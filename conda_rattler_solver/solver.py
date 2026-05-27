@@ -657,6 +657,13 @@ class RattlerSolver(Solver):
                     unsatisfiable[spec.name] = spec
                 else:
                     not_found[spec.name] = spec
+
+        # Raise the exception for conda-build if needed
+        self._maybe_raise_for_conda_build(
+            {**unsatisfiable, **not_found},
+            message=problems,
+        )
+
         if not unsatisfiable and not_found:
             log.debug(
                 "Inferred PackagesNotFoundError %s from conflicts:\n%s",
