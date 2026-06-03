@@ -177,8 +177,8 @@ def conda_match_spec_to_rattler_match_spec(spec: MatchSpec) -> rattler.MatchSpec
         raise InvalidMatchSpec(match_spec, "Cannot contain slashes.")
     return rattler.MatchSpec(
         str(match_spec).rstrip("=").replace("=[", "["),
-        experimental_conditionals=True,
-        experimental_extras=True,
+        conditionals=True,
+        extras=True,
     )
 
 
