@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import sys
@@ -15,6 +16,7 @@ from typing import TYPE_CHECKING
 import pytest
 from conda.base.context import context
 from conda.common.compat import on_linux, on_mac, on_win
+from conda.core.exclude_newer import ExcludeNewerPolicy
 from conda.core.prefix_data import PrefixData
 from conda.exceptions import (
     DryRunExit,
@@ -62,6 +64,28 @@ class TestRattlerSolver(SolverTests):
                 "test_unintentional_feature_downgrade",
             ],
         }
+
+
+def test_solver_declares_global_exclude_newer_support_only() -> None:
+    assert Solver.supports_exclude_newer_global is True
+    assert Solver.supports_exclude_newer_package is False
+
+
+def test_exclude_newer_datetime_unset() -> None:
+    solver = object.__new__(Solver)
+    solver.exclude_newer_policy = ExcludeNewerPolicy.disabled()
+
+    assert solver._exclude_newer_datetime() is None
+
+
+def test_exclude_newer_datetime_uses_resolved_global_cutoff() -> None:
+    solver = object.__new__(Solver)
+    solver.exclude_newer_policy = ExcludeNewerPolicy(global_cutoff=1234.56)
+
+    assert solver._exclude_newer_datetime() == datetime.datetime.fromtimestamp(
+        1234.56,
+        tz=datetime.timezone.utc,
+    )
 
 
 def test_python_downgrade_reinstalls_noarch_packages(

@@ -36,7 +36,7 @@ env:
   # we can't break classic from here; no need to test it
   # those tests will still be available for local debugging if necessary
   CONDA_TEST_SOLVERS: rattler
-  CONDA_REF: main
+  CONDA_REF: feature/repodata-filter-cooldown
 
 
 jobs:
@@ -123,7 +123,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          repository: conda/conda
+          repository: jezdez/conda
           path: conda  # CONDA-RATTLER-SOLVER CHANGE
           ref: ${{ env.CONDA_REF }}
 
@@ -315,7 +315,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          repository: conda/conda
+          repository: jezdez/conda
           path: conda  # CONDA-RATTLER-SOLVER CHANGE
           ref: ${{ env.CONDA_REF }}
 
@@ -478,7 +478,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          repository: conda/conda
+          repository: jezdez/conda
           path: conda  # CONDA-RATTLER-SOLVER CHANGE
           ref: ${{ env.CONDA_REF }}
 
