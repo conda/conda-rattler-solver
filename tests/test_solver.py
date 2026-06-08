@@ -66,9 +66,10 @@ class TestRattlerSolver(SolverTests):
         }
 
 
-def test_solver_declares_global_exclude_newer_support_only() -> None:
+def test_solver_declares_exclude_newer_support() -> None:
     assert Solver.supports_exclude_newer_global is True
-    assert Solver.supports_exclude_newer_package is False
+    assert Solver.supports_exclude_newer_channel is True
+    assert Solver.supports_exclude_newer_package is True
 
 
 def test_exclude_newer_datetime_unset() -> None:
@@ -86,6 +87,18 @@ def test_exclude_newer_datetime_uses_resolved_global_cutoff() -> None:
         1234.56,
         tz=datetime.timezone.utc,
     )
+
+
+def test_exclude_newer_datetime_disabled_for_policy_overrides() -> None:
+    solver = object.__new__(Solver)
+    solver.exclude_newer_policy = ExcludeNewerPolicy.from_values(
+        "1d",
+        {"openssl": False},
+        channel_settings=({"channel": "https://example.test/conda", "exclude_newer": "3d"},),
+        now=1_700_000_000.0,
+    )
+
+    assert solver._exclude_newer_datetime() is None
 
 
 def test_python_downgrade_reinstalls_noarch_packages(

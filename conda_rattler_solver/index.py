@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import random
@@ -17,6 +18,7 @@ from conda.base.constants import REPODATA_FN
 from conda.base.context import context
 from conda.common.io import DummyExecutor, ThreadLimitedThreadPoolExecutor
 from conda.common.url import path_to_url, remove_auth, split_anaconda_token
+from conda.core.exclude_newer import ExcludeNewerPolicy
 from conda.core.package_cache_data import PackageCacheData
 from conda.core.subdir_data import SubdirData
 from conda.models.channel import Channel
@@ -70,6 +72,7 @@ class RattlerIndexHelper:
         pkgs_dirs: PathsType = (),
         in_state: SolverInputState | None = None,
         build_repodata_subset: BuildRepodataSubset | None = None,
+        exclude_newer_policy: ExcludeNewerPolicy | None = None,
     ):
         self._unlink_on_del: list[Path] = []
 
@@ -78,6 +81,7 @@ class RattlerIndexHelper:
         self._repodata_fn = repodata_fn
         self.in_state = in_state
         self.build_repodata_subset = build_repodata_subset
+        self.exclude_newer_policy = exclude_newer_policy or ExcludeNewerPolicy.disabled()
 
         self._index: dict[str, _ChannelRepoInfo] = {}
         self._index.update(self._load_channels())
@@ -172,6 +176,7 @@ class RattlerIndexHelper:
             shutil.copy(json_path, path_copy)
             json_path = path_copy
             self._unlink_on_del.append(path_copy)
+        json_path = self._filtered_json_path(url, json_path)
         # TODO: Support multichannel https://github.com/conda/rattler/issues/1327
         rattler_channel = rattler.Channel(noauth_url_sans_subdir)
         repo = rattler.SparseRepoData(rattler_channel, channel.subdir, json_path)
@@ -261,6 +266,9 @@ class RattlerIndexHelper:
             subdir = Channel.from_url(url).subdir
             repodata = empty_repodata_dict(subdir, base_url=url)
             for filename, record in shards.iter_records():
+                package_url = f"{url.rstrip('/')}/{filename}"
+                if not self._record_allowed(record, filename, url, package_url):
+                    continue
                 if filename.endswith(".tar.bz2"):
                     repodata["packages"][filename] = record
                 elif filename.endswith(".conda"):
@@ -293,6 +301,72 @@ class RattlerIndexHelper:
             info = self._json_path_to_repo_info(url, f.name)
             index[info.noauth_url] = info
         return index
+
+    def _uses_python_exclude_newer_filter(self) -> bool:
+        return self.exclude_newer_policy.active and (
+            self.exclude_newer_policy.global_cutoff is None
+            or self.exclude_newer_policy.has_channel_overrides
+            or self.exclude_newer_policy.has_package_overrides
+        )
+
+    def _filtered_json_path(self, url: str, json_path: Path) -> Path:
+        if not self._uses_python_exclude_newer_filter():
+            return json_path
+
+        repodata = json.loads(json_path.read_text())
+        with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+            f.write(json_dump(self._filter_repodata(repodata, url)))
+        filtered_path = Path(f.name)
+        self._unlink_on_del.append(filtered_path)
+        return filtered_path
+
+    def _filter_repodata(self, repodata: dict, channel_url: str) -> dict:
+        filtered = {**repodata}
+        for package_group in ("packages", "packages.conda"):
+            filtered[package_group] = {
+                filename: record
+                for filename, record in repodata.get(package_group, {}).items()
+                if self._record_allowed(
+                    record,
+                    filename,
+                    channel_url,
+                    record.get("url") or f"{channel_url.rstrip('/')}/{filename}",
+                )
+            }
+
+        if v3 := repodata.get("v3"):
+            filtered["v3"] = {**v3}
+            filtered["v3"]["whl"] = {
+                filename: record
+                for filename, record in v3.get("whl", {}).items()
+                if self._record_allowed(
+                    record,
+                    filename,
+                    channel_url,
+                    record.get("url") or f"{channel_url.rstrip('/')}/{filename}",
+                )
+            }
+
+        return filtered
+
+    def _record_allowed(
+        self,
+        record: dict,
+        filename: str,
+        channel_url: str,
+        package_url: str,
+    ) -> bool:
+        if not self._uses_python_exclude_newer_filter():
+            return True
+
+        return self.exclude_newer_policy.should_include(
+            {
+                **record,
+                "channel": channel_url,
+                "fn": record.get("fn") or filename,
+                "url": package_url,
+            }
+        )
 
     def _load_channels(self, urls: Iterable[str] | None = None) -> dict[str, _ChannelRepoInfo]:
         if urls is None:

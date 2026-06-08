@@ -59,6 +59,8 @@ class RattlerSolver(Solver):
     MAX_SOLVER_ATTEMPTS_CAP = 10
     _uses_ssc = False
     supports_exclude_newer_global = True
+    supports_exclude_newer_channel = True
+    supports_exclude_newer_package = True
 
     @staticmethod
     @cache
@@ -248,6 +250,7 @@ class RattlerSolver(Solver):
             pkgs_dirs=context.pkgs_dirs if context.offline else (),
             in_state=in_state,
             build_repodata_subset=self._build_repodata_subset,
+            exclude_newer_policy=self.exclude_newer_policy,
         )
         for channel in conda_build_channels:
             index.reload_channel(channel)
@@ -758,7 +761,11 @@ class RattlerSolver(Solver):
 
     def _exclude_newer_datetime(self) -> datetime.datetime | None:
         """Return the resolved global cutoff as a UTC datetime for py-rattler."""
-        if self.exclude_newer_policy.global_cutoff is None:
+        if (
+            self.exclude_newer_policy.global_cutoff is None
+            or self.exclude_newer_policy.has_channel_overrides
+            or self.exclude_newer_policy.has_package_overrides
+        ):
             return None
 
         return datetime.datetime.fromtimestamp(

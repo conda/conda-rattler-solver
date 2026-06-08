@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from conda.base.context import context, reset_context
+from conda.core.exclude_newer import ExcludeNewerPolicy
 from conda.core.subdir_data import SubdirData
 from conda.gateways.logging import initialize_logging
 from conda.gateways.shards import build_repodata_subset
@@ -27,6 +28,8 @@ if TYPE_CHECKING:
 
 initialize_logging()
 DATA = Path(__file__).parent / "data"
+NOW = 1_700_000_000.0
+DAY = 86400
 
 CONDA_FORGE_WITH_SHARDS = "conda-forge"
 
@@ -115,6 +118,66 @@ def test_reload_channels(tmp_path: Path):
     time.sleep(1)
     index.reload_channel(Channel(str(tmp_path)))
     assert index.n_packages() == initial_count + 1
+
+
+def test_exclude_newer_python_filter_disabled_for_global_only_policy():
+    index = object.__new__(RattlerIndexHelper)
+    index._unlink_on_del = []
+    index.exclude_newer_policy = ExcludeNewerPolicy(global_cutoff=1234.56)
+
+    assert not index._uses_python_exclude_newer_filter()
+
+
+def test_exclude_newer_record_filter_honors_package_and_channel_overrides():
+    index = object.__new__(RattlerIndexHelper)
+    index._unlink_on_del = []
+    index.exclude_newer_policy = ExcludeNewerPolicy.from_values(
+        "1d",
+        {"openssl": "false", "numpy": "1d"},
+        channel_settings=({"channel": "https://example.test/conda", "exclude_newer": "3d"},),
+        now=NOW,
+    )
+
+    def allowed(name: str, channel_url: str, timestamp: float) -> bool:
+        filename = f"{name}-1.0-0.tar.bz2"
+        package_url = f"{channel_url}/{filename}"
+        return index._record_allowed(
+            {"name": name, "timestamp": timestamp},
+            filename,
+            channel_url,
+            package_url,
+        )
+
+    assert allowed("openssl", "https://example.test/conda/linux-64", NOW - 60)
+    assert allowed("numpy", "https://example.test/conda/linux-64", NOW - 2 * DAY)
+    assert not allowed("scipy", "https://example.test/conda/linux-64", NOW - 2 * DAY)
+    assert allowed("scipy", "https://other.example.test/conda/linux-64", NOW - 2 * DAY)
+
+
+def test_exclude_newer_filter_repodata_keeps_unknown_timestamps():
+    index = object.__new__(RattlerIndexHelper)
+    index._unlink_on_del = []
+    index.exclude_newer_policy = ExcludeNewerPolicy.from_values(
+        "",
+        {},
+        channel_settings=({"channel": "https://example.test/conda", "exclude_newer": "1d"},),
+        now=NOW,
+    )
+    repodata = {
+        "packages": {
+            "old-1.0-0.tar.bz2": {"name": "old", "timestamp": NOW - 2 * DAY},
+            "new-1.0-0.tar.bz2": {"name": "new", "timestamp": NOW - 60},
+            "unknown-1.0-0.tar.bz2": {"name": "unknown"},
+        },
+        "packages.conda": {},
+    }
+
+    filtered = index._filter_repodata(repodata, "https://example.test/conda/linux-64")
+
+    assert set(filtered["packages"]) == {
+        "old-1.0-0.tar.bz2",
+        "unknown-1.0-0.tar.bz2",
+    }
 
 
 @pytest.mark.parametrize(
