@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import json
 import logging
 import os
@@ -65,6 +66,7 @@ CHANNEL_PRIORITY_MAP = {
 class RattlerSolver(Solver):
     MAX_SOLVER_ATTEMPTS_CAP = 10
     _uses_ssc = False
+    supports_exclude_newer_global = True
 
     @staticmethod
     @cache
@@ -397,6 +399,9 @@ class RattlerSolver(Solver):
                 sparse_repodata=[info.repo for info in index._index.values()],
                 package_format_selection=index._package_format,
             )
+        exclude_newer = self._exclude_newer_datetime()
+        if exclude_newer is not None:
+            solve_kwargs["exclude_newer"] = exclude_newer
         if log.isEnabledFor(logging.DEBUG):
             dumped = json.dumps(solve_kwargs, indent=2, default=str, sort_keys=True)
             log.debug("Solver input for attempt %s:\n%s", attempt, dumped)
@@ -885,6 +890,16 @@ class RattlerSolver(Solver):
             )
             for pkg in in_state.virtual.values()
         ]
+
+    def _exclude_newer_datetime(self) -> datetime.datetime | None:
+        """Return the resolved global cutoff as a UTC datetime for py-rattler."""
+        if self.exclude_newer_policy.global_cutoff is None:
+            return None
+
+        return datetime.datetime.fromtimestamp(
+            self.exclude_newer_policy.global_cutoff,
+            tz=datetime.timezone.utc,
+        )
 
     def _called_from_conda_build(self) -> bool:
         """
