@@ -21,7 +21,7 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = [
   "conda >=26.5.0",
-  "py-rattler >=0.24.0,<0.25.0a0",
+  "py-rattler >=0.25.0,<0.26.0a0",
 ]
 dynamic = ["version"]
 
@@ -40,7 +40,7 @@ platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 
 [tool.pixi.dependencies]
 conda = ">=26.5.0"
-py-rattler = ">=0.24.0,<0.25.0a0"
+py-rattler = ">=0.25.0,<0.26.0a0"
 
 [tool.pixi.pypi-dependencies]
 conda-rattler-solver = { path = ".", editable = true }
