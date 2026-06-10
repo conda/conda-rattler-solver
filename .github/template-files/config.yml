@@ -13,8 +13,8 @@ conda/infrastructure:
   - .github/workflows/project.yml
 
   # [optional] stale bot workflows
-  - .github/workflows/stale.yml
-  - .github/workflows/lock.yml
+  # - .github/workflows/stale.yml
+  # - .github/workflows/lock.yml
 
   # [optional] general processes for the conda org
   - src: templates/HOW_WE_USE_GITHUB.md
@@ -34,8 +34,8 @@ conda/infrastructure:
     dst: .github/ISSUE_TEMPLATE/epic.yml
 
   # [optional] standard PR template
-  # - src: templates/pull_requests/news_tests_docs.md
-  #   dst: .github/template-files/templates/pull_request_template_details.md
+  - src: templates/pull_requests/news_tests_docs.md
+    dst: .github/template-files/templates/pull_request_template_details.md
   - src: templates/pull_requests/base.md
     dst: .github/PULL_REQUEST_TEMPLATE.md
 
@@ -50,7 +50,7 @@ conda/infrastructure:
   #     # SemVer placeholders
   #     placeholder: MAJOR.MINOR.MINOR
   #     placeholder_x: MAJOR.MINOR.x
-  # - src: templates/releases/rever.xsh
-  #   dst: rever.xsh
-  # - src: templates/releases/TEMPLATE
-  #   dst: news/TEMPLATE
+  - src: templates/releases/rever.xsh
+    dst: rever.xsh
+  - src: templates/releases/TEMPLATE
+    dst: news/TEMPLATE
