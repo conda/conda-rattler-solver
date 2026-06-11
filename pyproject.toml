@@ -118,10 +118,14 @@ python = "3.12.*"
 [tool.pixi.feature.py313.dependencies]
 python = "3.13.*"
 
+[tool.pixi.feature.release.dependencies]
+rever = "*"
+
 [tool.pixi.environments]
-dev = ["py310"]
 build = ["build"]
+dev = ["py310"]
 docs = ["docs"]
+release = ["release"]
 test-py310 = ["test", "py310"]
 test-py311 = ["test", "py311"]
 test-py312 = ["test", "py312"]
