@@ -1,5 +1,7 @@
 # Changelog
 
+[//]: # (current developments)
+
 ## 0.1.0 (2026-05-16)
 
 * Bump conda dependency to 26.5.0 by @soapy1 #61
