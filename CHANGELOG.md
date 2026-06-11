@@ -19,9 +19,9 @@
 ### Contributors
 
 * @danyeaw
-* @jsmolic
+* @jsmolic made their first contribution in https://github.com/conda/conda-rattler-solver/pull/65
 * @jezdez
-* @conda-bot
+* @conda-bot made their first contribution in https://github.com/conda/conda-rattler-solver/pull/71
 
 
 
