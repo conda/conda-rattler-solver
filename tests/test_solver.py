@@ -83,9 +83,9 @@ def test_python_downgrade_reinstalls_noarch_packages(
         "--channel=conda-forge",
         "--solver=rattler",
         "pip",
-        "python=3.10",
+        "python=3.11",
     ) as prefix:
-        assert PrefixData(prefix).get("python").version.startswith("3.10")
+        assert PrefixData(prefix).get("python").version.startswith("3.11")
         if on_win:
             pip = str(prefix / "Scripts" / "pip.exe")
         else:
@@ -98,9 +98,11 @@ def test_python_downgrade_reinstalls_noarch_packages(
             "--solver=rattler",
             "--override-channels",
             "--channel=conda-forge",
-            "python=3.9",
+            "python=3.10",
             "--yes",
         )
+        PrefixData._cache_.clear()
+        assert PrefixData(prefix).get("python").version.startswith("3.10")
         check_call([pip, "--version"])
 
 
@@ -332,7 +334,7 @@ def test_pinned_with_cli_build_string(tmp_env: TmpEnvFixture) -> None:
 
 def test_constraining_pin_and_requested():
     env = os.environ.copy()
-    env["CONDA_PINNED_PACKAGES"] = "python=3.9"
+    env["CONDA_PINNED_PACKAGES"] = "python=3.10"
 
     # This should fail because it contradicts the pinned packages
     p = conda_subprocess(
@@ -341,7 +343,7 @@ def test_constraining_pin_and_requested():
         "unused",
         "--dry-run",
         "--json",
-        "python=3.10",
+        "python=3.11",
         "--override-channels",
         "-c",
         "conda-forge",
