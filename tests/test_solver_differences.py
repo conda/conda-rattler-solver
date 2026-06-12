@@ -117,7 +117,7 @@ def test_gpu_cpu_mutexes():
     pkgs = (
         "cpuonly",
         "pyg=2.1.0",
-        "python=3.9",
+        "python=3.10",
         "pytorch::pytorch=1.12",
     )
     env = os.environ.copy()
@@ -159,7 +159,7 @@ def test_gpu_cpu_mutexes():
         "--solver=rattler",
         "cpuonly",
         "pyg=2.1.0",
-        "python=3.9",
+        "python=3.10",
         "pytorch::pytorch",  # more recent pytorch versions seem to be properly packaged
         env=env,
     )
