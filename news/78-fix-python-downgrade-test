@@ -1,0 +1,3 @@
+### Other
+
+* Fix integration test: downgrading to Python 3.9 breaks `pip --version` on current pip. (#78)
