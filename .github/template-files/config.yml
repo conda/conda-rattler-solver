@@ -40,16 +40,13 @@ conda/infrastructure:
     dst: .github/PULL_REQUEST_TEMPLATE.md
 
   # [optional] rever release files
+  # Select one of the following:
+  # conda and conda-build release file or
+  # Cadence release file
   # - src: templates/releases/RELEASE.md
-  #   dst: RELEASE.md
-  #   with:
-  #     canary_channel: https://anaconda.org/conda-canary
-  #     # CalVer placeholders
-  #     placeholder: YY.M.PATCH
-  #     placeholder_x: YY.M.x
-  #     # SemVer placeholders
-  #     placeholder: MAJOR.MINOR.MINOR
-  #     placeholder_x: MAJOR.MINOR.x
+  # On demand release file
+  - src: templates/releases/RELEASE_ON_DEMAND.md
+    dst: RELEASE.md
   - src: templates/releases/rever.xsh
     dst: rever.xsh
   - src: templates/releases/TEMPLATE
