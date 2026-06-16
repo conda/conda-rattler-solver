@@ -104,11 +104,9 @@ conda-index = "*"
 conda-libmamba-solver = ">=25.11"
 conda-lock = "*"
 coverage = "*"
-flask = ">=2.2"                # jlap pytest fixture
 git = "*"
 importlib_resources = ">=5.10" # only necessary for Python < 3.12
 pexpect = "*"
-pip = "*"
 pytest = "*"
 pytest-cov = "*"
 pytest-mock = "*"
@@ -118,7 +116,6 @@ pytest-timeout = "*"
 pytest-xprocess = "*"
 responses = "*"
 tomli = "*"                    # for coverage pyproject.toml, only necessary for Python <= 3.11.0a6
-werkzeug = ">=2.2"             # jlap pytest fixture
 
 [tool.pixi.feature.py310.dependencies]
 python = "3.10.*"
