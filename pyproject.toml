@@ -42,8 +42,14 @@ platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 conda = ">=26.5.0"
 py-rattler = ">=0.25.0,<0.26.0a0"
 
-[tool.pixi.pypi-dependencies]
-conda-rattler-solver = { path = ".", editable = true }
+[tool.pixi.feature.self.tasks]
+# conda-rattler-solver is on conda-forge but not PyPI; pixi pins the
+# released version during solve and blocks the local editable install.
+_install-self = { cmd = "conda pypi install -e . -q", default-environment = "test-py313" }
+
+[tool.pixi.feature.self.dependencies]
+hatchling = ">=1.12.2"
+hatch-vcs = ">=0.2.0"
 
 [tool.pixi.feature.build]
 dependencies = { conda-build = "*" }
@@ -82,14 +88,10 @@ sphinxcontrib-programoutput = "*"
 
 [tool.pixi.feature.test.tasks]
 pre-commit = 'pre-commit'
-# Needed because we can't use pypi-dependencies to install it;
-# conda is already a conda dependency and pixi won't allow us to overwrite it
-_install-conda-dev = { cmd = "pip install -e ../conda --no-deps --no-build-isolation -q" }
-_init-conda-dev = { cmd = "python -m conda init --all"}
 
 [tool.pixi.feature.test.tasks.test]
 cmd = "python -m pytest"
-depends-on = ["_install-conda-dev", "_init-conda-dev"]
+default-environment = "test-py313"
 [tool.pixi.feature.test.tasks.test.env]
 CONDA_TEST_SOLVERS = "rattler"
 CONDA_TEST_DATA_DIR = "$PIXI_PROJECT_ROOT/../conda/tests/data"
@@ -117,9 +119,6 @@ pytest-xprocess = "*"
 responses = "*"
 tomli = "*"                    # for coverage pyproject.toml, only necessary for Python <= 3.11.0a6
 werkzeug = ">=2.2"             # jlap pytest fixture
-# conda's build-system.requires so we can use --no-build-isolation in install-conda-dev
-hatchling = ">=1.12.2"
-hatch-vcs = ">=0.2.0"
 
 [tool.pixi.feature.py310.dependencies]
 python = "3.10.*"
@@ -141,15 +140,15 @@ python = "3.14.*"
 
 [tool.pixi.environments]
 build = ["build"]
-dev = ["py310"]
+dev = ["py310", "self"]
 docs = ["docs"]
 release = ["release"]
 lint = ["lint"]
-test-py310 = ["test", "py310"]
-test-py311 = ["test", "py311"]
-test-py312 = ["test", "py312"]
-test-py313 = ["test", "py313"]
-test-py314 = ["test", "py314"]
+test-py310 = ["test", "py310", "self"]
+test-py311 = ["test", "py311", "self"]
+test-py312 = ["test", "py312", "self"]
+test-py313 = ["test", "py313", "self"]
+test-py314 = ["test", "py314", "self"]
 
 [tool.hatch.build.hooks.vcs]
 version-file = "conda_rattler_solver/_version.py"
