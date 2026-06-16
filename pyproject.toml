@@ -91,6 +91,7 @@ pre-commit = 'pre-commit'
 
 [tool.pixi.feature.test.tasks.test]
 cmd = "python -m pytest"
+depends-on = ["_install-self"]
 default-environment = "test-py313"
 [tool.pixi.feature.test.tasks.test.env]
 CONDA_TEST_SOLVERS = "rattler"
