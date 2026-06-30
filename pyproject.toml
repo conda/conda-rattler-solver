@@ -54,7 +54,7 @@ hatch-vcs = ">=0.2.0"
 [tool.pixi.feature.build]
 dependencies = { conda-build = "*" }
 [tool.pixi.feature.build.tasks]
-build = { cmd = "conda build recipe --override-channels -c conda-forge", env = {CONDA_SOLVER = "libmamba"} }
+build = { cmd = "conda build recipe", env = {CONDA_SOLVER = "libmamba"} }
 
 [tool.pixi.feature.lint.dependencies]
 python = "3.12.*"
