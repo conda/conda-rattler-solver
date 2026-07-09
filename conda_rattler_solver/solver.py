@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import datetime
 import json
 import logging
 import os
@@ -39,6 +38,7 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
+    import datetime
     from collections.abc import Iterable, Mapping
     from typing import Literal
 
@@ -767,6 +767,8 @@ class RattlerSolver(Solver):
             or self.exclude_newer_policy.has_package_overrides
         ):
             return None
+
+        import datetime
 
         return datetime.datetime.fromtimestamp(
             self.exclude_newer_policy.global_cutoff,
