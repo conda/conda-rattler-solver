@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 import random
@@ -18,7 +17,6 @@ from conda.base.constants import REPODATA_FN
 from conda.base.context import context
 from conda.common.io import DummyExecutor, ThreadLimitedThreadPoolExecutor
 from conda.common.url import path_to_url, remove_auth, split_anaconda_token
-from conda.core.exclude_newer import ExcludeNewerPolicy
 from conda.core.package_cache_data import PackageCacheData
 from conda.core.subdir_data import SubdirData
 from conda.models.channel import Channel
@@ -35,6 +33,7 @@ if TYPE_CHECKING:
     from typing import Self
 
     from conda.common.path import PathsType
+    from conda.core.exclude_newer import ExcludeNewerPolicy
     from conda.gateways.shards import BuildRepodataSubset
     from conda.gateways.shards.typing import Shards
     from conda.models.match_spec import MatchSpec
@@ -116,7 +115,16 @@ class RattlerIndexHelper:
         self._repodata_fn = repodata_fn
         self.in_state = in_state
         self.build_repodata_subset = build_repodata_subset
-        self.exclude_newer_policy = exclude_newer_policy or ExcludeNewerPolicy.disabled()
+        if exclude_newer_policy is None:
+            from conda.core.exclude_newer import ExcludeNewerPolicy
+
+            exclude_newer_policy = ExcludeNewerPolicy.disabled()
+        self.exclude_newer_policy = exclude_newer_policy
+        self._use_python_exclude_newer_filter = self.exclude_newer_policy.active and (
+            self.exclude_newer_policy.global_cutoff is None
+            or self.exclude_newer_policy.has_channel_overrides
+            or self.exclude_newer_policy.has_package_overrides
+        )
 
         self._index: dict[str, _ChannelRepoInfo] = {}
         self._index.update(self._load_channels())
@@ -307,7 +315,9 @@ class RattlerIndexHelper:
             for (key, section), record in shards.iter_records_v3():
                 filename = record.get("fn", key)
                 package_url = f"{url.rstrip('/')}/{filename}"
-                if not self._record_allowed(record, filename, url, package_url):
+                if self._use_python_exclude_newer_filter and not self._record_allowed(
+                    record, filename, url, package_url
+                ):
                     continue
                 if section == "packages":
                     repodata["packages"][key] = record
@@ -339,25 +349,13 @@ class RattlerIndexHelper:
             index[info.noauth_url] = info
         return index
 
-    def _uses_python_exclude_newer_filter(self) -> bool:
-        return self.exclude_newer_policy.active and (
-            self.exclude_newer_policy.global_cutoff is None
-            or self.exclude_newer_policy.has_channel_overrides
-            or self.exclude_newer_policy.has_package_overrides
-        )
-
     def _filtered_json_path(self, url: str, json_path: Path) -> Path:
-        if not self._uses_python_exclude_newer_filter():
+        if not self._use_python_exclude_newer_filter:
             return json_path
 
-        repodata = json.loads(json_path.read_text())
-        with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
-            f.write(json_dump(self._filter_repodata(repodata, url)))
-        filtered_path = Path(f.name)
-        self._unlink_on_del.append(filtered_path)
-        return filtered_path
+        import json
 
-    def _filter_repodata(self, repodata: dict, channel_url: str) -> dict:
+        repodata = json.loads(json_path.read_text())
         filtered = {**repodata}
         for package_group in ("packages", "packages.conda"):
             filtered[package_group] = {
@@ -366,8 +364,8 @@ class RattlerIndexHelper:
                 if self._record_allowed(
                     record,
                     filename,
-                    channel_url,
-                    record.get("url") or f"{channel_url.rstrip('/')}/{filename}",
+                    url,
+                    record.get("url") or f"{url.rstrip('/')}/{filename}",
                 )
             }
 
@@ -379,12 +377,16 @@ class RattlerIndexHelper:
                 if self._record_allowed(
                     record,
                     filename,
-                    channel_url,
-                    record.get("url") or f"{channel_url.rstrip('/')}/{filename}",
+                    url,
+                    record.get("url") or f"{url.rstrip('/')}/{filename}",
                 )
             }
 
-        return filtered
+        with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+            f.write(json_dump(filtered))
+        filtered_path = Path(f.name)
+        self._unlink_on_del.append(filtered_path)
+        return filtered_path
 
     def _record_allowed(
         self,
@@ -393,9 +395,6 @@ class RattlerIndexHelper:
         channel_url: str,
         package_url: str,
     ) -> bool:
-        if not self._uses_python_exclude_newer_filter():
-            return True
-
         return self.exclude_newer_policy.should_include(
             {
                 **record,

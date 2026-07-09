@@ -123,14 +123,18 @@ def test_reload_channels(tmp_path: Path):
 def test_exclude_newer_python_filter_disabled_for_global_only_policy():
     index = object.__new__(RattlerIndexHelper)
     index._unlink_on_del = []
+    index._index = {}
     index.exclude_newer_policy = ExcludeNewerPolicy(global_cutoff=1234.56)
+    index._use_python_exclude_newer_filter = False
 
-    assert not index._uses_python_exclude_newer_filter()
+    path = Path("repodata.json")
+    assert index._filtered_json_path("https://example.test/conda/linux-64", path) == path
 
 
 def test_exclude_newer_record_filter_honors_package_and_channel_overrides():
     index = object.__new__(RattlerIndexHelper)
     index._unlink_on_del = []
+    index._index = {}
     index.exclude_newer_policy = ExcludeNewerPolicy.from_values(
         "1d",
         {"openssl": "false", "numpy": "1d"},
@@ -154,15 +158,17 @@ def test_exclude_newer_record_filter_honors_package_and_channel_overrides():
     assert allowed("scipy", "https://other.example.test/conda/linux-64", NOW - 2 * DAY)
 
 
-def test_exclude_newer_filter_repodata_keeps_unknown_timestamps():
+def test_exclude_newer_filter_repodata_keeps_unknown_timestamps(tmp_path):
     index = object.__new__(RattlerIndexHelper)
     index._unlink_on_del = []
+    index._index = {}
     index.exclude_newer_policy = ExcludeNewerPolicy.from_values(
         "",
         {},
         channel_settings=({"channel": "https://example.test/conda", "exclude_newer": "1d"},),
         now=NOW,
     )
+    index._use_python_exclude_newer_filter = True
     repodata = {
         "packages": {
             "old-1.0-0.tar.bz2": {"name": "old", "timestamp": NOW - 2 * DAY},
@@ -172,7 +178,13 @@ def test_exclude_newer_filter_repodata_keeps_unknown_timestamps():
         "packages.conda": {},
     }
 
-    filtered = index._filter_repodata(repodata, "https://example.test/conda/linux-64")
+    json_path = tmp_path / "repodata.json"
+    json_path.write_text(json.dumps(repodata))
+    filtered_path = index._filtered_json_path(
+        "https://example.test/conda/linux-64",
+        json_path,
+    )
+    filtered = json.loads(filtered_path.read_text())
 
     assert set(filtered["packages"]) == {
         "old-1.0-0.tar.bz2",
