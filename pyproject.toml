@@ -45,7 +45,7 @@ py-rattler = ">=0.25.0,<0.26.0a0"
 [tool.pixi.feature.self.tasks]
 # conda-rattler-solver is on conda-forge but not PyPI; pixi pins the
 # released version during solve and blocks the local editable install.
-_install-self = { cmd = "conda pypi install -e . -q", default-environment = "test-py313" }
+_install-self = { cmd = "conda pypi install -e . -q -y", default-environment = "test-py313" }
 
 [tool.pixi.feature.self.dependencies]
 hatchling = ">=1.12.2"
