@@ -15,6 +15,7 @@ from conda import __version__ as _conda_version
 from conda.base.constants import KNOWN_SUBDIRS, REPODATA_FN, UNKNOWN_CHANNEL
 from conda.base.context import context
 from conda.common.path import paths_equal
+from conda.core.prefix_data import PrefixData
 from conda.exceptions import InvalidMatchSpec, PackagesNotFoundError
 from conda.models.match_spec import MatchSpec
 from conda.models.records import PackageRecord, PrefixRecord
@@ -261,6 +262,7 @@ def notify_conda_outdated(
                     with open(entry.path) as f:
                         current_conda_prefix_rec = PrefixRecord(**json.loads(f.read()))
                     break
+
     if not current_conda_prefix_rec:
         # We are checking whether conda can be found in the environment conda is
         # running from. Unless something is really wrong, this should never happen.
@@ -292,7 +294,15 @@ def notify_conda_outdated(
 
     # print instructions to stderr if we found a newer conda
     if conda_newer_records:
+        prefix_data = PrefixData(context.root_prefix)
         newest = max(conda_newer_records, key=lambda x: VersionOrder(x.version))
+        if prefix_data.get("conda-self", None):
+            conda_update_message = "conda self update"
+        else:
+            conda_update_message = f"conda update -n base -c {channel_name} conda"
+            if prefix_data.is_frozen():
+                conda_update_message += " --override-frozen"
+
         print(
             dedent(
                 f"""
@@ -303,7 +313,7 @@ def notify_conda_outdated(
 
                     Please update conda by running
 
-                        $ conda update -n base -c {channel_name} conda
+                        $ {conda_update_message}
 
                     """
             ),
