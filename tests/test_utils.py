@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from conda import __version__ as _conda_version
-from conda.base.context import context
+from conda.base.context import context, reset_context
 from conda.models.records import PackageRecord, PrefixRecord
 
 import conda_rattler_solver.utils as utils_module
@@ -109,13 +109,15 @@ def test_notify_conda_outdated_message(
     - a plain 'conda update ...' when 'conda-self' is absent and the prefix isn't frozen.
     """
 
-    channel_name = context.channels[0]
+    channel_name = "test-channel"
     _write_current_conda_prefix_record(tmp_path / "conda-meta", channel_name)
 
     # Make conda "run from" our fake prefix, which contains the conda-meta record above.
     monkeypatch.setenv("CONDA_NOTIFY_OUTDATED_CONDA", "true")
     monkeypatch.setenv("CONDA_QUIET", "false")
     monkeypatch.setattr(utils_module, "PrefixData", _FakePrefixData(conda_self_installed, frozen))
+    monkeypatch.setenv("CONDA_ROOT_PREFIX", tmp_path)
+    reset_context()
 
     newer_record = PackageRecord(
         name="conda",
