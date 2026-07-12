@@ -1,6 +1,6 @@
 ### Enhancements
 
-* Allow callers to provide virtual packages when constructing `SolverInputState`.
+* Allow callers to provide virtual packages when constructing `SolverInputState`. (#98)
 
 ### Bug fixes
 
