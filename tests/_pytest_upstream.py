@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import pytest
 
-# https://github.com/conda/conda-rattler-solver/issues/88
 _XFAILS = {
     "tests/test_create.py::test_dont_remove_conda_dependency_with_dependent_packages[rattler]": (
         "Installed packages missing from narrowed channels: "
