@@ -135,7 +135,7 @@ def _installed_record(name: str, channel_url: str, subdir: str) -> PackageRecord
 def test_installed_records_default_is_noop():
     index = RattlerIndexHelper(channels=(), subdirs=("linux-64", "noarch"))
     assert index.n_packages() == 0
-    assert index._index == {}
+    assert index._index == []
 
 
 def test_installed_records_are_searchable_even_if_channel_is_unreachable():

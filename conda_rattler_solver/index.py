@@ -80,14 +80,14 @@ class RattlerIndexHelper:
         self.in_state = in_state
         self.build_repodata_subset = build_repodata_subset
 
-        self._index: dict[str, _ChannelRepoInfo] = {}
-        self._index.update(self._load_channels())
+        self._index: list[_ChannelRepoInfo] = []
+        self._index.extend(self._load_channels())
         if pkgs_dirs:
             repo_infos = self._load_pkgs_cache(pkgs_dirs)
-            self._index.update({info.noauth_url: info for info in repo_infos})
+            self._index.extend(repo_infos)
         if installed_records:
             repo_infos = self._load_installed_records(installed_records)
-            self._index.update({f"installed:{info.noauth_url}": info for info in repo_infos})
+            self._index.extend(repo_infos)
 
     @classmethod
     def from_platform_aware_channel(cls, channel: Channel) -> Self:
@@ -104,13 +104,13 @@ class RattlerIndexHelper:
     def reload_channel(self, channel: Channel) -> None:
         urls = {}
         for url in channel.urls(with_credentials=False, subdirs=self._subdirs):
-            for repo_info in self._index.values():
+            for repo_info in self._index:
                 if repo_info.noauth_url == url:
                     log.debug("Reloading repo %s", repo_info.noauth_url)
                     urls[repo_info.full_url] = channel
                     break
-        for new_repo_info in self._load_channels(urls).values():
-            for repo_info in self._index.values():
+        for new_repo_info in self._load_channels(urls):
+            for repo_info in self._index:
                 if repo_info.noauth_url == new_repo_info.noauth_url:
                     repo_info.repo.close()
                     repo_info.repo = new_repo_info.repo
@@ -123,22 +123,14 @@ class RattlerIndexHelper:
     ) -> int:
         count = 0
         if filter_ is not None:
-            for info in repos or self._index.values():
+            for info in repos or self._index:
                 for record in info.repo.load_all_records(self._package_format):
                     if filter_(record):
                         count += 1
         else:
-            for info in repos or self._index.values():
+            for info in repos or self._index:
                 count += info.repo.record_count(self._package_format)
         return count
-
-    def get_info(self, key: str) -> _ChannelRepoInfo:
-        if not key.startswith("file://"):
-            # The conda functions (specifically remove_auth) assume the input
-            # is a url; a file uri on windows with a drive letter messes them up.
-            # For the rest, we remove all forms of authentication
-            key = split_anaconda_token(remove_auth(key))[0]
-        return self._index[key]
 
     def _fetch_channel(self, url: str) -> tuple[str, os.PathLike]:
         channel = Channel.from_url(url)
@@ -295,7 +287,7 @@ class RattlerIndexHelper:
             index[info.noauth_url] = info
         return index
 
-    def _load_channels(self, urls: Iterable[str] | None = None) -> dict[str, _ChannelRepoInfo]:
+    def _load_channels(self, urls: Iterable[str] | None = None) -> list[_ChannelRepoInfo]:
         if urls is None:
             urls = self._urls_from_channels()
 
@@ -304,7 +296,7 @@ class RattlerIndexHelper:
             urls_to_channel = {url: Channel.from_url(url) for url in urls}
             channel_repos_info = self._load_channel_repo_info_shards(urls_to_channel)
             if channel_repos_info is not None:
-                return channel_repos_info
+                return [repo_info for repo_info in channel_repos_info.values()]
             log.debug("No sharded channels available. Fall back to non-sharded path.")
 
         # 1. Fetch URLs (if needed)
@@ -317,10 +309,9 @@ class RattlerIndexHelper:
             jsons = {url: str(path) for (url, path) in executor.map(self._fetch_channel, urls)}
 
         # 2. Create repos in same order as `urls`
-        index = {}
+        index = []
         for url in urls:
-            info = self._json_path_to_repo_info(url, jsons[url])
-            index[info.noauth_url] = info
+            index.append(self._json_path_to_repo_info(url, jsons[url]))
 
         return index
 
@@ -479,7 +470,7 @@ class RattlerIndexHelper:
 
     def __del__(self):
         if self._unlink_on_del:
-            for info in self._index.values():
+            for info in self._index:
                 info.repo.close()
             self._index.clear()
         for path in self._unlink_on_del:
