@@ -87,7 +87,7 @@ class RattlerIndexHelper:
             self._index.update({info.noauth_url: info for info in repo_infos})
         if installed_records:
             repo_infos = self._load_installed_records(installed_records)
-            self._index.update({info.noauth_url: info for info in repo_infos})
+            self._index.update({f"installed:{info.noauth_url}": info for info in repo_infos})
 
     @classmethod
     def from_platform_aware_channel(cls, channel: Channel) -> Self:
