@@ -83,12 +83,11 @@ class RattlerIndexHelper:
         self._index: dict[str, _ChannelRepoInfo] = {}
         self._index.update(self._load_channels())
         if pkgs_dirs:
-            self._index.update(
-                {info.noauth_url: info for info in self._load_pkgs_cache(pkgs_dirs)}
-            )
+            repo_infos = self._load_pkgs_cache(pkgs_dirs)
+            self._index.update({info.noauth_url: info for info in repo_infos})
         if installed_records:
-            installed_records = self._load_installed_records(installed_records)
-            self._index.update({info.noauth_url: info for info in installed_records})
+            repo_infos = self._load_installed_records(installed_records)
+            self._index.update({info.noauth_url: info for info in repo_infos})
 
     @classmethod
     def from_platform_aware_channel(cls, channel: Channel) -> Self:
