@@ -8,7 +8,7 @@ import os
 import sys
 from itertools import chain, permutations, repeat
 from pathlib import Path
-from subprocess import check_call, run
+from subprocess import run
 from textwrap import dedent
 from typing import TYPE_CHECKING
 
@@ -31,7 +31,7 @@ from conda_rattler_solver.solver import RattlerSolver as Solver
 from .utils import conda_subprocess
 
 if TYPE_CHECKING:
-    from conda.testing.fixtures import CondaCLIFixture, TmpEnvFixture
+    from conda.testing.fixtures import CondaCLIFixture, PipCLIFixture, TmpEnvFixture
     from pytest import MonkeyPatch
 
 HERE = Path(__file__).parent
@@ -67,6 +67,7 @@ class TestRattlerSolver(SolverTests):
 def test_python_downgrade_reinstalls_noarch_packages(
     tmp_env: TmpEnvFixture,
     conda_cli: CondaCLIFixture,
+    pip_cli: PipCLIFixture,
 ) -> None:
     """
     Reported in https://github.com/conda/conda/issues/11346
@@ -83,14 +84,10 @@ def test_python_downgrade_reinstalls_noarch_packages(
         "--channel=conda-forge",
         "--solver=rattler",
         "pip",
-        "python=3.10",
+        "python=3.11",
     ) as prefix:
-        assert PrefixData(prefix).get("python").version.startswith("3.10")
-        if on_win:
-            pip = str(prefix / "Scripts" / "pip.exe")
-        else:
-            pip = str(prefix / "bin" / "pip")
-        check_call([pip, "--version"])
+        assert PrefixData(prefix).get("python").version.startswith("3.11")
+        pip_cli("--version", prefix=prefix)
 
         conda_cli(
             "install",
@@ -98,10 +95,12 @@ def test_python_downgrade_reinstalls_noarch_packages(
             "--solver=rattler",
             "--override-channels",
             "--channel=conda-forge",
-            "python=3.9",
+            "python=3.10",
             "--yes",
         )
-        check_call([pip, "--version"])
+        PrefixData._cache_.clear()
+        assert PrefixData(prefix).get("python").version.startswith("3.10")
+        pip_cli("--version", prefix=prefix)
 
 
 @pytest.mark.xfail(

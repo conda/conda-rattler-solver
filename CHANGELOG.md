@@ -1,5 +1,30 @@
 # Changelog
 
+[//]: # (current developments)
+
+## 0.1.1 (2026-06-11)
+
+### Enhancements
+
+* Bump `py-rattler` to `>=0.25.0,<0.26.0a0` to restore `ppc64le` support for the conda-forge build of conda. (#69)
+
+### Bug fixes
+
+* Raise the conda-build-specific exception when solver problems are inferred, so conda-build receives the expected error type instead of a generic conflict. (#65)
+
+### Other
+
+* Update the conda dependency to `conda >=26.5.0` and correct the 0.1.0 release date in the changelog. (#63, #64)
+
+### Contributors
+
+* @danyeaw
+* @jsmolic made their first contribution in https://github.com/conda/conda-rattler-solver/pull/65
+* @jezdez
+* @conda-bot made their first contribution in https://github.com/conda/conda-rattler-solver/pull/71
+
+
+
 ## 0.1.0 (2026-05-16)
 
 * Bump conda dependency to 26.5.0 by @soapy1 #61
