@@ -222,8 +222,7 @@ def test_http_server_auth_token(
 
 
 @pytest.mark.xfail(
-    reason="multichannels not fully implemented yet: "
-    "https://github.com/conda/rattler/issues/1327",
+    reason="multichannels not fully implemented yet: https://github.com/conda/rattler/issues/1327",
     strict=True,
 )
 def test_http_server_auth_token_in_defaults(
@@ -255,8 +254,7 @@ def test_http_server_auth_token_in_defaults(
 
 
 @pytest.mark.xfail(
-    reason="multichannels not fully implemented yet: "
-    "https://github.com/conda/rattler/issues/1327",
+    reason="multichannels not fully implemented yet: https://github.com/conda/rattler/issues/1327",
     strict=True,
 )
 def test_local_spec() -> None:

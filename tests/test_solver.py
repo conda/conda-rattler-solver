@@ -856,3 +856,24 @@ def test_python_does_not_change_unless_wanted(
         link_names = {pkg["name"] for pkg in data["actions"]["LINK"]}
         unlink_names = {pkg["name"] for pkg in data["actions"]["UNLINK"]}
         assert "python" in unlink_names.intersection(link_names)
+
+
+def test_installed_packages_included_in_solver(
+    tmp_env: TmpEnvFixture, conda_cli: CondaCLIFixture
+) -> None:
+    """
+    Test that installed packages are included in the solver's consideration when
+    updating all packages.
+
+    ref: https://github.com/conda/conda-rattler-solver/issues/88
+    """
+    with tmp_env("imagesize", "--override-channels", "--channel=defaults") as prefix:
+        _, err, rc = conda_cli(
+            "update",
+            "--all",
+            f"--prefix={prefix}",
+            "--override-channels",
+            "--channel=conda-canary",
+        )
+        assert rc == 0
+        assert err == ""

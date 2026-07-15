@@ -15,6 +15,7 @@ from conda.core.subdir_data import SubdirData
 from conda.gateways.logging import initialize_logging
 from conda.gateways.shards import build_repodata_subset
 from conda.models.channel import Channel
+from conda.models.records import PackageRecord
 
 from conda_rattler_solver.index import RattlerIndexHelper, _is_sharded_repodata_enabled
 from conda_rattler_solver.state import SolverInputState
@@ -115,6 +116,86 @@ def test_reload_channels(tmp_path: Path):
     time.sleep(1)
     index.reload_channel(Channel(str(tmp_path)))
     assert index.n_packages() == initial_count + 1
+
+
+def _installed_record(name: str, channel_url: str, subdir: str) -> PackageRecord:
+    return PackageRecord(
+        name=name,
+        version="1.0",
+        build="0",
+        build_number=0,
+        channel=f"{channel_url}/{subdir}",
+        subdir=subdir,
+        fn=f"{name}-1.0-0.tar.bz2",
+        depends=(),
+        constrains=(),
+    )
+
+
+def test_installed_records_default_is_noop():
+    index = RattlerIndexHelper(channels=(), subdirs=("linux-64", "noarch"))
+    assert index.n_packages() == 0
+    assert index._index == {}
+
+
+def test_installed_records_are_searchable_even_if_channel_is_unreachable():
+    """
+    Installed records must be resolvable from their own metadata, without ever
+    fetching repodata from their (possibly no-longer-available) origin channel.
+    """
+    installed = (
+        _installed_record("foo", "https://conda.anaconda.org/unreachable-channel", "linux-64"),
+        _installed_record("bar", "https://conda.anaconda.org/unreachable-channel", "noarch"),
+    )
+    index = RattlerIndexHelper(
+        channels=(), subdirs=("linux-64", "noarch"), installed_records=installed
+    )
+    assert index.n_packages() == 2
+
+    pkgs = index.search("foo")
+    assert len(pkgs) == 1
+    assert pkgs.version == "1.0"
+    pkgs = index.search("bar")
+    assert len(pkgs) == 1
+    assert pkgs.version == "1.0"
+
+
+def test_installed_records_grouped_by_channel_and_subdir():
+    installed = (
+        _installed_record("foo", "https://conda.anaconda.org/chan-a", "linux-64"),
+        _installed_record("baz", "https://conda.anaconda.org/chan-a", "linux-64"),
+        _installed_record("bar", "https://conda.anaconda.org/chan-b", "noarch"),
+    )
+    index = RattlerIndexHelper(
+        channels=(), subdirs=("linux-64", "noarch"), installed_records=installed
+    )
+    # foo and baz share a (channel, subdir) pair and must collapse into a single repo entry
+    assert len(index._index) == 2
+    assert index.n_packages() == 3
+
+
+def test_installed_records_filtered_by_requested_subdirs():
+    installed = (
+        _installed_record("foo", "https://conda.anaconda.org/chan", "linux-64"),
+        _installed_record("win-only", "https://conda.anaconda.org/chan", "win-64"),
+    )
+    index = RattlerIndexHelper(
+        channels=(), subdirs=("linux-64", "noarch"), installed_records=installed
+    )
+    assert index.n_packages() == 1
+    assert list(index.search("foo"))
+    assert not list(index.search("win-only"))
+
+
+def test_installed_records_with_noarch_only_subdirs():
+    """
+    Requesting only the "noarch" subdir must not crash even though
+    installed records normally come from a native (non-noarch) subdir too.
+    """
+    installed = (_installed_record("bar", "https://conda.anaconda.org/chan", "noarch"),)
+    index = RattlerIndexHelper(channels=(), subdirs=("noarch",), installed_records=installed)
+    assert index.n_packages() == 1
+    assert list(index.search("bar"))
 
 
 @pytest.mark.parametrize(
