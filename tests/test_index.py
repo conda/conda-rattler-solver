@@ -152,12 +152,12 @@ def test_installed_records_are_searchable_even_if_channel_is_unreachable():
     )
     assert index.n_packages() == 2
 
-    pkgs = index.search("foo")
+    pkgs = [pkg for pkg in index.search("foo")]
     assert len(pkgs) == 1
-    assert pkgs.version == "1.0"
-    pkgs = index.search("bar")
+    assert pkgs[0].version == "1.0"
+    pkgs = [pkg for pkg in index.search("bar")]
     assert len(pkgs) == 1
-    assert pkgs.version == "1.0"
+    assert pkgs[0].version == "1.0"
 
 
 def test_installed_records_grouped_by_channel_and_subdir():

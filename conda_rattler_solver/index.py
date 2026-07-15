@@ -413,24 +413,24 @@ class RattlerIndexHelper:
                     record_data[field] = value
             packages_key = "packages" if record.fn.endswith(".tar.bz2") else "packages.conda"
 
-            record_map_key = (record.channel, record.subdir)
-            if record_map_key not in records_map:
-                records_map[record_map_key] = empty_repodata_dict(
+            if record.channel not in records_map:
+                records_map[record.channel] = empty_repodata_dict(
                     record.subdir
                 )  # , base_url=record.channel.canonical_name)
-            records_map[record_map_key][packages_key][record.fn] = record_data
+            records_map[record.channel][packages_key][record.fn] = record_data
 
-        for channel_tuple, repodata in records_map.items():
+        for channel, repodata in records_map.items():
             with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
                 f.write(json_dump(repodata))
-            subdir = channel_tuple[1]
-            noauth_url = channel_tuple[0].urls(with_credentials=False, subdirs=(subdir,))[0]
+            subdir = channel.subdir or "noarch"
+            noauth_url = channel.urls(with_credentials=False, subdirs=(subdir,))[0]
+            noauth_url_sans_subdir = noauth_url.rsplit("/", 1)[0]
             repos.append(
                 _ChannelRepoInfo(
                     repo=rattler.SparseRepoData(
-                        rattler.Channel(channel_tuple[0].base_url), subdir, f.name
+                        rattler.Channel(noauth_url_sans_subdir), subdir, f.name
                     ),
-                    channel=channel_tuple[0],
+                    channel=channel,
                     full_url=noauth_url,
                     noauth_url=noauth_url,
                     local_json=f.name,
