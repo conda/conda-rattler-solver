@@ -239,11 +239,13 @@ class RattlerSolver(Solver):
         subdirs: Iterable[str],
         in_state: SolverInputState,
     ) -> RattlerIndexHelper:
+
         index = RattlerIndexHelper(
             channels=[*conda_build_channels, *channels],
             subdirs=subdirs,
             repodata_fn=self._repodata_fn,
             pkgs_dirs=context.pkgs_dirs if context.offline else (),
+            installed_records=(*in_state.installed.values(),),
             in_state=in_state,
             build_repodata_subset=self._build_repodata_subset,
         )
