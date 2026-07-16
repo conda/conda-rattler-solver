@@ -239,17 +239,35 @@ class RattlerIndexHelper:
         """
         index = {}
         for url, shards in channel_data.items():
-            subdir = Channel.from_url(url).subdir
+            subdir = Channel.from_url(url).subdir or ""
             repodata = empty_repodata_dict(subdir, base_url=url)
+
+            for filename, record in shards.iter_records():
+                if filename.endswith(".tar.bz2"):
+                    repodata["packages"][filename] = record
+                elif filename.endswith(".conda"):
+                    repodata["packages.conda"][filename] = record
+                elif record.get("fn", "").endswith(".whl"):
+                    # Wheel records must contain the `fn` field
+                    # https://github.com/conda/ceps/pull/145/changes#diff-82241b2f88ce71caab4f64ac25bff5f1e4544117b076952753b2b09677dec95aR64
+                    # Currently, we only expect whl files to be served in v3 repodata.
+                    # In the future, we will need to extend this to support .conda and
+                    # .tar.bz2 files in v3 repodata.
+                    repodata["v3"]["whl"][filename] = record
+
+            repodata2 = empty_repodata_dict(subdir, base_url=url)
             for (key, section), record in shards.iter_records_v3():
                 if section == "packages":
-                    repodata["packages"][key] = record
+                    repodata2["packages"][key] = record
                 elif section == "packages.conda":
-                    repodata["packages.conda"][key] = record
+                    repodata2["packages.conda"][key] = record
                 elif section.startswith("v3."):
                     # Extract v3 package type (whl, conda, tar.bz2) from section name
                     v3_type = section[3:]  # Remove "v3." prefix
-                    repodata["v3"][v3_type][key] = record
+                    repodata2["v3"][v3_type][key] = record
+
+            assert repodata2 == repodata
+
             n_packages = (
                 len(repodata["packages"])
                 + len(repodata["packages.conda"])
