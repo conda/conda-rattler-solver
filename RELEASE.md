@@ -1,6 +1,7 @@
 <!-- edit this in https://github.com/conda/infrastructure -->
 
 [compare]: https://github.com/conda/conda-rattler-solver/compare
+[new release]: https://github.com/conda/conda-rattler-solver/releases/new
 [release docs]: https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
 [rever docs]: https://regro.github.io/rever-docs
 [Anaconda Recipes]: https://github.com/AnacondaRecipes/conda-rattler-solver-feedstock
@@ -150,26 +151,23 @@ Install [`rever`][rever docs] using whatever your project defines (e.g., a conda
     Xref #<RELEASE ISSUE>
     ```
 
+10. [Create][new release] the release and **save as draft**:
+
+    | Field | Value |
+    |---|---|
+    | Choose a tag | `MAJOR.MINOR.PATCH` |
+    | Target | `main` |
+    | Body | copy/paste from `CHANGELOG.md` |
+
+    > **Note:** Only publish the release after the release PR is merged.
+
 </details>
 
 ## 3. Wait for review and approval of the release PR.
 
-## 4. Merge the release PR and push the release tag.
+## 4. Merge the release PR and publish the release.
 
-After the release PR is merged, update your local `main` branch and push the
-release tag:
-
-```bash
-$ git switch main
-$ git pull --ff-only upstream main
-$ git tag MAJOR.MINOR.PATCH
-$ git push upstream MAJOR.MINOR.PATCH
-```
-
-The release workflow builds the source and wheel distributions from the locked
-Pixi environment, attests them, creates a draft GitHub release from the matching
-`CHANGELOG.md` entry, publishes the distributions to PyPI using trusted
-publishing, and then publishes the GitHub release.
+Go to the [releases page][new release], add the release notes from `CHANGELOG.md` to the draft, and publish.
 
 ## 5. Bump [Anaconda Recipes][Anaconda Recipes] and [conda-forge][conda-forge] feedstocks to use `MAJOR.MINOR.PATCH`.
 
