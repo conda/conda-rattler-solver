@@ -138,6 +138,9 @@ class SolverInputState:
     interoperability
         Whether ``PrefixData`` will also expose packages not installed by
         ``conda`` (e.g. ``pip`` and others can put Python packages in the prefix).
+    virtual_packages
+        System properties exposed to the solver. When omitted, conda detects them
+        from the local system.
     """
 
     _ENUM_STR_MAP = {
@@ -171,6 +174,7 @@ class SolverInputState:
         prune: bool | None = False,
         command: str | None = None,
         interoperability: bool | None = None,
+        virtual_packages: Iterable[PackageRecord] | None = None,
     ):
         self.prefix = prefix
         self._prefix_data = PrefixData(prefix, interoperability=interoperability)
@@ -179,7 +183,7 @@ class SolverInputState:
         self._pinned = {spec.name: spec for spec in get_pinned_specs(prefix)}
         self._aggressive_updates = {spec.name: spec for spec in context.aggressive_update_packages}
 
-        virtual = Index().system_packages
+        virtual = Index().system_packages if virtual_packages is None else virtual_packages
         self._virtual = {record.name: record for record in virtual}
 
         self._requested = {}
