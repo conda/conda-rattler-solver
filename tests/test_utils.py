@@ -1,5 +1,4 @@
-# Copyright (C) 2022 Anaconda, Inc
-# Copyright (C) 2023 conda
+# Copyright (C) 2026 conda
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
 
@@ -77,8 +76,8 @@ def _write_current_conda_prefix_record(conda_meta_dir, channel_name: str):
 @pytest.mark.parametrize(
     "conda_self_installed,frozen,expected_snippet",
     [
-        pytest.param(True, True, r"\$ conda self update", id="conda self installed, frozen"),
-        pytest.param(True, False, r"\$ conda self update", id="conda self installed, not frozen"),
+        pytest.param(True, True, r"\$ conda self update\n", id="conda self installed, frozen"),
+        pytest.param(True, False, r"\$ conda self update\n", id="conda self installed, not frozen"),
         pytest.param(
             False,
             True,
@@ -88,7 +87,7 @@ def _write_current_conda_prefix_record(conda_meta_dir, channel_name: str):
         pytest.param(
             False,
             False,
-            r"\$ conda update -n base -c [\w-]+ conda",
+            r"\$ conda update -n base -c [\w-]+ conda\n",
             id="conda self not installed, not frozen",
         ),
     ],
@@ -116,7 +115,7 @@ def test_notify_conda_outdated_message(
     monkeypatch.setenv("CONDA_NOTIFY_OUTDATED_CONDA", "true")
     monkeypatch.setenv("CONDA_QUIET", "false")
     monkeypatch.setattr(utils_module, "PrefixData", _FakePrefixData(conda_self_installed, frozen))
-    monkeypatch.setenv("CONDA_ROOT_PREFIX", tmp_path)
+    monkeypatch.setenv("CONDA_ROOT_PREFIX", str(tmp_path))
     reset_context()
 
     newer_record = PackageRecord(

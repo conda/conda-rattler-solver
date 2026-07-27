@@ -1,6 +1,6 @@
 ### Enhancements
 
-* * Suggest updating conda with `conda self` if conda self plugin is installed. (#96)
+* Suggest updating conda with `conda self` if conda self plugin is installed. (#96)
 
 ### Bug fixes
 
