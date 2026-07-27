@@ -1,22 +1,28 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling>=1.12.2", "hatch-vcs>=0.2.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "conda-rattler-solver"
 description = "The fast pixi solver, now in conda"
-readme = "README.md"
-license = { file = "LICENSE" }
+readme = { file = "README.md", content-type = "text/markdown" }
+license = "BSD-3-Clause"
+keywords = ["conda", "dependency-solving", "plugin", "rattler", "solver"]
 classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
   "License :: OSI Approved :: BSD License",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: Implementation :: CPython",
-  "Programming Language :: Python :: Implementation :: PyPy",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: System :: Software Distribution",
 ]
 requires-python = ">=3.10"
 dependencies = [
@@ -26,7 +32,10 @@ dependencies = [
 dynamic = ["version"]
 
 [project.urls]
-homepage = "https://github.com/conda-incubator/conda-rattler-solver"
+Changelog = "https://github.com/conda/conda-rattler-solver/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/conda/conda-rattler-solver"
+Issues = "https://github.com/conda/conda-rattler-solver/issues"
+Repository = "https://github.com/conda/conda-rattler-solver"
 
 [project.entry-points.conda]
 conda-rattler-solver = "conda_rattler_solver.plugin"
@@ -131,6 +140,10 @@ python = "3.12.*"
 python = "3.13.*"
 
 [tool.pixi.feature.release.dependencies]
+hatch-vcs = ">=0.2.0"
+hatchling = ">=1.12.2"
+python = ">=3.13,<3.14"
+python-build = ">=1.2"
 rever = "*"
 
 [tool.pixi.feature.py314.dependencies]
@@ -140,7 +153,7 @@ python = "3.14.*"
 build = ["build"]
 dev = ["py310", "self"]
 docs = ["docs"]
-release = ["release"]
+release = { features = ["release"], no-default-feature = true }
 lint = ["lint"]
 test-py310 = ["test", "py310", "self"]
 test-py311 = ["test", "py311", "self"]
