@@ -13,7 +13,9 @@ import pytest
 from conda.base.context import context, reset_context
 from conda.core.subdir_data import SubdirData
 from conda.gateways.logging import initialize_logging
+from conda.gateways.shards import build_repodata_subset
 from conda.models.channel import Channel
+from conda.testing import http_test_server
 
 from conda_rattler_solver.index import RattlerIndexHelper, _is_sharded_repodata_enabled
 from conda_rattler_solver.state import SolverInputState
@@ -145,13 +147,9 @@ def test_load_channel_repo_info_shards(
     assert _is_sharded_repodata_enabled() == (load_type == "shard")
 
     if load_type == "shard":
-        shards_mod = pytest.importorskip(
-            "conda.gateways.shards",
-            reason="conda.gateways.shards not available; install conda 633de45c62, 26.5.0 or later ",
-        )
-        build_repodata_subset = shards_mod.build_repodata_subset
+        _build_repodata_subset = build_repodata_subset
     else:
-        build_repodata_subset = None
+        _build_repodata_subset = None
 
     with tmp_env("xz", "--solver=rattler") as prefix:
         in_state = SolverInputState(prefix, requested=requested)
@@ -162,7 +160,7 @@ def test_load_channel_repo_info_shards(
                 context.subdir,
             ),
             in_state=in_state,
-            build_repodata_subset=build_repodata_subset,
+            build_repodata_subset=_build_repodata_subset,
         )
 
         assert len(index_helper._index) > 0
@@ -183,3 +181,69 @@ def test_load_channel_repo_info_shards(
                 f"Shard index ({shard_package_count} packages) should be a strict subset of "
                 f"full repodata ({full_package_count} packages)"
             )
+
+
+def test_search_non_sharded_channels(tmp_path: Path):
+    (tmp_path / "noarch").mkdir(parents=True, exist_ok=True)
+    shutil.copy(DATA / "mamba_repo" / "noarch" / "repodata.json", tmp_path / "noarch")
+    index = RattlerIndexHelper(channels=[Channel(str(tmp_path))])
+    results = [result for result in index.search("test-package")]
+    assert len(results) == 1
+    assert results[0].name == "test-package"
+
+
+def test_search_sharded_channels(tmp_path: Path):
+    server = http_test_server.run_test_server(DATA / "sharded_repo")
+    host, port = server.socket.getsockname()[:2]
+    url_host = f"[{host}]" if ":" in host else host
+    url = f"http://{url_host}:{port}/noarch"
+    index = RattlerIndexHelper(
+        channels=[Channel(url)],
+        build_repodata_subset=build_repodata_subset,
+        in_state=SolverInputState(tmp_path),
+    )
+
+    results = [result for result in index.search("foo")]
+    assert len(results) == 1
+    assert results[0].name == "foo"
+
+    results = [result for result in index.search("bar")]
+    assert len(results) == 1
+    assert results[0].name == "bar"
+
+    results = [result for result in index.search("idontexist")]
+    assert len(results) == 0
+
+    results = [result for result in index.search("bar>2")]
+    assert len(results) == 0
+
+    results = [result for result in index.search("bar==1")]
+    assert len(results) == 1
+    assert results[0].name == "bar"
+
+
+def test_search_combo_sharded_channels(tmp_path: Path):
+    server = http_test_server.run_test_server(DATA / "sharded_repo")
+    host, port = server.socket.getsockname()[:2]
+    url_host = f"[{host}]" if ":" in host else host
+    url = f"http://{url_host}:{port}/noarch"
+    (tmp_path / "noarch").mkdir(parents=True, exist_ok=True)
+    shutil.copy(DATA / "mamba_repo" / "noarch" / "repodata.json", tmp_path / "noarch")
+
+    index = RattlerIndexHelper(
+        channels=[Channel(url), Channel(str(tmp_path))],
+        build_repodata_subset=build_repodata_subset,
+        in_state=SolverInputState(tmp_path),
+    )
+
+    results = [result for result in index.search("foo")]
+    assert len(results) == 1
+    assert results[0].name == "foo"
+
+    results = [result for result in index.search("bar")]
+    assert len(results) == 1
+    assert results[0].name == "bar"
+
+    results = [result for result in index.search("test-package")]
+    assert len(results) == 1
+    assert results[0].name == "test-package"
