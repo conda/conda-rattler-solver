@@ -206,6 +206,24 @@ class RattlerIndexHelper:
 
         return tuple(dict.fromkeys(urls))  # de-duplicate
 
+    def _load_root_package_from_shard(self, package_names: list[str]):
+        """
+        Loads packages from channels that are sharded
+        """
+        urls = self._urls_from_channels()
+        if self.build_repodata_subset and _is_sharded_repodata_enabled():
+            urls_to_channel = {url: Channel.from_url(url) for url in urls}
+            channel_data = self.build_repodata_subset(
+                package_names, urls_to_channel, repodata_version=3
+            )
+            log.debug(
+                "build_repodata_subset returned channels: %s",
+                list(channel_data) if channel_data is not None else None,
+            )
+            if channel_data is None:
+                return None
+            self._index.update(self._load_repo_info_from_shards(channel_data))
+
     def _load_channel_repo_info_shards(
         self, urls_to_channel: dict[str, Channel]
     ) -> dict[str, _ChannelRepoInfo] | None:
@@ -359,6 +377,8 @@ class RattlerIndexHelper:
 
     def search(self, spec: str | MatchSpec) -> Iterable[PackageRecord]:
         spec = rattler.MatchSpec(str(spec))
+        # load shards with requested spec
+        self._load_root_package_from_shard([spec.name.normalized])
         for info in self._index.values():
             for record in info.repo.load_matching_records([spec]):
                 yield rattler_record_to_conda_record(record)
