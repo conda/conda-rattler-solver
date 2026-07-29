@@ -206,10 +206,11 @@ class RattlerIndexHelper:
 
         return tuple(dict.fromkeys(urls))  # de-duplicate
 
-    def _load_root_package_from_shard(self, package_names: list[str]):
+    def _get_root_package_from_shard(self, package_names: list[str]) -> dict[str, _ChannelRepoInfo]:
         """
-        Loads packages from channels that are sharded
+        Builds the repodata subset for a set of packages. Only applicable to sharded channels.
         """
+        result: dict[str, _ChannelRepoInfo] = {}
         urls = self._urls_from_channels()
         if self.build_repodata_subset and _is_sharded_repodata_enabled():
             urls_to_channel = {url: Channel.from_url(url) for url in urls}
@@ -222,7 +223,8 @@ class RattlerIndexHelper:
             )
             if channel_data is None:
                 return None
-            self._index.update(self._load_repo_info_from_shards(channel_data))
+            result.update(self._load_repo_info_from_shards(channel_data))
+        return result
 
     def _load_channel_repo_info_shards(
         self, urls_to_channel: dict[str, Channel]
@@ -377,9 +379,16 @@ class RattlerIndexHelper:
 
     def search(self, spec: str | MatchSpec) -> Iterable[PackageRecord]:
         spec = rattler.MatchSpec(str(spec))
-        # load shards with requested spec
-        self._load_root_package_from_shard([spec.name.normalized])
-        for info in self._index.values():
+        # Search the loaded index. Additionally, load packages matching the search target
+        # from channels with sparse repodata. The packages loaded with `_get_root_package_from_shard`
+        # will have the most up-to-date packages for the requested spec in sharded channels.
+        # This does not update the internal index (self._index) with the search results.
+        extra_index = self._get_root_package_from_shard([spec.name.normalized])
+        if extra_index is not None:
+            index = self._index | extra_index
+        else:
+            index = self._index
+        for info in index.values():
             for record in info.repo.load_matching_records([spec]):
                 yield rattler_record_to_conda_record(record)
 
