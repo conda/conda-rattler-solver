@@ -480,12 +480,16 @@ class RattlerSolver(Solver):
             if requested:
                 specs.extend(requested)
                 # https://github.com/conda/conda-rattler-solver/issues/100
-                # Name-only python skips the X.Y.* pin in Block A. When other history
-                # packages bind the current ABI, hold the minor so we do not float to a
-                # newer one (libmamba keeps those installs instead).
+                # Name-only `conda update python` skips the X.Y.* pin in Block A. When
+                # that is the sole request and other history packages bind the ABI, hold
+                # the minor (libmamba keeps those installs instead). Do not apply when
+                # other versioned specs are present (e.g. conda downgrade needing an
+                # older python).
                 if (
                     name == "python"
                     and installed
+                    and in_state.is_updating
+                    and set(in_state.requested) == {"python"}
                     and all(spec.is_name_only_spec for spec in requested)
                     and history_binds_python_abi
                 ):
