@@ -428,6 +428,19 @@ class RattlerSolver(Solver):
         if installed_python and to_be_installed_python:
             python_version_might_change = not to_be_installed_python.match(installed_python)
 
+        # Other history packages that depend on python/python_abi effectively hold the
+        # current ABI (libmamba Keep of those installs). Used only for the niche #100 case.
+        history_binds_python_abi = False
+        for hist_name in in_state.history:
+            if hist_name == "python":
+                continue
+            hist_record = in_state.installed.get(hist_name)
+            if not hist_record:
+                continue
+            if any(MatchSpec(dep).name in ("python", "python_abi") for dep in hist_record.depends):
+                history_binds_python_abi = True
+                break
+
         # TODO: Make in_state.requested a dict[str, list[MatchSpec]]
         # This makes tests/core/test_solve.py::test_globstr_matchspec_compatible
         # and test_globstr_matchspec_non_compatible pass
@@ -466,6 +479,18 @@ class RattlerSolver(Solver):
             # Block B: main logic for user requests and installed packages
             if requested:
                 specs.extend(requested)
+                # https://github.com/conda/conda-rattler-solver/issues/100
+                # Name-only python skips the X.Y.* pin in Block A. When other history
+                # packages bind the current ABI, hold the minor so we do not float to a
+                # newer one (libmamba keeps those installs instead).
+                if (
+                    name == "python"
+                    and installed
+                    and all(spec.is_name_only_spec for spec in requested)
+                    and history_binds_python_abi
+                ):
+                    pyver = ".".join(installed.version.split(".")[:2])
+                    constraints.append(f"python {pyver}.*")
             elif name in in_state.always_update:
                 if in_state.update_modifier.UPDATE_ALL and conflicting and not history:
                     # with --update-all, all packages will be requested, but sometimes

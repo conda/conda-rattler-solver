@@ -211,6 +211,49 @@ def test_update_from_latest_not_downgrade(
         assert original_python.version == update_python.version
 
 
+def test_name_only_update_python_keeps_minor_when_history_holds_abi(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+) -> None:
+    """
+    https://github.com/conda/conda-rattler-solver/issues/100
+
+    Name-only `conda update python` must not jump minors when another history package
+    that depends on python/python_abi is present. Explicit versioned requests still may.
+    """
+    args = ("--override-channels", "--channel=defaults", "--solver=rattler")
+    with tmp_env("python=3.13", "conda", *args) as prefix:
+        original = PrefixData(prefix).get("python")
+        assert original.version.startswith("3.13.")
+
+        out, err, rc = conda_cli(
+            "update",
+            f"--prefix={prefix}",
+            *args,
+            "--json",
+            "--dry-run",
+            "python",
+        )
+        assert rc == 0
+        data = json.loads(out)
+        if data.get("message") != "All requested packages already installed.":
+            link = {pkg["name"]: pkg for pkg in data.get("actions", {}).get("LINK", ())}
+            if "python" in link:
+                assert link["python"]["version"].startswith("3.13."), link["python"]["version"]
+
+        out, err, rc = conda_cli(
+            "install",
+            f"--prefix={prefix}",
+            *args,
+            "--json",
+            "--dry-run",
+            "python=3.14",
+            raises=DryRunExit,
+        )
+        data = json.loads(out)
+        link = {pkg["name"]: pkg for pkg in data["actions"]["LINK"]}
+        assert link["python"]["version"].startswith("3.14.")
+
 @pytest.mark.skipif(not on_linux, reason="Linux only")
 def test_too_aggressive_update_to_conda_forge_packages(tmp_env: TmpEnvFixture) -> None:
     """
