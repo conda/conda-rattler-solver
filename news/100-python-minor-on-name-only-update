@@ -1,0 +1,19 @@
+### Enhancements
+
+* <news item>
+
+### Bug fixes
+
+* Fix `conda update python` jumping to a newer Python minor (e.g. 3.13 → 3.14) when the environment also has packages like `conda` that were explicitly installed. Behavior now matches libmamba: stay on the current major.minor unless the user asks for a different Python version. (#100)
+
+### Deprecations
+
+* <news item>
+
+### Docs
+
+* <news item>
+
+### Other
+
+* <news item>
