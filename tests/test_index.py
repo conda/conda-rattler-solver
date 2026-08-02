@@ -193,6 +193,12 @@ def test_search_non_sharded_channels(tmp_path: Path):
 
 
 def test_search_sharded_channels(tmp_path: Path):
+    """
+    This test ensures that searching the index works for a sharded channel. When
+    `search_expanded_index` is True, the search should be sure to build the
+    repodata subset of the requested package to include it in the search results.
+    Further, the search should not effect the internal index state.
+    """
     server = http_test_server.run_test_server(DATA / "sharded_repo")
     host, port = server.socket.getsockname()[:2]
     url_host = f"[{host}]" if ":" in host else host
@@ -203,26 +209,63 @@ def test_search_sharded_channels(tmp_path: Path):
         in_state=SolverInputState(tmp_path),
     )
 
-    results = [result for result in index.search("foo")]
+    results = [result for result in index.search("foo", search_expanded_index=True)]
     assert len(results) == 1
     assert results[0].name == "foo"
 
-    results = [result for result in index.search("bar")]
+    results = [result for result in index.search("foo", search_expanded_index=False)]
+    assert len(results) == 0
+
+    results = [result for result in index.search("bar", search_expanded_index=True)]
     assert len(results) == 1
     assert results[0].name == "bar"
 
-    results = [result for result in index.search("idontexist")]
+    results = [result for result in index.search("idontexist", search_expanded_index=True)]
     assert len(results) == 0
 
-    results = [result for result in index.search("bar>2")]
+    results = [result for result in index.search("bar>2", search_expanded_index=True)]
     assert len(results) == 0
 
-    results = [result for result in index.search("bar==1")]
+    results = [result for result in index.search("bar==1", search_expanded_index=True)]
     assert len(results) == 1
     assert results[0].name == "bar"
+
+
+def test_search_sharded_channels_with_requested_packages(tmp_path: Path):
+    """
+    This test ensures that if a package is in the set of requested packages, 
+    it should not require loading the expanded index to find it.
+    """
+    server = http_test_server.run_test_server(DATA / "sharded_repo")
+    host, port = server.socket.getsockname()[:2]
+    url_host = f"[{host}]" if ":" in host else host
+    url = f"http://{url_host}:{port}/noarch"
+    index = RattlerIndexHelper(
+        channels=[Channel(url)],
+        build_repodata_subset=build_repodata_subset,
+        in_state=SolverInputState(tmp_path, requested=["foo"]),
+    )
+
+    results = [result for result in index.search("foo", search_expanded_index=False)]
+    assert len(results) == 1
+    assert results[0].name == "foo"
+
+    results = [result for result in index.search("bar", search_expanded_index=False)]
+    assert len(results) == 1
+    assert results[0].name == "bar"
+
+    results = [result for result in index.search("idontexist", search_expanded_index=False)]
+    assert len(results) == 0
+    
+    results = [result for result in index.search("idontexist", search_expanded_index=True)]
+    assert len(results) == 0
 
 
 def test_search_combo_sharded_channels(tmp_path: Path):
+    """
+    This test ensures that searching the index works for a combination of sharded 
+    and non-sharded channels. 
+    """
     server = http_test_server.run_test_server(DATA / "sharded_repo")
     host, port = server.socket.getsockname()[:2]
     url_host = f"[{host}]" if ":" in host else host
@@ -236,14 +279,17 @@ def test_search_combo_sharded_channels(tmp_path: Path):
         in_state=SolverInputState(tmp_path),
     )
 
-    results = [result for result in index.search("foo")]
+    results = [result for result in index.search("foo", search_expanded_index=True)]
     assert len(results) == 1
     assert results[0].name == "foo"
 
-    results = [result for result in index.search("bar")]
+    results = [result for result in index.search("foo", search_expanded_index=False)]
+    assert len(results) == 0
+
+    results = [result for result in index.search("bar", search_expanded_index=True)]
     assert len(results) == 1
     assert results[0].name == "bar"
 
-    results = [result for result in index.search("test-package")]
+    results = [result for result in index.search("test-package", search_expanded_index=True)]
     assert len(results) == 1
     assert results[0].name == "test-package"
