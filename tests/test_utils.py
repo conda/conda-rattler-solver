@@ -137,3 +137,12 @@ def test_notify_conda_outdated_message(
     stderr = capsys.readouterr().err
     assert "WARNING: A newer version of conda exists" in stderr
     assert re.search(expected_snippet, stderr)
+
+
+def test_conda_match_spec_to_rattler_match_spec(monkeypatch):
+    result = utils_module.conda_match_spec_to_rattler_match_spec(
+        "requests[extras=[a,b]]"
+    )
+    assert result is not None
+
+        

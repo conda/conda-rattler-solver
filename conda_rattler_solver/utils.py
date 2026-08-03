@@ -176,8 +176,13 @@ def conda_match_spec_to_rattler_match_spec(spec: MatchSpec) -> rattler.MatchSpec
     match_spec = MatchSpec(spec)
     if os.sep in match_spec.name or "/" in match_spec.name:
         raise InvalidMatchSpec(match_spec, "Cannot contain slashes.")
+
+    if "extras" in match_spec:
+        intermediate=str(match_spec).rstrip("=")
+    else:
+        intermediate=str(match_spec).rstrip("=").replace("=[", "[")
     return rattler.MatchSpec(
-        str(match_spec).rstrip("=").replace("=[", "["),
+        intermediate,
         conditionals=True,
         extras=True,
     )
