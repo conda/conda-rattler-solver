@@ -221,9 +221,8 @@ class RattlerIndexHelper:
                 "build_repodata_subset returned channels: %s",
                 list(channel_data) if channel_data is not None else None,
             )
-            if channel_data is None:
-                return None
-            result.update(self._load_repo_info_from_shards(channel_data))
+            if channel_data is not None:
+                result.update(self._load_repo_info_from_shards(channel_data))
         return result
 
     def _load_channel_repo_info_shards(
