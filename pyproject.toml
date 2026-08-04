@@ -118,6 +118,7 @@ git = "*"
 importlib_resources = ">=5.10" # only necessary for Python < 3.12
 pexpect = "*"
 pytest = "*"
+pytest-benchmark = "*"
 pytest-cov = "*"
 pytest-mock = "*"
 pytest-rerunfailures = "*"
@@ -182,6 +183,7 @@ addopts = [
 markers = [
   "integration: integration tests that usually require an internet connect",
   "slow: slow running tests",
+  "benchmark: benchmark tests",
 ]
 
 [tool.ruff]
