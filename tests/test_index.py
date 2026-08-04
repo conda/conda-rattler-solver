@@ -15,7 +15,6 @@ from conda.core.subdir_data import SubdirData
 from conda.gateways.logging import initialize_logging
 from conda.gateways.shards import build_repodata_subset
 from conda.models.channel import Channel
-from conda.testing import http_test_server
 
 from conda_rattler_solver.index import RattlerIndexHelper, _is_sharded_repodata_enabled
 from conda_rattler_solver.state import SolverInputState
@@ -23,7 +22,7 @@ from conda_rattler_solver.state import SolverInputState
 if TYPE_CHECKING:
     from os import PathLike
 
-    from conda.testing.fixtures import TmpEnvFixture
+    from conda.testing.fixtures import HttpTestServerFixture, TmpEnvFixture
 
 
 initialize_logging()
@@ -192,17 +191,19 @@ def test_search_non_sharded_channels(tmp_path: Path):
     assert results[0].name == "test-package"
 
 
-def test_search_sharded_channels(tmp_path: Path):
+@pytest.mark.parametrize(
+    "http_test_server",
+    [DATA / "sharded_repo"],
+    indirect=True,
+)
+def test_search_sharded_channels(tmp_path: Path, http_test_server: HttpTestServerFixture):
     """
     This test ensures that searching the index works for a sharded channel. When
     `search_expanded_index` is True, the search should be sure to build the
     repodata subset of the requested package to include it in the search results.
     Further, the search should not effect the internal index state.
     """
-    server = http_test_server.run_test_server(DATA / "sharded_repo")
-    host, port = server.socket.getsockname()[:2]
-    url_host = f"[{host}]" if ":" in host else host
-    url = f"http://{url_host}:{port}/noarch"
+    url = http_test_server.url
     index = RattlerIndexHelper(
         channels=[Channel(url)],
         build_repodata_subset=build_repodata_subset,
@@ -231,15 +232,19 @@ def test_search_sharded_channels(tmp_path: Path):
     assert results[0].name == "bar"
 
 
-def test_search_sharded_channels_with_requested_packages(tmp_path: Path):
+@pytest.mark.parametrize(
+    "http_test_server",
+    [DATA / "sharded_repo"],
+    indirect=True,
+)
+def test_search_sharded_channels_with_requested_packages(
+    tmp_path: Path, http_test_server: HttpTestServerFixture
+):
     """
-    This test ensures that if a package is in the set of requested packages, 
+    This test ensures that if a package is in the set of requested packages,
     it should not require loading the expanded index to find it.
     """
-    server = http_test_server.run_test_server(DATA / "sharded_repo")
-    host, port = server.socket.getsockname()[:2]
-    url_host = f"[{host}]" if ":" in host else host
-    url = f"http://{url_host}:{port}/noarch"
+    url = http_test_server.url
     index = RattlerIndexHelper(
         channels=[Channel(url)],
         build_repodata_subset=build_repodata_subset,
@@ -261,15 +266,17 @@ def test_search_sharded_channels_with_requested_packages(tmp_path: Path):
     assert len(results) == 0
 
 
-def test_search_combo_sharded_channels(tmp_path: Path):
+@pytest.mark.parametrize(
+    "http_test_server",
+    [DATA / "sharded_repo"],
+    indirect=True,
+)
+def test_search_combo_sharded_channels(tmp_path: Path, http_test_server: HttpTestServerFixture):
     """
-    This test ensures that searching the index works for a combination of sharded 
-    and non-sharded channels. 
+    This test ensures that searching the index works for a combination of sharded
+    and non-sharded channels.
     """
-    server = http_test_server.run_test_server(DATA / "sharded_repo")
-    host, port = server.socket.getsockname()[:2]
-    url_host = f"[{host}]" if ":" in host else host
-    url = f"http://{url_host}:{port}/noarch"
+    url = http_test_server.url
     (tmp_path / "noarch").mkdir(parents=True, exist_ok=True)
     shutil.copy(DATA / "mamba_repo" / "noarch" / "repodata.json", tmp_path / "noarch")
 
@@ -298,19 +305,27 @@ def test_search_combo_sharded_channels(tmp_path: Path):
 @pytest.mark.benchmark
 @pytest.mark.parametrize("query", ["foo", "bar", "bar>2", "idontexist"])
 @pytest.mark.parametrize("expand_search", [True, False])
-def test_query_search_benchmark(benchmark: BenchmarkFixture, tmp_path: Path, query: str, expand_search: bool):
+@pytest.mark.parametrize(
+    "http_test_server",
+    [DATA / "sharded_repo"],
+    indirect=True,
+)
+def test_query_search_benchmark(
+    benchmark: BenchmarkFixture,
+    tmp_path: Path,
+    query: str,
+    expand_search: bool,
+    http_test_server: HttpTestServerFixture,
+):
     """
     Benchmark searching for a package that does not exist in the loaded part of the index.
-    
+
     Should observe that setting `search_expanded_index` to `True` will be much slower
     than when it is set to `False`. From the related unit tests, we can confirm that
-    without using the `search_expanded_index` option, these searches will not find the 
+    without using the `search_expanded_index` option, these searches will not find the
     requested package.
     """
-    server = http_test_server.run_test_server(DATA / "sharded_repo")
-    host, port = server.socket.getsockname()[:2]
-    url_host = f"[{host}]" if ":" in host else host
-    url = f"http://{url_host}:{port}/noarch"
+    url = http_test_server.url
     index = RattlerIndexHelper(
         channels=[Channel(url)],
         build_repodata_subset=build_repodata_subset,
@@ -326,18 +341,26 @@ def test_query_search_benchmark(benchmark: BenchmarkFixture, tmp_path: Path, que
 @pytest.mark.benchmark
 @pytest.mark.parametrize("query", ["foo", "bar", "bar>2", "idontexist"])
 @pytest.mark.parametrize("expand_search", [True, False])
-def test_query_search_requested_packages_benchmark(benchmark: BenchmarkFixture, tmp_path: Path, query: str, expand_search: bool):
+@pytest.mark.parametrize(
+    "http_test_server",
+    [DATA / "sharded_repo"],
+    indirect=True,
+)
+def test_query_search_requested_packages_benchmark(
+    benchmark: BenchmarkFixture,
+    tmp_path: Path,
+    query: str,
+    expand_search: bool,
+    http_test_server: HttpTestServerFixture,
+):
     """
     Benchmark searching for packages with the context of a package already being requested.
-    
+
     Should observe that searching the index for a package that has been requested as
     part of the input state should be about the same speed for searching with the `search_expanded_index`
     set to `True` or `False`.
     """
-    server = http_test_server.run_test_server(DATA / "sharded_repo")
-    host, port = server.socket.getsockname()[:2]
-    url_host = f"[{host}]" if ":" in host else host
-    url = f"http://{url_host}:{port}/noarch"
+    url = http_test_server.url
     index = RattlerIndexHelper(
         channels=[Channel(url)],
         build_repodata_subset=build_repodata_subset,
