@@ -13,6 +13,7 @@ import pytest
 from conda.base.context import context, reset_context
 from conda.core.subdir_data import SubdirData
 from conda.gateways.logging import initialize_logging
+from conda.gateways.shards import build_repodata_subset
 from conda.models.channel import Channel
 
 from conda_rattler_solver.index import RattlerIndexHelper, _is_sharded_repodata_enabled
@@ -21,7 +22,7 @@ from conda_rattler_solver.state import SolverInputState
 if TYPE_CHECKING:
     from os import PathLike
 
-    from conda.testing.fixtures import TmpEnvFixture
+    from conda.testing.fixtures import HttpTestServerFixture, TmpEnvFixture
 
 
 initialize_logging()
@@ -145,13 +146,9 @@ def test_load_channel_repo_info_shards(
     assert _is_sharded_repodata_enabled() == (load_type == "shard")
 
     if load_type == "shard":
-        shards_mod = pytest.importorskip(
-            "conda.gateways.shards",
-            reason="conda.gateways.shards not available; install conda 633de45c62, 26.5.0 or later ",
-        )
-        build_repodata_subset = shards_mod.build_repodata_subset
+        _build_repodata_subset = build_repodata_subset
     else:
-        build_repodata_subset = None
+        _build_repodata_subset = None
 
     with tmp_env("xz", "--solver=rattler") as prefix:
         in_state = SolverInputState(prefix, requested=requested)
@@ -162,7 +159,7 @@ def test_load_channel_repo_info_shards(
                 context.subdir,
             ),
             in_state=in_state,
-            build_repodata_subset=build_repodata_subset,
+            build_repodata_subset=_build_repodata_subset,
         )
 
         assert len(index_helper._index) > 0
@@ -183,3 +180,194 @@ def test_load_channel_repo_info_shards(
                 f"Shard index ({shard_package_count} packages) should be a strict subset of "
                 f"full repodata ({full_package_count} packages)"
             )
+
+
+def test_search_non_sharded_channels(tmp_path: Path):
+    (tmp_path / "noarch").mkdir(parents=True, exist_ok=True)
+    shutil.copy(DATA / "mamba_repo" / "noarch" / "repodata.json", tmp_path / "noarch")
+    index = RattlerIndexHelper(channels=[Channel(str(tmp_path))])
+    results = list(index.search("test-package"))
+    assert len(results) == 1
+    assert results[0].name == "test-package"
+
+
+@pytest.mark.parametrize(
+    "http_test_server",
+    [DATA / "sharded_repo"],
+    indirect=True,
+)
+def test_search_sharded_channels(tmp_path: Path, http_test_server: HttpTestServerFixture):
+    """
+    This test ensures that searching the index works for a sharded channel. When
+    `search_expanded_index` is True, the search should be sure to build the
+    repodata subset of the requested package to include it in the search results.
+    Further, the search should not effect the internal index state.
+    """
+    url = http_test_server.url
+    index = RattlerIndexHelper(
+        channels=[Channel(url)],
+        build_repodata_subset=build_repodata_subset,
+        in_state=SolverInputState(tmp_path),
+    )
+
+    results = list(index.search("foo", search_expanded_index=True))
+    assert len(results) == 1
+    assert results[0].name == "foo"
+
+    results = list(index.search("foo", search_expanded_index=False))
+    assert len(results) == 0
+
+    results = list(index.search("bar", search_expanded_index=True))
+    assert len(results) == 1
+    assert results[0].name == "bar"
+
+    results = list(index.search("idontexist", search_expanded_index=True))
+    assert len(results) == 0
+
+    results = list(result for result in index.search("bar>2", search_expanded_index=True))
+    assert len(results) == 0
+
+    results = list(index.search("bar==1", search_expanded_index=True))
+    assert len(results) == 1
+    assert results[0].name == "bar"
+
+
+@pytest.mark.parametrize(
+    "http_test_server",
+    [DATA / "sharded_repo"],
+    indirect=True,
+)
+def test_search_sharded_channels_with_requested_packages(
+    tmp_path: Path, http_test_server: HttpTestServerFixture
+):
+    """
+    This test ensures that if a package is in the set of requested packages,
+    it should not require loading the expanded index to find it.
+    """
+    url = http_test_server.url
+    index = RattlerIndexHelper(
+        channels=[Channel(url)],
+        build_repodata_subset=build_repodata_subset,
+        in_state=SolverInputState(tmp_path, requested=["foo"]),
+    )
+
+    results = list(index.search("foo", search_expanded_index=False))
+    assert len(results) == 1
+    assert results[0].name == "foo"
+
+    results =list(index.search("bar", search_expanded_index=False))
+    assert len(results) == 1
+    assert results[0].name == "bar"
+
+    results = list(index.search("idontexist", search_expanded_index=False))
+    assert len(results) == 0
+    
+    results = list(index.search("idontexist", search_expanded_index=True))
+    assert len(results) == 0
+
+
+@pytest.mark.parametrize(
+    "http_test_server",
+    [DATA / "sharded_repo"],
+    indirect=True,
+)
+def test_search_combo_sharded_channels(tmp_path: Path, http_test_server: HttpTestServerFixture):
+    """
+    This test ensures that searching the index works for a combination of sharded
+    and non-sharded channels.
+    """
+    url = http_test_server.url
+    (tmp_path / "noarch").mkdir(parents=True, exist_ok=True)
+    shutil.copy(DATA / "mamba_repo" / "noarch" / "repodata.json", tmp_path / "noarch")
+
+    index = RattlerIndexHelper(
+        channels=[Channel(url), Channel(str(tmp_path))],
+        build_repodata_subset=build_repodata_subset,
+        in_state=SolverInputState(tmp_path),
+    )
+
+    results = list(index.search("foo", search_expanded_index=True))
+    assert len(results) == 1
+    assert results[0].name == "foo"
+
+    results = list( index.search("foo", search_expanded_index=False))
+    assert len(results) == 0
+
+    results = list(index.search("bar", search_expanded_index=True))
+    assert len(results) == 1
+    assert results[0].name == "bar"
+
+    results = list(index.search("test-package", search_expanded_index=True))
+    assert len(results) == 1
+    assert results[0].name == "test-package"
+
+
+@pytest.mark.benchmark
+@pytest.mark.parametrize("query", ["foo", "bar", "bar>2", "idontexist"])
+@pytest.mark.parametrize("expand_search", [True, False])
+@pytest.mark.parametrize(
+    "http_test_server",
+    [DATA / "sharded_repo"],
+    indirect=True,
+)
+def test_query_search_benchmark(
+    benchmark: BenchmarkFixture,
+    tmp_path: Path,
+    query: str,
+    expand_search: bool,
+    http_test_server: HttpTestServerFixture,
+):
+    """
+    Benchmark searching for a package that does not exist in the loaded part of the index.
+
+    Should observe that setting `search_expanded_index` to `True` will be much slower
+    than when it is set to `False`. From the related unit tests, we can confirm that
+    without using the `search_expanded_index` option, these searches will not find the
+    requested package.
+    """
+    url = http_test_server.url
+    index = RattlerIndexHelper(
+        channels=[Channel(url)],
+        build_repodata_subset=build_repodata_subset,
+        in_state=SolverInputState(tmp_path),
+    )
+
+    def run():
+        list(index.search(query, search_expanded_index=expand_search))
+
+    benchmark(run)
+
+
+@pytest.mark.benchmark
+@pytest.mark.parametrize("query", ["foo", "bar", "bar>2", "idontexist"])
+@pytest.mark.parametrize("expand_search", [True, False])
+@pytest.mark.parametrize(
+    "http_test_server",
+    [DATA / "sharded_repo"],
+    indirect=True,
+)
+def test_query_search_requested_packages_benchmark(
+    benchmark: BenchmarkFixture,
+    tmp_path: Path,
+    query: str,
+    expand_search: bool,
+    http_test_server: HttpTestServerFixture,
+):
+    """
+    Benchmark searching for packages with the context of a package already being requested.
+
+    Should observe that searching the index for a package that has been requested as
+    part of the input state should be about the same speed for searching with the `search_expanded_index`
+    set to `True` or `False`.
+    """
+    url = http_test_server.url
+    index = RattlerIndexHelper(
+        channels=[Channel(url)],
+        build_repodata_subset=build_repodata_subset,
+        in_state=SolverInputState(tmp_path, requested=["foo"]),
+    )
+
+    def run():
+        list(index.search(query, search_expanded_index=expand_search))
+
+    benchmark(run)
