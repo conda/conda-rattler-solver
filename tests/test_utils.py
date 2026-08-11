@@ -149,6 +149,7 @@ def test_notify_conda_outdated_message(
         pytest.param("numpy==1.21.0=py39_0", "numpy", None, id="exact-version-build"),
         pytest.param("foo >=1.0,<2", "foo", None, id="version-inequality"),
         pytest.param("numpy[build=py39*]", "numpy", None, id="build-glob"),
+        pytest.param("numpy=[build=0]", "numpy", None, id="name-equals-bracket"),
         pytest.param(
             "ca-certificates[when='libzlib=1.2']",
             "ca-certificates",
@@ -183,3 +184,16 @@ def test_conda_match_spec_to_rattler_match_spec(
         assert result.extras in (None, [])
     else:
         assert set(result.extras) == expected_extras
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("numpy=[build=0]", "numpy[build=0]"),
+        ("requests[extras=['a', 'b']]", "requests[extras=['a', 'b']]"),
+        ("pkg[flags=['cuda']]", "pkg[flags=['cuda']]"),
+        ("numpy[build=0]", "numpy[build=0]"),
+    ],
+)
+def test_normalize_name_equals_bracket(raw: str, expected: str) -> None:
+    assert utils_module._NAME_EQUALS_BRACKET.sub(r"\1[", raw, count=1) == expected

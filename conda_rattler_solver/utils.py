@@ -172,13 +172,22 @@ def conda_prefix_record_to_rattler_prefix_record(
     )
 
 
+_NAME_EQUALS_BRACKET = re.compile(r"^([^\[\]=]+)=\[")
+
+
 def conda_match_spec_to_rattler_match_spec(spec: MatchSpec) -> rattler.MatchSpec:
     match_spec = MatchSpec(spec)
     if os.sep in match_spec.name or "/" in match_spec.name:
         raise InvalidMatchSpec(match_spec, "Cannot contain slashes.")
 
+    # numpy=[build=0]  ->  numpy[build=0]
+    # requests[extras=[a,b]]  ->  unchanged (already has [ after the name)
+
+    intermediate = str(match_spec).rstrip("=")
+    intermediate = _NAME_EQUALS_BRACKET.sub(r"\1[", intermediate, count=1)
+
     return rattler.MatchSpec(
-        str(match_spec).rstrip("="),
+        intermediate,
         conditionals=True,
         extras=True,
     )
