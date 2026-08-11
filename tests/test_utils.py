@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from conda import __version__ as _conda_version
-from conda.base.context import context, reset_context
+from conda.base.context import reset_context
 from conda.models.records import PackageRecord, PrefixRecord
 
 import conda_rattler_solver.utils as utils_module
@@ -77,7 +77,9 @@ def _write_current_conda_prefix_record(conda_meta_dir, channel_name: str):
     "conda_self_installed,frozen,expected_snippet",
     [
         pytest.param(True, True, r"\$ conda self update\n", id="conda self installed, frozen"),
-        pytest.param(True, False, r"\$ conda self update\n", id="conda self installed, not frozen"),
+        pytest.param(
+            True, False, r"\$ conda self update\n", id="conda self installed, not frozen"
+        ),
         pytest.param(
             False,
             True,
@@ -139,10 +141,45 @@ def test_notify_conda_outdated_message(
     assert re.search(expected_snippet, stderr)
 
 
-def test_conda_match_spec_to_rattler_match_spec(monkeypatch):
-    result = utils_module.conda_match_spec_to_rattler_match_spec(
-        "requests[extras=[a,b]]"
-    )
-    assert result is not None
-
-        
+@pytest.mark.parametrize(
+    "spec,expected_name,expected_extras",
+    [
+        pytest.param("numpy", "numpy", None, id="name-only"),
+        pytest.param("numpy=1.21", "numpy", None, id="fuzzy-version"),
+        pytest.param("numpy==1.21.0=py39_0", "numpy", None, id="exact-version-build"),
+        pytest.param("foo >=1.0,<2", "foo", None, id="version-inequality"),
+        pytest.param("numpy[build=py39*]", "numpy", None, id="build-glob"),
+        pytest.param(
+            "ca-certificates[when='libzlib=1.2']",
+            "ca-certificates",
+            None,
+            id="when",
+        ),
+        pytest.param(
+            "requests[extras=[a,b]]",
+            "requests",
+            {"a", "b"},
+            id="extras",
+        ),
+        pytest.param(
+            "pkg[flags=[cuda]]",
+            "pkg",
+            None,
+            id="flags",
+        ),
+    ],
+)
+def test_conda_match_spec_to_rattler_match_spec(
+    monkeypatch: pytest.MonkeyPatch,
+    spec: str,
+    expected_name: str,
+    expected_extras: set[str] | None,
+) -> None:
+    monkeypatch.setenv("CONDA_SOLVER", "rattler")
+    reset_context()
+    result = utils_module.conda_match_spec_to_rattler_match_spec(spec)
+    assert result.name.normalized == expected_name
+    if expected_extras is None:
+        assert result.extras in (None, [])
+    else:
+        assert set(result.extras) == expected_extras
