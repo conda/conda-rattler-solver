@@ -26,7 +26,7 @@ class _FakeIndex:
         self.channels = [SimpleNamespace(canonical_name=channel_name)]
         self._newer_records = newer_records
 
-    def search(self, spec):
+    def search(self, spec, search_expanded_index: bool = False):
         return self._newer_records
 
 
