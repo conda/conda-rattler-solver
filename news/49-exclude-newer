@@ -1,0 +1,19 @@
+### Enhancements
+
+* Support conda's `exclude_newer` policy for global, channel, and package scopes. (#49)
+
+### Bug fixes
+
+* <news item>
+
+### Deprecations
+
+* <news item>
+
+### Docs
+
+* <news item>
+
+### Other
+
+* <news item>
