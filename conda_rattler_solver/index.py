@@ -219,7 +219,9 @@ class RattlerIndexHelper:
 
         return tuple(dict.fromkeys(urls))  # de-duplicate
 
-    def _get_root_package_from_shard(self, package_names: list[str]) -> dict[str, _ChannelRepoInfo]:
+    def _get_root_package_from_shard(
+        self, package_names: list[str]
+    ) -> dict[str, _ChannelRepoInfo]:
         """
         Builds the repodata subset for a set of packages. Only applicable to sharded channels.
         """
@@ -449,7 +451,9 @@ class RattlerIndexHelper:
                 self._unlink_on_del.append(Path(f.name))
         return repos
 
-    def _search(self, spec: rattler.MatchSpec, index: dict[str, _ChannelRepoInfo]) -> Iterable[PackageRecord]:
+    def _search(
+        self, spec: rattler.MatchSpec, index: dict[str, _ChannelRepoInfo]
+    ) -> Iterable[PackageRecord]:
         """
         Search for packages matching the given spec in the index. This function does not
         build the repodata subset for the requested spec, so it may not find packages
@@ -459,7 +463,9 @@ class RattlerIndexHelper:
             for record in info.repo.load_matching_records([spec]):
                 yield rattler_record_to_conda_record(record)
 
-    def search(self, spec: str | MatchSpec, search_expanded_index: bool = False) -> Iterable[PackageRecord]:
+    def search(
+        self, spec: str | MatchSpec, search_expanded_index: bool = False
+    ) -> Iterable[PackageRecord]:
         """
         Search for packages matching the given spec in the index. For channels that are sharded,
         the requested spec may not be in the loaded index. So, this function will additionally

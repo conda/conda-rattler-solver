@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from os import PathLike
 
     from conda.testing.fixtures import HttpTestServerFixture, TmpEnvFixture
+    from pytest_benchmark.fixture import BenchmarkFixture
 
 
 initialize_logging()
@@ -330,13 +331,13 @@ def test_search_sharded_channels_with_requested_packages(
     assert len(results) == 1
     assert results[0].name == "foo"
 
-    results =list(index.search("bar", search_expanded_index=False))
+    results = list(index.search("bar", search_expanded_index=False))
     assert len(results) == 1
     assert results[0].name == "bar"
 
     results = list(index.search("idontexist", search_expanded_index=False))
     assert len(results) == 0
-    
+
     results = list(index.search("idontexist", search_expanded_index=True))
     assert len(results) == 0
 
@@ -365,7 +366,7 @@ def test_search_combo_sharded_channels(tmp_path: Path, http_test_server: HttpTes
     assert len(results) == 1
     assert results[0].name == "foo"
 
-    results = list( index.search("foo", search_expanded_index=False))
+    results = list(index.search("foo", search_expanded_index=False))
     assert len(results) == 0
 
     results = list(index.search("bar", search_expanded_index=True))
@@ -432,8 +433,8 @@ def test_query_search_requested_packages_benchmark(
     Benchmark searching for packages with the context of a package already being requested.
 
     Should observe that searching the index for a package that has been requested as
-    part of the input state should be about the same speed for searching with the `search_expanded_index`
-    set to `True` or `False`.
+    part of the input state should be about the same speed for searching with the
+    `search_expanded_index` set to `True` or `False`.
     """
     url = http_test_server.url
     index = RattlerIndexHelper(
