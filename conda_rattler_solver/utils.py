@@ -40,7 +40,11 @@ def _hash_to_str(bytes_or_str: bytes | str | None) -> None | str:
     return bytes_or_str.lower()
 
 
-def rattler_record_to_conda_record(record: rattler.PackageRecord) -> PackageRecord:
+def rattler_record_to_conda_record(
+    record: rattler.PackageRecord,
+    *,
+    add_pip_as_python_dependency: bool = False,
+) -> PackageRecord:
     if timestamp := record.timestamp:
         timestamp = int(timestamp.timestamp() * 1000)
     else:
@@ -65,6 +69,14 @@ def rattler_record_to_conda_record(record: rattler.PackageRecord) -> PackageReco
     else:
         channel_url = ""
 
+    depends = record.depends or ()
+    if (
+        add_pip_as_python_dependency
+        and record.name.source == "python"
+        and str(record.version).startswith(("2.", "3."))
+    ):
+        depends = (*depends, "pip")
+
     return PackageRecord(
         name=record.name.source,
         version=str(record.version),
@@ -80,7 +92,7 @@ def rattler_record_to_conda_record(record: rattler.PackageRecord) -> PackageReco
         sha256=_hash_to_str(record.sha256),
         arch=record.arch,
         platform=str(record.platform or "") or None,
-        depends=record.depends or (),
+        depends=depends,
         constrains=record.constrains or (),
         track_features=record.track_features or (),
         features=record.features or (),

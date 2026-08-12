@@ -13,6 +13,7 @@ from textwrap import dedent
 from typing import TYPE_CHECKING
 
 import pytest
+from conda._private.shards import ShardLike
 from conda.base.context import context
 from conda.common.compat import on_linux, on_mac, on_win
 from conda.core.prefix_data import PrefixData
@@ -22,11 +23,17 @@ from conda.exceptions import (
     SpecsConfigurationConflictError,
     UnsatisfiableError,
 )
+from conda.models.channel import Channel
+from conda.models.match_spec import MatchSpec
+from conda.models.records import PrefixRecord
 from conda.testing.integration import package_is_installed
 from conda.testing.solver_helpers import SolverTests
+from rattler.exceptions import SolverError as RattlerSolverError
 
 from conda_rattler_solver.exceptions import RattlerUnsatisfiableError
+from conda_rattler_solver.index import RattlerIndexHelper
 from conda_rattler_solver.solver import RattlerSolver as Solver
+from conda_rattler_solver.state import SolverInputState, SolverOutputState
 
 from .utils import conda_subprocess
 
@@ -727,6 +734,300 @@ def test_conditional_specs_in_cli(conda_cli):
                 f"ca-certificates should not be installed; got {data['actions']['LINK']}"
             )
     assert has_zlib
+
+
+def _add_pip_repodata(include_pip: bool = True) -> dict:
+    def record(name: str, version: str, *depends: str) -> dict:
+        return {
+            "name": name,
+            "version": version,
+            "build": "0",
+            "build_number": 0,
+            "depends": list(depends),
+        }
+
+    packages = {
+        "application-2-1.0-0.tar.bz2": record("application-2", "1.0", "python 2.*"),
+        "application-3-1.0-0.tar.bz2": record("application-3", "1.0", "python 3.*"),
+        "application-4-1.0-0.tar.bz2": record("application-4", "1.0", "python 4.*"),
+        "python-2.7.18-0.tar.bz2": record("python", "2.7.18"),
+        "python-3.13.0-0.tar.bz2": record("python", "3.13.0"),
+        "python-4.0.0-0.tar.bz2": record("python", "4.0.0"),
+        "standalone-1.0-0.tar.bz2": record("standalone", "1.0"),
+    }
+    if include_pip:
+        packages["pip-25.0-0.tar.bz2"] = record("pip", "25.0")
+    return {
+        "info": {"subdir": "noarch"},
+        "packages": packages,
+        "packages.conda": {},
+        "repodata_version": 1,
+    }
+
+
+def _add_pip_index(
+    tmp_path: Path,
+    in_state: SolverInputState,
+    repodata: dict,
+    repodata_use_shards: bool,
+) -> RattlerIndexHelper:
+    if repodata_use_shards:
+        url = "https://example.invalid/noarch"
+        shardlike = ShardLike(repodata, url)
+        for record in repodata["packages"].values():
+            shardlike.visit_package(record["name"])
+        return RattlerIndexHelper(
+            channels=[Channel(url)],
+            subdirs=("noarch",),
+            in_state=in_state,
+            build_repodata_subset=lambda *_args, **_kwargs: {url: shardlike},
+        )
+
+    channel = tmp_path / "channel" / "noarch"
+    channel.mkdir(parents=True)
+    (channel / "repodata.json").write_text(json.dumps(repodata))
+    return RattlerIndexHelper(
+        channels=[Channel(str(channel.parent))],
+        subdirs=("noarch",),
+    )
+
+
+@pytest.mark.parametrize("repodata_use_shards", (False, True), ids=("repodata", "shards"))
+def test_add_pip_as_python_dependency(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    repodata_use_shards: bool,
+) -> None:
+    monkeypatch.setattr(context, "repodata_use_shards", repodata_use_shards)
+    prefix = tmp_path / "env"
+    requested = ("application-3",)
+    solver = Solver(
+        prefix=prefix,
+        channels=(),
+        subdirs=("noarch",),
+        specs_to_add=requested,
+    )
+    in_state = SolverInputState(prefix, requested=requested)
+    index = _add_pip_index(
+        tmp_path,
+        in_state,
+        _add_pip_repodata(),
+        repodata_use_shards,
+    )
+
+    for add_pip in (False, True, False):
+        monkeypatch.setattr(context, "add_pip_as_python_dependency", add_pip)
+        out_state = SolverOutputState(solver_input_state=in_state)
+        solution = solver._solve_attempt(in_state, out_state, index)
+
+        assert isinstance(solution, list)
+        assert ("pip" in {record.name.source for record in solution}) is add_pip
+        solver._export_solved_records(solution, out_state)
+        assert ("pip" in out_state.records["python"].depends) is add_pip
+
+
+def test_add_pip_in_index_search(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    prefix = tmp_path / "env"
+    in_state = SolverInputState(prefix, requested=("python",))
+    index = _add_pip_index(
+        tmp_path,
+        in_state,
+        _add_pip_repodata(),
+        repodata_use_shards=False,
+    )
+
+    for add_pip in (False, True, False):
+        monkeypatch.setattr(context, "add_pip_as_python_dependency", add_pip)
+        dependencies = {
+            record.version: "pip" in record.depends for record in index.search("python")
+        }
+
+        assert dependencies == {
+            "2.7.18": add_pip,
+            "3.13.0": add_pip,
+            "4.0.0": False,
+        }
+
+
+def test_add_pip_does_not_patch_locked_python(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(context, "add_pip_as_python_dependency", True)
+
+    prefix = tmp_path / "env"
+    in_state = SolverInputState(prefix, requested=("standalone",))
+    in_state.prefix_data._prefix_records["python"] = PrefixRecord(
+        name="python",
+        version="3.13.0",
+        build="0",
+        build_number=0,
+        channel="https://example.invalid/noarch",
+        subdir="noarch",
+        fn="python-3.13.0-0.tar.bz2",
+        url="https://example.invalid/noarch/python-3.13.0-0.tar.bz2",
+        depends=(),
+    )
+    in_state._history["python"] = MatchSpec("python")
+    out_state = SolverOutputState(solver_input_state=in_state)
+    solver = Solver(
+        prefix=prefix,
+        channels=(),
+        subdirs=("noarch",),
+        specs_to_add=("standalone",),
+    )
+    index = _add_pip_index(
+        tmp_path,
+        in_state,
+        _add_pip_repodata(),
+        repodata_use_shards=False,
+    )
+
+    out_state = solver._solving_loop(in_state, out_state, index)
+
+    assert set(out_state.records) == {"python", "standalone"}
+    assert "pip" not in out_state.records["python"].depends
+
+
+def test_add_pip_requires_a_pip_candidate(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(context, "add_pip_as_python_dependency", True)
+
+    prefix = tmp_path / "env"
+    requested = ("application-3",)
+    solver = Solver(
+        prefix=prefix,
+        channels=(),
+        subdirs=("noarch",),
+        specs_to_add=requested,
+    )
+    in_state = SolverInputState(prefix, requested=requested)
+    out_state = SolverOutputState(solver_input_state=in_state)
+    index = _add_pip_index(
+        tmp_path,
+        in_state,
+        _add_pip_repodata(include_pip=False),
+        repodata_use_shards=False,
+    )
+
+    result = solver._solve_attempt(in_state, out_state, index)
+
+    assert isinstance(result, RattlerSolverError)
+    assert "pip *, for which no candidates were found" in str(result)
+
+
+@pytest.mark.parametrize(
+    "python_depends,expected_names",
+    (
+        pytest.param(("pip",), set(), id="python-depends-on-pip"),
+        pytest.param((), {"python"}, id="legacy-python-without-pip-dependency"),
+    ),
+)
+def test_removing_pip_respects_installed_python_metadata(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    python_depends: tuple[str, ...],
+    expected_names: set[str],
+) -> None:
+    monkeypatch.setattr(context, "add_pip_as_python_dependency", True)
+
+    prefix = tmp_path / "env"
+    requested = ("pip",)
+    solver = Solver(
+        prefix=prefix,
+        channels=(),
+        subdirs=("noarch",),
+        specs_to_remove=requested,
+        command="remove",
+    )
+    in_state = SolverInputState(prefix, requested=requested, command="remove")
+    for name, version, depends in (
+        ("python", "3.13.0", python_depends),
+        ("pip", "25.0", ()),
+    ):
+        filename = f"{name}-{version}-0.tar.bz2"
+        in_state.prefix_data._prefix_records[name] = PrefixRecord(
+            name=name,
+            version=version,
+            build="0",
+            build_number=0,
+            channel="https://example.invalid/noarch",
+            subdir="noarch",
+            fn=filename,
+            url=f"https://example.invalid/noarch/{filename}",
+            depends=depends,
+        )
+    in_state._history["python"] = MatchSpec("python")
+    out_state = SolverOutputState(solver_input_state=in_state)
+    repodata = _add_pip_repodata()
+    for filename in tuple(repodata["packages"]):
+        if filename.startswith(("python-2.", "python-4.")):
+            repodata["packages"].pop(filename)
+    index = _add_pip_index(
+        tmp_path,
+        in_state,
+        repodata,
+        repodata_use_shards=False,
+    )
+
+    out_state = solver._solving_loop(in_state, out_state, index)
+
+    assert set(out_state.records) == expected_names
+    if "python" in expected_names:
+        assert out_state.records["python"].depends == python_depends
+
+
+def test_add_pip_from_offline_package_cache(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(context, "add_pip_as_python_dependency", True)
+    packages_dir = tmp_path / "pkgs"
+    packages_dir.mkdir()
+    for name, version in (("python", "3.13.0"), ("pip", "25.0")):
+        filename = f"{name}-{version}-0.conda"
+        info_dir = packages_dir / f"{name}-{version}-0" / "info"
+        info_dir.mkdir(parents=True)
+        record = {
+            "name": name,
+            "version": version,
+            "build": "0",
+            "build_number": 0,
+            "depends": [],
+            "subdir": context.subdir,
+            "fn": filename,
+            "channel": f"https://example.invalid/{context.subdir}",
+            "url": f"https://example.invalid/{context.subdir}/{filename}",
+        }
+        (info_dir / "index.json").write_text(json.dumps(record))
+        (info_dir / "repodata_record.json").write_text(json.dumps(record))
+
+    prefix = tmp_path / "env"
+    requested = ("python",)
+    solver = Solver(
+        prefix=prefix,
+        channels=(),
+        subdirs=(context.subdir, "noarch"),
+        specs_to_add=requested,
+    )
+    in_state = SolverInputState(prefix, requested=requested)
+    out_state = SolverOutputState(solver_input_state=in_state)
+    index = RattlerIndexHelper(
+        channels=(),
+        subdirs=(context.subdir, "noarch"),
+        pkgs_dirs=(str(packages_dir),),
+        in_state=in_state,
+    )
+
+    solution = solver._solve_attempt(in_state, out_state, index)
+
+    assert isinstance(solution, list)
+    assert {record.name.source for record in solution} == {"python", "pip"}
 
 
 def test_conditional_specs_in_repodata_virtual(conda_cli):
