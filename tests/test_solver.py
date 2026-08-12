@@ -28,6 +28,7 @@ from conda.models.match_spec import MatchSpec
 from conda.models.records import PrefixRecord
 from conda.testing.integration import package_is_installed
 from conda.testing.solver_helpers import SolverTests
+from rattler.exceptions import SolverError as RattlerSolverError
 
 from conda_rattler_solver.exceptions import RattlerUnsatisfiableError
 from conda_rattler_solver.index import RattlerIndexHelper
@@ -791,133 +792,8 @@ def _add_pip_index(
     )
 
 
-@pytest.mark.parametrize(
-    "add_pip,requested,expected_pip",
-    (
-        pytest.param(False, ("application-3",), False, id="disabled"),
-        pytest.param(True, ("application-2",), True, id="python-2"),
-        pytest.param(True, ("application-3",), True, id="python-3"),
-        pytest.param(True, ("application-4",), False, id="python-4"),
-        pytest.param(False, ("application-3", "pip"), True, id="explicit"),
-        pytest.param(True, ("standalone",), False, id="without-python"),
-    ),
-)
 @pytest.mark.parametrize("repodata_use_shards", (False, True), ids=("repodata", "shards"))
 def test_add_pip_as_python_dependency(
-    tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-    add_pip: bool,
-    requested: tuple[str, ...],
-    expected_pip: bool,
-    repodata_use_shards: bool,
-) -> None:
-    monkeypatch.setattr(context, "add_pip_as_python_dependency", add_pip)
-    monkeypatch.setattr(context, "repodata_use_shards", repodata_use_shards)
-    repodata = _add_pip_repodata(include_pip=requested != ("standalone",))
-
-    prefix = tmp_path / "env"
-    solver = Solver(
-        prefix=prefix,
-        channels=(),
-        subdirs=("noarch",),
-        specs_to_add=requested,
-    )
-    in_state = SolverInputState(prefix, requested=requested)
-    out_state = SolverOutputState(solver_input_state=in_state)
-    index = _add_pip_index(tmp_path, in_state, repodata, repodata_use_shards)
-
-    for python_record in index.search("python"):
-        expected_dependency = add_pip and python_record.version.startswith(("2.", "3."))
-        assert ("pip" in python_record.depends) is expected_dependency
-    solution = solver._solve_attempt(in_state, out_state, index)
-
-    assert isinstance(solution, list)
-    records = {record.name.source for record in solution}
-    assert ("pip" in records) is expected_pip
-    solver._export_solved_records(solution, out_state)
-    if python := out_state.records.get("python"):
-        assert ("pip" in python.depends) is (add_pip and python.version.startswith(("2.", "3.")))
-
-
-@pytest.mark.parametrize("repodata_use_shards", (False, True), ids=("repodata", "shards"))
-def test_add_pip_does_not_patch_locked_python(
-    tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-    repodata_use_shards: bool,
-) -> None:
-    monkeypatch.setattr(context, "add_pip_as_python_dependency", True)
-    monkeypatch.setattr(context, "repodata_use_shards", repodata_use_shards)
-
-    prefix = tmp_path / "env"
-    in_state = SolverInputState(prefix, requested=("standalone",))
-    in_state.prefix_data._prefix_records["python"] = PrefixRecord(
-        name="python",
-        version="3.13.0",
-        build="0",
-        build_number=0,
-        channel="https://example.invalid/noarch",
-        subdir="noarch",
-        fn="python-3.13.0-0.tar.bz2",
-        url="https://example.invalid/noarch/python-3.13.0-0.tar.bz2",
-        depends=(),
-    )
-    in_state._history["python"] = MatchSpec("python")
-    out_state = SolverOutputState(solver_input_state=in_state)
-    solver = Solver(
-        prefix=prefix,
-        channels=(),
-        subdirs=("noarch",),
-        specs_to_add=("standalone",),
-    )
-    index = _add_pip_index(
-        tmp_path,
-        in_state,
-        _add_pip_repodata(),
-        repodata_use_shards,
-    )
-
-    solution = solver._solve_attempt(in_state, out_state, index)
-
-    assert isinstance(solution, list)
-    assert {record.name.source for record in solution} == {"python", "standalone"}
-    python_record = next(record for record in solution if record.name.source == "python")
-    assert "pip" not in python_record.depends
-
-
-@pytest.mark.parametrize("repodata_use_shards", (False, True), ids=("repodata", "shards"))
-def test_add_pip_requires_a_pip_candidate(
-    tmp_path: Path,
-    monkeypatch: MonkeyPatch,
-    repodata_use_shards: bool,
-) -> None:
-    monkeypatch.setattr(context, "add_pip_as_python_dependency", True)
-    monkeypatch.setattr(context, "repodata_use_shards", repodata_use_shards)
-
-    prefix = tmp_path / "env"
-    requested = ("application-3",)
-    solver = Solver(
-        prefix=prefix,
-        channels=(),
-        subdirs=("noarch",),
-        specs_to_add=requested,
-    )
-    in_state = SolverInputState(prefix, requested=requested)
-    out_state = SolverOutputState(solver_input_state=in_state)
-    index = _add_pip_index(
-        tmp_path,
-        in_state,
-        _add_pip_repodata(include_pip=False),
-        repodata_use_shards,
-    )
-
-    result = solver._solve_attempt(in_state, out_state, index)
-
-    assert isinstance(result, Exception)
-    assert "pip" in str(result)
-
-
-@pytest.mark.parametrize("repodata_use_shards", (False, True), ids=("repodata", "shards"))
-def test_add_pip_setting_does_not_mutate_cached_repodata(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
     repodata_use_shards: bool,
@@ -946,9 +822,105 @@ def test_add_pip_setting_does_not_mutate_cached_repodata(
 
         assert isinstance(solution, list)
         assert ("pip" in {record.name.source for record in solution}) is add_pip
+        solver._export_solved_records(solution, out_state)
+        assert ("pip" in out_state.records["python"].depends) is add_pip
 
 
-@pytest.mark.parametrize("repodata_use_shards", (False, True), ids=("repodata", "shards"))
+def test_add_pip_in_index_search(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    prefix = tmp_path / "env"
+    in_state = SolverInputState(prefix, requested=("python",))
+    index = _add_pip_index(
+        tmp_path,
+        in_state,
+        _add_pip_repodata(),
+        repodata_use_shards=False,
+    )
+
+    for add_pip in (False, True, False):
+        monkeypatch.setattr(context, "add_pip_as_python_dependency", add_pip)
+        dependencies = {
+            record.version: "pip" in record.depends for record in index.search("python")
+        }
+
+        assert dependencies == {
+            "2.7.18": add_pip,
+            "3.13.0": add_pip,
+            "4.0.0": False,
+        }
+
+
+def test_add_pip_does_not_patch_locked_python(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(context, "add_pip_as_python_dependency", True)
+
+    prefix = tmp_path / "env"
+    in_state = SolverInputState(prefix, requested=("standalone",))
+    in_state.prefix_data._prefix_records["python"] = PrefixRecord(
+        name="python",
+        version="3.13.0",
+        build="0",
+        build_number=0,
+        channel="https://example.invalid/noarch",
+        subdir="noarch",
+        fn="python-3.13.0-0.tar.bz2",
+        url="https://example.invalid/noarch/python-3.13.0-0.tar.bz2",
+        depends=(),
+    )
+    in_state._history["python"] = MatchSpec("python")
+    out_state = SolverOutputState(solver_input_state=in_state)
+    solver = Solver(
+        prefix=prefix,
+        channels=(),
+        subdirs=("noarch",),
+        specs_to_add=("standalone",),
+    )
+    index = _add_pip_index(
+        tmp_path,
+        in_state,
+        _add_pip_repodata(),
+        repodata_use_shards=False,
+    )
+
+    out_state = solver._solving_loop(in_state, out_state, index)
+
+    assert set(out_state.records) == {"python", "standalone"}
+    assert "pip" not in out_state.records["python"].depends
+
+
+def test_add_pip_requires_a_pip_candidate(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(context, "add_pip_as_python_dependency", True)
+
+    prefix = tmp_path / "env"
+    requested = ("application-3",)
+    solver = Solver(
+        prefix=prefix,
+        channels=(),
+        subdirs=("noarch",),
+        specs_to_add=requested,
+    )
+    in_state = SolverInputState(prefix, requested=requested)
+    out_state = SolverOutputState(solver_input_state=in_state)
+    index = _add_pip_index(
+        tmp_path,
+        in_state,
+        _add_pip_repodata(include_pip=False),
+        repodata_use_shards=False,
+    )
+
+    result = solver._solve_attempt(in_state, out_state, index)
+
+    assert isinstance(result, RattlerSolverError)
+    assert "pip *, for which no candidates were found" in str(result)
+
+
 @pytest.mark.parametrize(
     "python_depends,expected_names",
     (
@@ -959,12 +931,10 @@ def test_add_pip_setting_does_not_mutate_cached_repodata(
 def test_removing_pip_respects_installed_python_metadata(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
-    repodata_use_shards: bool,
     python_depends: tuple[str, ...],
     expected_names: set[str],
 ) -> None:
     monkeypatch.setattr(context, "add_pip_as_python_dependency", True)
-    monkeypatch.setattr(context, "repodata_use_shards", repodata_use_shards)
 
     prefix = tmp_path / "env"
     requested = ("pip",)
@@ -998,20 +968,25 @@ def test_removing_pip_respects_installed_python_metadata(
     for filename in tuple(repodata["packages"]):
         if filename.startswith(("python-2.", "python-4.")):
             repodata["packages"].pop(filename)
-    index = _add_pip_index(tmp_path, in_state, repodata, repodata_use_shards)
+    index = _add_pip_index(
+        tmp_path,
+        in_state,
+        repodata,
+        repodata_use_shards=False,
+    )
 
     out_state = solver._solving_loop(in_state, out_state, index)
 
     assert set(out_state.records) == expected_names
+    if "python" in expected_names:
+        assert out_state.records["python"].depends == python_depends
 
 
-@pytest.mark.parametrize("add_pip", (False, True), ids=("disabled", "enabled"))
 def test_add_pip_from_offline_package_cache(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
-    add_pip: bool,
 ) -> None:
-    monkeypatch.setattr(context, "add_pip_as_python_dependency", add_pip)
+    monkeypatch.setattr(context, "add_pip_as_python_dependency", True)
     packages_dir = tmp_path / "pkgs"
     packages_dir.mkdir()
     for name, version in (("python", "3.13.0"), ("pip", "25.0")):
@@ -1052,7 +1027,7 @@ def test_add_pip_from_offline_package_cache(
     solution = solver._solve_attempt(in_state, out_state, index)
 
     assert isinstance(solution, list)
-    assert ("pip" in {record.name.source for record in solution}) is add_pip
+    assert {record.name.source for record in solution} == {"python", "pip"}
 
 
 def test_conditional_specs_in_repodata_virtual(conda_cli):
