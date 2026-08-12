@@ -358,6 +358,7 @@ class RattlerSolver(Solver):
                 if context.use_only_tar_bz2
                 else rattler.PackageFormatSelection.PREFER_CONDA_WITH_WHL
             ),
+            "add_pip_as_python_dependency": context.add_pip_as_python_dependency,
         }
         if log.isEnabledFor(logging.DEBUG):
             dumped = json.dumps(solve_kwargs, indent=2, default=str, sort_keys=True)
@@ -733,6 +734,8 @@ class RattlerSolver(Solver):
     def _export_solved_records(self, records, out_state):
         out_state.records.clear()
         for rattler_record in records:
+            # Repository candidates are patched by py-rattler before solving. Do not
+            # patch here because locked records must preserve their installed metadata.
             conda_record = rattler_record_to_conda_record(rattler_record)
             out_state.records[conda_record.name] = conda_record
 
