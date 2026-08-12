@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from typing import Self
 
     from conda.common.path import PathsType
+    from conda.core.exclude_newer import ExcludeNewerPolicy
     from conda.gateways.shards import BuildRepodataSubset
     from conda.gateways.shards.typing import Shards
     from conda.models.match_spec import MatchSpec
@@ -70,6 +71,7 @@ class RattlerIndexHelper:
         pkgs_dirs: PathsType = (),
         in_state: SolverInputState | None = None,
         build_repodata_subset: BuildRepodataSubset | None = None,
+        exclude_newer_policy: ExcludeNewerPolicy | None = None,
     ):
         self._unlink_on_del: list[Path] = []
 
@@ -78,6 +80,16 @@ class RattlerIndexHelper:
         self._repodata_fn = repodata_fn
         self.in_state = in_state
         self.build_repodata_subset = build_repodata_subset
+        if exclude_newer_policy is None:
+            from conda.core.exclude_newer import ExcludeNewerPolicy
+
+            exclude_newer_policy = ExcludeNewerPolicy.disabled()
+        self.exclude_newer_policy = exclude_newer_policy
+        self._use_python_exclude_newer_filter = self.exclude_newer_policy.active and (
+            self.exclude_newer_policy.global_cutoff is None
+            or self.exclude_newer_policy.has_channel_overrides
+            or self.exclude_newer_policy.has_package_overrides
+        )
 
         self._index: dict[str, _ChannelRepoInfo] = {}
         self._index.update(self._load_channels())
@@ -172,6 +184,7 @@ class RattlerIndexHelper:
             shutil.copy(json_path, path_copy)
             json_path = path_copy
             self._unlink_on_del.append(path_copy)
+        json_path = self._filtered_json_path(url, json_path)
         # TODO: Support multichannel https://github.com/conda/rattler/issues/1327
         rattler_channel = rattler.Channel(noauth_url_sans_subdir)
         repo = rattler.SparseRepoData(rattler_channel, channel.subdir, json_path)
@@ -206,7 +219,9 @@ class RattlerIndexHelper:
 
         return tuple(dict.fromkeys(urls))  # de-duplicate
 
-    def _get_root_package_from_shard(self, package_names: list[str]) -> dict[str, _ChannelRepoInfo]:
+    def _get_root_package_from_shard(
+        self, package_names: list[str]
+    ) -> dict[str, _ChannelRepoInfo]:
         """
         Builds the repodata subset for a set of packages. Only applicable to sharded channels.
         """
@@ -261,6 +276,11 @@ class RattlerIndexHelper:
             subdir = Channel.from_url(url).subdir
             repodata = empty_repodata_dict(subdir, base_url=url)
             for filename, record in shards.iter_records():
+                package_url = f"{url.rstrip('/')}/{filename}"
+                if self._use_python_exclude_newer_filter and not self._record_allowed(
+                    record, filename, url, package_url
+                ):
+                    continue
                 if filename.endswith(".tar.bz2"):
                     repodata["packages"][filename] = record
                 elif filename.endswith(".conda"):
@@ -293,6 +313,61 @@ class RattlerIndexHelper:
             info = self._json_path_to_repo_info(url, f.name)
             index[info.noauth_url] = info
         return index
+
+    def _filtered_json_path(self, url: str, json_path: Path) -> Path:
+        if not self._use_python_exclude_newer_filter:
+            return json_path
+
+        import json
+
+        repodata = json.loads(json_path.read_text())
+        filtered = {**repodata}
+        for package_group in ("packages", "packages.conda"):
+            filtered[package_group] = {
+                filename: record
+                for filename, record in repodata.get(package_group, {}).items()
+                if self._record_allowed(
+                    record,
+                    filename,
+                    url,
+                    record.get("url") or f"{url.rstrip('/')}/{filename}",
+                )
+            }
+
+        if v3 := repodata.get("v3"):
+            filtered["v3"] = {**v3}
+            filtered["v3"]["whl"] = {
+                filename: record
+                for filename, record in v3.get("whl", {}).items()
+                if self._record_allowed(
+                    record,
+                    filename,
+                    url,
+                    record.get("url") or f"{url.rstrip('/')}/{filename}",
+                )
+            }
+
+        with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+            f.write(json_dump(filtered))
+        filtered_path = Path(f.name)
+        self._unlink_on_del.append(filtered_path)
+        return filtered_path
+
+    def _record_allowed(
+        self,
+        record: dict,
+        filename: str,
+        channel_url: str,
+        package_url: str,
+    ) -> bool:
+        return self.exclude_newer_policy.should_include(
+            {
+                **record,
+                "channel": channel_url,
+                "fn": record.get("fn") or filename,
+                "url": package_url,
+            }
+        )
 
     def _load_channels(self, urls: Iterable[str] | None = None) -> dict[str, _ChannelRepoInfo]:
         if urls is None:
@@ -376,7 +451,9 @@ class RattlerIndexHelper:
                 self._unlink_on_del.append(Path(f.name))
         return repos
 
-    def _search(self, spec: rattler.MatchSpec, index: dict[str, _ChannelRepoInfo]) -> Iterable[PackageRecord]:
+    def _search(
+        self, spec: rattler.MatchSpec, index: dict[str, _ChannelRepoInfo]
+    ) -> Iterable[PackageRecord]:
         """
         Search for packages matching the given spec in the index. This function does not
         build the repodata subset for the requested spec, so it may not find packages
@@ -386,7 +463,9 @@ class RattlerIndexHelper:
             for record in info.repo.load_matching_records([spec]):
                 yield rattler_record_to_conda_record(record)
 
-    def search(self, spec: str | MatchSpec, search_expanded_index: bool = False) -> Iterable[PackageRecord]:
+    def search(
+        self, spec: str | MatchSpec, search_expanded_index: bool = False
+    ) -> Iterable[PackageRecord]:
         """
         Search for packages matching the given spec in the index. For channels that are sharded,
         the requested spec may not be in the loaded index. So, this function will additionally

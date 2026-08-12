@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from conda.base.context import context, reset_context
+from conda.core.exclude_newer import ExcludeNewerPolicy
 from conda.core.subdir_data import SubdirData
 from conda.gateways.logging import initialize_logging
 from conda.gateways.shards import build_repodata_subset
@@ -23,10 +24,13 @@ if TYPE_CHECKING:
     from os import PathLike
 
     from conda.testing.fixtures import HttpTestServerFixture, TmpEnvFixture
+    from pytest_benchmark.fixture import BenchmarkFixture
 
 
 initialize_logging()
 DATA = Path(__file__).parent / "data"
+NOW = 1_700_000_000.0
+DAY = 86400
 
 CONDA_FORGE_WITH_SHARDS = "conda-forge"
 
@@ -115,6 +119,78 @@ def test_reload_channels(tmp_path: Path):
     time.sleep(1)
     index.reload_channel(Channel(str(tmp_path)))
     assert index.n_packages() == initial_count + 1
+
+
+def test_exclude_newer_python_filter_disabled_for_global_only_policy():
+    index = object.__new__(RattlerIndexHelper)
+    index._unlink_on_del = []
+    index._index = {}
+    index.exclude_newer_policy = ExcludeNewerPolicy(global_cutoff=1234.56)
+    index._use_python_exclude_newer_filter = False
+
+    path = Path("repodata.json")
+    assert index._filtered_json_path("https://example.test/conda/linux-64", path) == path
+
+
+def test_exclude_newer_record_filter_honors_package_and_channel_overrides():
+    index = object.__new__(RattlerIndexHelper)
+    index._unlink_on_del = []
+    index._index = {}
+    index.exclude_newer_policy = ExcludeNewerPolicy.from_values(
+        "1d",
+        {"openssl": "false", "numpy": "1d"},
+        channel_settings=({"channel": "https://example.test/conda", "exclude_newer": "3d"},),
+        now=NOW,
+    )
+
+    def allowed(name: str, channel_url: str, timestamp: float) -> bool:
+        filename = f"{name}-1.0-0.tar.bz2"
+        package_url = f"{channel_url}/{filename}"
+        return index._record_allowed(
+            {"name": name, "timestamp": timestamp},
+            filename,
+            channel_url,
+            package_url,
+        )
+
+    assert allowed("openssl", "https://example.test/conda/linux-64", NOW - 60)
+    assert allowed("numpy", "https://example.test/conda/linux-64", NOW - 2 * DAY)
+    assert not allowed("scipy", "https://example.test/conda/linux-64", NOW - 2 * DAY)
+    assert allowed("scipy", "https://other.example.test/conda/linux-64", NOW - 2 * DAY)
+
+
+def test_exclude_newer_filter_repodata_keeps_unknown_timestamps(tmp_path):
+    index = object.__new__(RattlerIndexHelper)
+    index._unlink_on_del = []
+    index._index = {}
+    index.exclude_newer_policy = ExcludeNewerPolicy.from_values(
+        "",
+        {},
+        channel_settings=({"channel": "https://example.test/conda", "exclude_newer": "1d"},),
+        now=NOW,
+    )
+    index._use_python_exclude_newer_filter = True
+    repodata = {
+        "packages": {
+            "old-1.0-0.tar.bz2": {"name": "old", "timestamp": NOW - 2 * DAY},
+            "new-1.0-0.tar.bz2": {"name": "new", "timestamp": NOW - 60},
+            "unknown-1.0-0.tar.bz2": {"name": "unknown"},
+        },
+        "packages.conda": {},
+    }
+
+    json_path = tmp_path / "repodata.json"
+    json_path.write_text(json.dumps(repodata))
+    filtered_path = index._filtered_json_path(
+        "https://example.test/conda/linux-64",
+        json_path,
+    )
+    filtered = json.loads(filtered_path.read_text())
+
+    assert set(filtered["packages"]) == {
+        "old-1.0-0.tar.bz2",
+        "unknown-1.0-0.tar.bz2",
+    }
 
 
 @pytest.mark.parametrize(
@@ -255,13 +331,13 @@ def test_search_sharded_channels_with_requested_packages(
     assert len(results) == 1
     assert results[0].name == "foo"
 
-    results =list(index.search("bar", search_expanded_index=False))
+    results = list(index.search("bar", search_expanded_index=False))
     assert len(results) == 1
     assert results[0].name == "bar"
 
     results = list(index.search("idontexist", search_expanded_index=False))
     assert len(results) == 0
-    
+
     results = list(index.search("idontexist", search_expanded_index=True))
     assert len(results) == 0
 
@@ -290,7 +366,7 @@ def test_search_combo_sharded_channels(tmp_path: Path, http_test_server: HttpTes
     assert len(results) == 1
     assert results[0].name == "foo"
 
-    results = list( index.search("foo", search_expanded_index=False))
+    results = list(index.search("foo", search_expanded_index=False))
     assert len(results) == 0
 
     results = list(index.search("bar", search_expanded_index=True))
@@ -357,8 +433,8 @@ def test_query_search_requested_packages_benchmark(
     Benchmark searching for packages with the context of a package already being requested.
 
     Should observe that searching the index for a package that has been requested as
-    part of the input state should be about the same speed for searching with the `search_expanded_index`
-    set to `True` or `False`.
+    part of the input state should be about the same speed for searching with the
+    `search_expanded_index` set to `True` or `False`.
     """
     url = http_test_server.url
     index = RattlerIndexHelper(

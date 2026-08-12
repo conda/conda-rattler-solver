@@ -38,6 +38,7 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
+    import datetime
     from collections.abc import Iterable, Mapping
     from typing import Literal
 
@@ -57,6 +58,9 @@ log = logging.getLogger(f"conda.{__name__}")
 class RattlerSolver(Solver):
     MAX_SOLVER_ATTEMPTS_CAP = 10
     _uses_ssc = False
+    supports_exclude_newer_global = True
+    supports_exclude_newer_channel = True
+    supports_exclude_newer_package = True
 
     @staticmethod
     @cache
@@ -246,6 +250,7 @@ class RattlerSolver(Solver):
             pkgs_dirs=context.pkgs_dirs if context.offline else (),
             in_state=in_state,
             build_repodata_subset=self._build_repodata_subset,
+            exclude_newer_policy=self.exclude_newer_policy,
         )
         for channel in conda_build_channels:
             index.reload_channel(channel)
@@ -359,6 +364,9 @@ class RattlerSolver(Solver):
                 else rattler.PackageFormatSelection.PREFER_CONDA_WITH_WHL
             ),
         }
+        exclude_newer = self._exclude_newer_datetime()
+        if exclude_newer is not None:
+            solve_kwargs["exclude_newer"] = exclude_newer
         if log.isEnabledFor(logging.DEBUG):
             dumped = json.dumps(solve_kwargs, indent=2, default=str, sort_keys=True)
             log.debug("Solver input for attempt %s:\n%s", attempt, dumped)
@@ -750,6 +758,22 @@ class RattlerSolver(Solver):
             )
             for pkg in in_state.virtual.values()
         ]
+
+    def _exclude_newer_datetime(self) -> datetime.datetime | None:
+        """Return the resolved global cutoff as a UTC datetime for py-rattler."""
+        if (
+            self.exclude_newer_policy.global_cutoff is None
+            or self.exclude_newer_policy.has_channel_overrides
+            or self.exclude_newer_policy.has_package_overrides
+        ):
+            return None
+
+        import datetime
+
+        return datetime.datetime.fromtimestamp(
+            self.exclude_newer_policy.global_cutoff,
+            tz=datetime.timezone.utc,
+        )
 
     def _called_from_conda_build(self) -> bool:
         """
