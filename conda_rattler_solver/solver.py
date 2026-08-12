@@ -460,6 +460,9 @@ class RattlerSolver(Solver):
                     # name-only pins are considered 'frozen' if also installed (see below)
                     constraints.append(pinned)
             elif name == "python" and installed and not requested:
+                # Classic major.minor business rule: do not float python beyond X.Y.*
+                # unless the user requested python explicitly. Compatible with
+                # always_update / --update-all so patch releases can still be taken.
                 pyver = ".".join(installed.version.split(".")[:2])
                 constraints.append(f"python {pyver}.*")
 

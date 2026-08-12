@@ -206,6 +206,25 @@ class RattlerIndexHelper:
 
         return tuple(dict.fromkeys(urls))  # de-duplicate
 
+    def _get_root_package_from_shard(self, package_names: list[str]) -> dict[str, _ChannelRepoInfo]:
+        """
+        Builds the repodata subset for a set of packages. Only applicable to sharded channels.
+        """
+        result: dict[str, _ChannelRepoInfo] = {}
+        urls = self._urls_from_channels()
+        if self.build_repodata_subset and _is_sharded_repodata_enabled():
+            urls_to_channel = {url: Channel.from_url(url) for url in urls}
+            channel_data = self.build_repodata_subset(
+                package_names, urls_to_channel, repodata_version=3
+            )
+            log.debug(
+                "build_repodata_subset returned channels: %s",
+                list(channel_data) if channel_data is not None else None,
+            )
+            if channel_data is not None:
+                result.update(self._load_repo_info_from_shards(channel_data))
+        return result
+
     def _load_channel_repo_info_shards(
         self, urls_to_channel: dict[str, Channel]
     ) -> dict[str, _ChannelRepoInfo] | None:
@@ -354,11 +373,35 @@ class RattlerIndexHelper:
                 self._unlink_on_del.append(Path(f.name))
         return repos
 
-    def search(self, spec: str | MatchSpec) -> Iterable[PackageRecord]:
-        spec = rattler.MatchSpec(str(spec))
-        for info in self._index.values():
+    def _search(self, spec: rattler.MatchSpec, index: dict[str, _ChannelRepoInfo]) -> Iterable[PackageRecord]:
+        """
+        Search for packages matching the given spec in the index. This function does not
+        build the repodata subset for the requested spec, so it may not find packages
+        that are only available in sharded channels.
+        """
+        for info in index.values():
             for record in info.repo.load_matching_records([spec]):
                 yield rattler_record_to_conda_record(record)
+
+    def search(self, spec: str | MatchSpec, search_expanded_index: bool = False) -> Iterable[PackageRecord]:
+        """
+        Search for packages matching the given spec in the index. For channels that are sharded,
+        the requested spec may not be in the loaded index. So, this function will additionally
+        build the repodata subset for the requested spec. This will not update the loaded index.
+        """
+        spec = rattler.MatchSpec(str(spec))
+        search_result = list(self._search(spec, self._index))
+        if search_result:
+            yield from search_result
+            return
+
+        # If there are no search results in the regular index, try to build the repodata
+        # subset for the requested spec and search again.
+        if search_expanded_index:
+            # The packages loaded with `_get_root_package_from_shard` will have the most
+            # up-to-date packages for the requested spec in sharded channels.
+            extra_index = self._get_root_package_from_shard([spec.name.normalized])
+            yield from self._search(spec, self._index | extra_index)
 
     @property
     def _package_format(self) -> rattler.PackageFormatSelection:
