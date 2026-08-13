@@ -1,0 +1,19 @@
+### Enhancements
+
+* <news item>
+
+### Bug fixes
+
+* Load v3 package records from sharded channels via `iter_records_v3()`, fixing installs from v3-native channels. (#92 via #66)
+
+### Deprecations
+
+* <news item>
+
+### Docs
+
+* <news item>
+
+### Other
+
+* Require `conda >=26.7.0` for the shards `iter_records_v3()` API. (#66)
