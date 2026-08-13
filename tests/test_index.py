@@ -124,7 +124,7 @@ def _installed_record(name: str, channel_url: str, subdir: str) -> PackageRecord
         version="1.0",
         build="0",
         build_number=0,
-        channel=f"{channel_url}/{subdir}",
+        channel=channel_url,
         subdir=subdir,
         fn=f"{name}-1.0-0.tar.bz2",
         depends=(),
@@ -164,7 +164,7 @@ def test_installed_records_grouped_by_channel_and_subdir():
     installed = (
         _installed_record("foo", "https://conda.anaconda.org/chan-a", "linux-64"),
         _installed_record("baz", "https://conda.anaconda.org/chan-a", "linux-64"),
-        _installed_record("bar", "https://conda.anaconda.org/chan-b", "noarch"),
+        _installed_record("bar", "https://conda.anaconda.org/chan-a", "noarch"),
     )
     index = RattlerIndexHelper(
         channels=(), subdirs=("linux-64", "noarch"), installed_records=installed
@@ -172,6 +172,8 @@ def test_installed_records_grouped_by_channel_and_subdir():
     # foo and baz share a (channel, subdir) pair and must collapse into a single repo entry
     assert len(index._index) == 2
     assert index.n_packages() == 3
+    assert next(index.search("foo")).url.endswith("/linux-64/foo-1.0-0.tar.bz2")
+    assert next(index.search("bar")).url.endswith("/noarch/bar-1.0-0.tar.bz2")
 
 
 def test_installed_records_filtered_by_requested_subdirs():
