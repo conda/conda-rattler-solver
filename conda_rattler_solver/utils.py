@@ -173,6 +173,9 @@ def conda_prefix_record_to_rattler_prefix_record(
 
 
 _NAME_EQUALS_BRACKET = re.compile(r"^([^\[\]=]+)=\[")
+# TODO: remove once py-rattler gains quoted-extras support (conda/rattler#2552).
+# conda's MatchSpec.__str__ emits extras=['a', 'b']; py-rattler 0.25 rejects that.
+_EXTRAS_QUOTED_ITEMS = re.compile(r"extras=\[([^\]]*)\]")
 
 
 def conda_match_spec_to_rattler_match_spec(spec: MatchSpec) -> rattler.MatchSpec:
@@ -182,9 +185,16 @@ def conda_match_spec_to_rattler_match_spec(spec: MatchSpec) -> rattler.MatchSpec
 
     # numpy=[build=0]  ->  numpy[build=0]
     # requests[extras=[a,b]]  ->  unchanged (already has [ after the name)
-
     intermediate = str(match_spec).rstrip("=")
+
     intermediate = _NAME_EQUALS_BRACKET.sub(r"\1[", intermediate, count=1)
+
+    # extras=['a', 'b'] -> extras=[a, b]  (temporary, do not strip quotes elsewhere)
+    # this should be removed when pin is updated to py-rattler 0.26
+    intermediate = _EXTRAS_QUOTED_ITEMS.sub(
+        lambda m: "extras=[" + m.group(1).replace("'", "").replace('"', "") + "]",
+        intermediate,
+    )
 
     return rattler.MatchSpec(
         intermediate,

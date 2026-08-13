@@ -150,7 +150,12 @@ def test_notify_conda_outdated_message(
         pytest.param("foo >=1.0,<2", "foo", None, id="version-inequality"),
         pytest.param("numpy[build=py39*]", "numpy", None, id="build-glob"),
         pytest.param("numpy=[build=0]", "numpy", None, id="name-equals-bracket"),
-        pytest.param("numpy=[extras=[a,b]]", "numpy", {"a", "b"}, id="mixed case"),
+        pytest.param(
+            "numpy=[extras=[a,b]]",
+            "numpy",
+            {"a", "b"},
+            id="name-equals-bracket-with-extras",
+        ),
         pytest.param(
             "ca-certificates[when='libzlib=1.2']",
             "ca-certificates",
