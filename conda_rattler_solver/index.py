@@ -260,22 +260,19 @@ class RattlerIndexHelper:
         for url, shards in channel_data.items():
             subdir = Channel.from_url(url).subdir
             repodata = empty_repodata_dict(subdir, base_url=url)
-            for filename, record in shards.iter_records():
-                if filename.endswith(".tar.bz2"):
-                    repodata["packages"][filename] = record
-                elif filename.endswith(".conda"):
-                    repodata["packages.conda"][filename] = record
-                elif record.get("fn", "").endswith(".whl"):
-                    # Wheel records must contain the `fn` field
-                    # https://github.com/conda/ceps/pull/145/changes#diff-82241b2f88ce71caab4f64ac25bff5f1e4544117b076952753b2b09677dec95aR64
-                    # Currently, we only expect whl files to be served in v3 repodata.
-                    # In the future, we will need to extend this to support .conda and
-                    # .tar.bz2 files in v3 repodata.
-                    repodata["v3"]["whl"][filename] = record
+            for (key, section), record in shards.iter_records_v3():
+                if section == "packages":
+                    repodata["packages"][key] = record
+                elif section == "packages.conda":
+                    repodata["packages.conda"][key] = record
+                elif section.startswith("v3."):
+                    # Extract v3 package type (whl, conda, tar.bz2) from section name
+                    v3_type = section[3:]  # Remove "v3." prefix
+                    repodata["v3"][v3_type][key] = record
             n_packages = (
                 len(repodata["packages"])
                 + len(repodata["packages.conda"])
-                + len(repodata["v3"]["whl"])
+                + sum(len(group) for group in repodata["v3"].values())
             )
             log.debug(
                 "_load_repo_info_from_shards: %s packages for %s",
