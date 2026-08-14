@@ -290,6 +290,7 @@ class RattlerSolver(Solver):
                 neutered=dict(out_state.neutered),
                 conflicts=dict(out_state.conflicts),
                 pins=dict(out_state.pins),
+                missing_installed=set(out_state.missing_installed),
             )
         else:
             # Didn't find a solution after all attempts, let's unfreeze everything
@@ -544,6 +545,15 @@ class RattlerSolver(Solver):
                 elif action == "lock":
                     locked_packages.append(installed)
 
+        # Add packages marked as missing to the set of locked packages
+        if out_state.missing_installed:
+            already_locked = {record.name for record in locked_packages}
+            for name in out_state.missing_installed:
+                if name in already_locked:
+                    continue
+                if installed := in_state.installed.get(name):
+                    locked_packages.append(installed)
+
         return {
             "specs": [conda_match_spec_to_rattler_match_spec(spec) for spec in specs],
             "constraints": [conda_match_spec_to_rattler_match_spec(spec) for spec in constraints],
@@ -661,6 +671,7 @@ class RattlerSolver(Solver):
                 # list. e.g. `conda create main::psutil` + `conda install -c conda-forge python`
                 if any(spec.match(record) for record in in_state.installed.values()):
                     unsatisfiable[spec.name] = spec
+                    self._mark_missing_installed(spec.name, in_state, out_state)
                 else:
                     not_found[spec.name] = spec
 
@@ -705,6 +716,27 @@ class RattlerSolver(Solver):
             problems,
         )
         out_state.conflicts.update(unsatisfiable)
+
+    def _mark_missing_installed(
+        self, name: str, in_state: SolverInputState, out_state: SolverOutputState
+    ) -> None:
+        """
+        Record ``name`` (an installed package reported as absent from the current index) in
+        ``out_state.missing_installed``, along with its installed dependencies. A missing
+        package's installed dependencies are likely missing from the same channel, we lock
+        the whole subtree in one go.
+        """
+        pending = [name]
+        while pending:
+            current = pending.pop()
+            if current in out_state.missing_installed:
+                continue
+            out_state.missing_installed.add(current)
+            if installed := in_state.installed.get(current):
+                for dep in installed.depends:
+                    dep_name = MatchSpec(dep).name
+                    if dep_name in in_state.installed:
+                        pending.append(dep_name)
 
     def _maybe_raise_for_conda_build(
         self,

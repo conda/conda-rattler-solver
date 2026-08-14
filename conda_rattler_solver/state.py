@@ -434,6 +434,11 @@ class SolverOutputState:
         blank mapping.
     pins
         Packages that ended up being pinned. Mostly used for reporting and debugging. Deprecated.
+    missing_installed
+        Names of installed packages that the solver reported as having no candidates in the
+        current index (e.g. their channel was dropped). Solvers can use this to make sure
+        those installed records stay available in the candidate pool. If not provided, the
+        default value is a blank set.
 
     Notes
     -----
@@ -467,6 +472,7 @@ class SolverOutputState:
         neutered: dict[str, MatchSpec] | None = None,
         conflicts: dict[str, MatchSpec] | None = None,
         pins: dict[str, MatchSpec] | None = None,
+        missing_installed: set[str] | None = None,
     ):
         self.solver_input_state: SolverInputState = solver_input_state
         self.records: dict[str, PackageRecord] = records or dict(solver_input_state.installed)
@@ -474,6 +480,7 @@ class SolverOutputState:
         self.neutered: dict[str, MatchSpec] = neutered or {}
         self.conflicts: dict[str, MatchSpec] = conflicts or {}
         self.pins: dict[str, MatchSpec] = pins or {}
+        self.missing_installed: set[str] = set(missing_installed) if missing_installed else set()
 
     @property
     def current_solution(self) -> IndexedSet[PackageRecord]:
