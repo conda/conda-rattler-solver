@@ -466,6 +466,9 @@ class RattlerSolver(Solver):
                 pyver = ".".join(installed.version.split(".")[:2])
                 constraints.append(f"python {pyver}.*")
 
+            if in_state.is_updating and installed and not installed.is_unmanageable:
+                constraints.append(MatchSpec(name=name, version=f">={installed.version}"))
+
             # Block B: main logic for user requests and installed packages
             if requested:
                 specs.extend(requested)

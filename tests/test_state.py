@@ -36,6 +36,32 @@ def test_update_all_includes_python_in_always_update(tmp_path):
     assert "numpy" in state.always_update
 
 
+def test_update_all_emits_installed_version_constraint(tmp_path):
+    in_state = SolverInputState(
+        tmp_path,
+        update_modifier=UpdateModifier.UPDATE_ALL,
+        command="update",
+    )
+    in_state.prefix_data._prefix_records["libmamba"] = PrefixRecord(
+        name="libmamba",
+        version="2.3.2",
+        build="0",
+        build_number=0,
+        channel="conda-forge",
+        subdir="noarch",
+        fn="libmamba-2.3.2-0.conda",
+    )
+    out_state = SolverOutputState(solver_input_state=in_state)
+    solver = RattlerSolver(tmp_path, channels=("defaults",), command="update")
+
+    collected = solver._collect_specs_main(in_state, out_state)
+    specs = [str(spec) for spec in collected["specs"]]
+    constraints = [str(spec) for spec in collected["constraints"]]
+
+    assert "libmamba" in specs
+    assert "libmamba >=2.3.2" in constraints
+
+
 def test_update_all_emits_python_constraint_and_update_spec(tmp_path):
     """UPDATE_ALL must request python while constraining to the current major.minor.
 
