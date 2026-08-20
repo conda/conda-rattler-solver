@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from conda.base.constants import UpdateModifier
+from conda.models.enums import PackageType
 from conda.models.match_spec import MatchSpec
 from conda.models.records import PackageRecord, PrefixRecord
 
@@ -34,6 +35,67 @@ def test_update_all_includes_python_in_always_update(tmp_path):
 
     assert "python" in state.always_update
     assert "numpy" in state.always_update
+
+
+def test_update_all_emits_installed_version_constraint(tmp_path):
+    in_state = SolverInputState(
+        tmp_path,
+        update_modifier=UpdateModifier.UPDATE_ALL,
+        command="update",
+    )
+    in_state.prefix_data._prefix_records["libmamba"] = PrefixRecord(
+        name="libmamba",
+        version="2.3.2",
+        build="0",
+        build_number=0,
+        channel="conda-forge",
+        subdir="noarch",
+        fn="libmamba-2.3.2-0.conda",
+    )
+    out_state = SolverOutputState(solver_input_state=in_state)
+    solver = RattlerSolver(tmp_path, channels=("defaults",), command="update")
+
+    collected = solver._collect_specs_main(in_state, out_state)
+    specs = [str(spec) for spec in collected["specs"]]
+    constraints = [str(spec) for spec in collected["constraints"]]
+
+    assert "libmamba" in specs
+    assert "libmamba >=2.3.2" in constraints
+
+
+def test_installed_version_constraint_exclusions(tmp_path):
+    for command, package_type in (
+        ("install", None),
+        ("update", PackageType.VIRTUAL_PYTHON_EGG_UNMANAGEABLE),
+    ):
+        prefix = tmp_path / command
+        in_state = SolverInputState(
+            prefix,
+            requested=("libmamba",),
+            command=command,
+        )
+        in_state.prefix_data._prefix_records["libmamba"] = PrefixRecord(
+            name="libmamba",
+            version="2.3.2",
+            build="0",
+            build_number=0,
+            channel="conda-forge",
+            subdir="noarch",
+            fn="libmamba-2.3.2-0.conda",
+            package_type=package_type,
+        )
+        out_state = SolverOutputState(solver_input_state=in_state)
+        solver = RattlerSolver(
+            prefix,
+            channels=("defaults",),
+            specs_to_add=("libmamba",),
+            command=command,
+        )
+
+        collected = solver._collect_specs_main(in_state, out_state)
+        constraints = [str(spec) for spec in collected["constraints"]]
+
+        assert "libmamba >=2.3.2" not in constraints
 
 
 def test_update_all_emits_python_constraint_and_update_spec(tmp_path):
