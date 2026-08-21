@@ -647,6 +647,7 @@ class RattlerSolver(Solver):
             if line.startswith("Cannot solve the request because of:"):
                 line = line.split(":", 1)[1]
             words = line.split()
+            # import pdb; pdb.set_trace()
             if "is locked, but another version is required as reported above" in line:
                 unsatisfiable[words[0]] = MatchSpec(f"{words[0]} {words[1]}")
             elif "which cannot be installed because there are no viable options" in line:
@@ -669,6 +670,19 @@ class RattlerSolver(Solver):
                 # Do not consider "not found" if it's already installed; this happens
                 # when user requested a package from a channel that is no longer in the
                 # list. e.g. `conda create main::psutil` + `conda install -c conda-forge python`
+                if any(spec.match(record) for record in in_state.installed.values()):
+                    unsatisfiable[spec.name] = spec
+                    self._mark_missing_installed(spec.name, in_state, out_state)
+                else:
+                    not_found[spec.name] = spec
+            elif "for which no candidates were found" in line:
+                # Same situation as "No candidates were found for" above, but reported as a
+                # nested reason under some other unsatisfiable package instead of as a
+                # standalone line, e.g. "foo >=2, for which no candidates were found." This
+                # happens when the name does have candidates in the index, just not any that
+                # satisfy the requested version (as opposed to being fully absent from it).
+                spec = line.split(", for which no candidates were found", 1)[0].strip()
+                spec = MatchSpec(spec)
                 if any(spec.match(record) for record in in_state.installed.values()):
                     unsatisfiable[spec.name] = spec
                     self._mark_missing_installed(spec.name, in_state, out_state)
