@@ -13,7 +13,8 @@ from textwrap import dedent
 from typing import TYPE_CHECKING
 
 import pytest
-from conda.base.context import context
+from conda.base.constants import ChannelPriority, UpdateModifier
+from conda.base.context import context, reset_context
 from conda.common.compat import on_linux, on_mac, on_win
 from conda.core.prefix_data import PrefixData
 from conda.exceptions import (
@@ -22,6 +23,7 @@ from conda.exceptions import (
     SpecsConfigurationConflictError,
     UnsatisfiableError,
 )
+from conda.models.channel import Channel
 from conda.testing.integration import package_is_installed
 from conda.testing.solver_helpers import SolverTests
 
@@ -858,22 +860,161 @@ def test_python_does_not_change_unless_wanted(
         assert "python" in unlink_names.intersection(link_names)
 
 
-def test_installed_packages_included_in_solver(
-    tmp_env: TmpEnvFixture, conda_cli: CondaCLIFixture
+def _write_prefix_record(
+    conda_meta: Path, name: str, version: str, channel_name: str, depends: tuple[str, ...] = ()
+) -> None:
+    fn = f"{name}-{version}-0.tar.bz2"
+    data = {
+        "name": name,
+        "version": version,
+        "build": "0",
+        "build_number": 0,
+        "channel": f"https://conda.anaconda.org/{channel_name}/noarch",
+        "subdir": "noarch",
+        "noarch": "generic",
+        "fn": fn,
+        "url": f"https://conda.anaconda.org/{channel_name}/noarch/{fn}",
+        "depends": list(depends),
+        "constrains": [],
+        "md5": "0" * 32,
+        "size": 1,
+    }
+    (conda_meta / f"{name}-{version}-0.json").write_text(json.dumps(data))
+
+
+def test_strict_channel_priority_keeps_installed_dependency_from_removed_channel(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
 ) -> None:
     """
-    Test that installed packages are included in the solver's consideration when
-    updating all packages.
-
-    ref: https://github.com/conda/conda-rattler-solver/issues/88
+    With strict channel priority, an active channel that happens to also publish an
+    older `foo` must not shadow the already-installed, newer `foo` coming from its own
+    (now inactive/removed) origin channel -- especially when another installed package
+    (`bar`) requires that newer `foo`. Currently, the installed `foo=2.0` gets excluded
+    from the solver's candidate pool, and instead of leaving the environment untouched,
+    both `foo` and `bar` are silently dropped from the solution.
     """
-    with tmp_env("imagesize", "--override-channels", "--channel=defaults") as prefix:
-        _, err, rc = conda_cli(
-            "update",
-            "--all",
-            f"--prefix={prefix}",
-            "--override-channels",
-            "--channel=conda-canary",
+    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", "strict")
+    reset_context()
+    assert context.channel_priority == ChannelPriority.STRICT
+
+    # "bar" and its dependency "foo=2.0" were originally installed from "chan-b",
+    # which is no longer part of the active channel list below.
+    conda_meta = tmp_path / "prefix" / "conda-meta"
+    conda_meta.mkdir(parents=True)
+    _write_prefix_record(conda_meta, "foo", "2.0", "chan-b")
+    _write_prefix_record(conda_meta, "bar", "1.0", "chan-b", depends=("foo>=2",))
+
+    # The only active channel, "chan-a", happens to also publish "foo", but only 1.0.
+    chan_a = tmp_path / "chan-a"
+    (chan_a / "noarch").mkdir(parents=True)
+    (chan_a / "noarch" / "repodata.json").write_text(
+        json.dumps(
+            {
+                "info": {"subdir": "noarch"},
+                "packages": {
+                    "foo-1.0-0.tar.bz2": {
+                        "build": "0",
+                        "build_number": 0,
+                        "depends": [],
+                        "constrains": [],
+                        "md5": "0" * 32,
+                        "name": "foo",
+                        "noarch": "generic",
+                        "sha256": "0" * 64,
+                        "size": 1,
+                        "subdir": "noarch",
+                        "timestamp": 0,
+                        "version": "1.0",
+                    },
+                },
+                "packages.conda": {},
+                "removed": [],
+                "repodata_version": 1,
+            }
         )
-        assert rc == 0
-        assert err == ""
+    )
+
+    solver = Solver(
+        prefix=tmp_path / "prefix",
+        channels=[Channel(str(chan_a))],
+        subdirs=("noarch",),
+    )
+    solution = solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_ALL)
+    # There are no updates to be made
+    assert len(solution) == 0
+
+
+def test_strict_channel_priority_updates_installed_dependency(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """
+    
+    """
+    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", "strict")
+    reset_context()
+    assert context.channel_priority == ChannelPriority.STRICT
+
+    # "bar" and its dependency "foo=2.0" were originally installed from "chan-b",
+    # which is no longer part of the active channel list below.
+    conda_meta = tmp_path / "prefix" / "conda-meta"
+    conda_meta.mkdir(parents=True)
+    _write_prefix_record(conda_meta, "foo", "2.0", "chan-b")
+    _write_prefix_record(conda_meta, "bar", "1.0", "chan-b", depends=("foo>=2",))
+
+    # The only active channel, "chan-a", happens to also publish "foo", but only 1.0.
+    chan_a = tmp_path / "chan-a"
+    (chan_a / "noarch").mkdir(parents=True)
+    (chan_a / "noarch" / "repodata.json").write_text(
+        json.dumps(
+            {
+                "info": {"subdir": "noarch"},
+                "packages": {
+                    "foo-1.0-0.tar.bz2": {
+                        "build": "0",
+                        "build_number": 0,
+                        "depends": [],
+                        "constrains": [],
+                        "md5": "0" * 32,
+                        "name": "foo",
+                        "noarch": "generic",
+                        "sha256": "0" * 64,
+                        "size": 1,
+                        "subdir": "noarch",
+                        "timestamp": 0,
+                        "version": "1.0",
+                    },
+                    "foo-3.0-0.tar.bz2": {
+                        "build": "0",
+                        "build_number": 0,
+                        "depends": [],
+                        "constrains": [],
+                        "md5": "0" * 32,
+                        "name": "foo",
+                        "noarch": "generic",
+                        "sha256": "0" * 64,
+                        "size": 1,
+                        "subdir": "noarch",
+                        "timestamp": 0,
+                        "version": "3.0",
+                    },
+                },
+                "packages.conda": {},
+                "removed": [],
+                "repodata_version": 1,
+            }
+        )
+    )
+
+    solver = Solver(
+        prefix=tmp_path / "prefix",
+        channels=[Channel(str(chan_a))],
+        subdirs=("noarch",),
+    )
+    solution = solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_ALL)
+    packages =  {f"{pkg.channel}::{pkg.name}": pkg.version for pkg in solution}
+    assert f"file://{chan_a}/noarch::foo" in packages
+    assert packages[f"file://{chan_a}/noarch::foo"] == "3.0"
+    assert "https://conda.anaconda.org/chan-b/noarch::bar" in packages
+    assert packages[f"https://conda.anaconda.org/chan-b/noarch::bar"] == "1.0"

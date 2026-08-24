@@ -118,7 +118,9 @@ def test_reload_channels(tmp_path: Path):
     assert index.n_packages() == initial_count + 1
 
 
-def _installed_record(name: str, channel_url: str, subdir: str) -> PackageRecord:
+def _installed_record(
+    name: str, channel_url: str, subdir: str, ext: str = "tar.bz2"
+) -> PackageRecord:
     return PackageRecord(
         name=name,
         version="1.0",
@@ -126,7 +128,7 @@ def _installed_record(name: str, channel_url: str, subdir: str) -> PackageRecord
         build_number=0,
         channel=channel_url,
         subdir=subdir,
-        fn=f"{name}-1.0-0.tar.bz2",
+        fn=f"{name}-1.0-0.{ext}",
         depends=(),
         constrains=(),
     )
@@ -187,6 +189,24 @@ def test_installed_records_filtered_by_requested_subdirs():
     assert index.n_packages() == 1
     assert list(index.search("foo"))
     assert not list(index.search("win-only"))
+
+
+def test_installed_dot_conda_records_survive_use_only_tar_bz2(monkeypatch: pytest.MonkeyPatch):
+    """
+    CONDA_USE_ONLY_TAR_BZ2 controls which package *format* should be downloaded from
+    remote channels; it should have no bearing on packages that are already installed,
+    since those require no download at all. Currently, an installed record whose
+    filename ends in `.conda` gets dropped from the pool entirely when this flag is on.
+    """
+    monkeypatch.setenv("CONDA_USE_ONLY_TAR_BZ2", "1")
+    reset_context()
+    installed = (
+        _installed_record("foo", "https://conda.anaconda.org/chan", "linux-64", ext="conda"),
+    )
+    index = RattlerIndexHelper(
+        channels=(), subdirs=("linux-64", "noarch"), installed_records=installed
+    )
+    assert index.n_packages() == 1
 
 
 def test_installed_records_with_noarch_only_subdirs():
