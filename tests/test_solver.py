@@ -950,7 +950,8 @@ def test_strict_channel_priority_updates_installed_dependency(
     monkeypatch: MonkeyPatch,
 ) -> None:
     """
-    
+    With strict channel priority enabled, ensure that the package foo is updated
+    if a true update is required.
     """
     monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", "strict")
     reset_context()

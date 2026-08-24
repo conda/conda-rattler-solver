@@ -402,12 +402,10 @@ class RattlerIndexHelper:
                 value = getattr(record, field, None)
                 if value is not None:
                     record_data[field] = value
-            packages_key = "packages" if record.fn.endswith(".tar.bz2") else "packages.conda"
-
             channel_and_subdir = (record.channel, record.subdir)
             if channel_and_subdir not in records_map:
                 records_map[channel_and_subdir] = empty_repodata_dict(record.subdir)
-            records_map[channel_and_subdir][packages_key][record.fn] = record_data
+            records_map[channel_and_subdir]["packages"][record.fn] = record_data
 
         for (channel, subdir), repodata in records_map.items():
             with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
