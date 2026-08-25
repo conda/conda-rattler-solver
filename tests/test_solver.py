@@ -882,9 +882,16 @@ def _write_prefix_record(
     (conda_meta / f"{name}-{version}-0.json").write_text(json.dumps(data))
 
 
+@pytest.mark.parametrize(
+    "channel_priority",
+    [
+        "strict", "flexible", "disabled" 
+    ],
+)
 def test_strict_channel_priority_keeps_installed_dependency_from_removed_channel(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
+    channel_priority: str,
 ) -> None:
     """
     With strict channel priority, an active channel that happens to also publish an
@@ -894,9 +901,8 @@ def test_strict_channel_priority_keeps_installed_dependency_from_removed_channel
     from the solver's candidate pool, and instead of leaving the environment untouched,
     both `foo` and `bar` are silently dropped from the solution.
     """
-    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", "strict")
+    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", channel_priority)
     reset_context()
-    assert context.channel_priority == ChannelPriority.STRICT
 
     # "bar" and its dependency "foo=2.0" were originally installed from "chan-b",
     # which is no longer part of the active channel list below.
@@ -941,21 +947,30 @@ def test_strict_channel_priority_keeps_installed_dependency_from_removed_channel
         subdirs=("noarch",),
     )
     solution = solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_ALL)
-    # There are no updates to be made
-    assert len(solution) == 0
+    packages =  {f"{pkg.channel}::{pkg.name}": pkg.version for pkg in solution}
+    assert f"https://conda.anaconda.org/chan-b/noarch::foo" in packages
+    assert packages[f"https://conda.anaconda.org/chan-b/noarch::foo"] == "2.0"
+    assert "https://conda.anaconda.org/chan-b/noarch::bar" in packages
+    assert packages[f"https://conda.anaconda.org/chan-b/noarch::bar"] == "1.0"
 
 
+@pytest.mark.parametrize(
+    "channel_priority",
+    [
+        "strict", "flexible", "disabled" 
+    ],
+)
 def test_strict_channel_priority_updates_installed_dependency(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
+    channel_priority: str
 ) -> None:
     """
     With strict channel priority enabled, ensure that the package foo is updated
     if a true update is required.
     """
-    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", "strict")
+    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", channel_priority)
     reset_context()
-    assert context.channel_priority == ChannelPriority.STRICT
 
     # "bar" and its dependency "foo=2.0" were originally installed from "chan-b",
     # which is no longer part of the active channel list below.
