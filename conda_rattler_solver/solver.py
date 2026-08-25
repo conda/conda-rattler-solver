@@ -647,7 +647,6 @@ class RattlerSolver(Solver):
             if line.startswith("Cannot solve the request because of:"):
                 line = line.split(":", 1)[1]
             words = line.split()
-            # import pdb; pdb.set_trace()
             if "is locked, but another version is required as reported above" in line:
                 unsatisfiable[words[0]] = MatchSpec(f"{words[0]} {words[1]}")
             elif "which cannot be installed because there are no viable options" in line:
@@ -672,7 +671,7 @@ class RattlerSolver(Solver):
                 # list. e.g. `conda create main::psutil` + `conda install -c conda-forge python`
                 if any(spec.match(record) for record in in_state.installed.values()):
                     unsatisfiable[spec.name] = spec
-                    self._mark_missing_installed(spec.name, in_state, out_state)
+                    out_state.missing_installed.add(spec.name)
                 else:
                     not_found[spec.name] = spec
             elif "for which no candidates were found" in line:
@@ -685,7 +684,7 @@ class RattlerSolver(Solver):
                 spec = MatchSpec(spec)
                 if any(spec.match(record) for record in in_state.installed.values()):
                     unsatisfiable[spec.name] = spec
-                    self._mark_missing_installed(spec.name, in_state, out_state)
+                    out_state.missing_installed.add(spec.name)
                 else:
                     not_found[spec.name] = spec
 
@@ -730,27 +729,6 @@ class RattlerSolver(Solver):
             problems,
         )
         out_state.conflicts.update(unsatisfiable)
-
-    def _mark_missing_installed(
-        self, name: str, in_state: SolverInputState, out_state: SolverOutputState
-    ) -> None:
-        """
-        Record ``name`` (an installed package reported as absent from the current index) in
-        ``out_state.missing_installed``, along with its installed dependencies. A missing
-        package's installed dependencies are likely missing from the same channel, we lock
-        the whole subtree in one go.
-        """
-        pending = [name]
-        while pending:
-            current = pending.pop()
-            if current in out_state.missing_installed:
-                continue
-            out_state.missing_installed.add(current)
-            if installed := in_state.installed.get(current):
-                for dep in installed.depends:
-                    dep_name = MatchSpec(dep).name
-                    if dep_name in in_state.installed:
-                        pending.append(dep_name)
 
     def _maybe_raise_for_conda_build(
         self,

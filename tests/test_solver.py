@@ -1020,8 +1020,7 @@ def test_explicit_update_keeps_installed_package_whose_channel_is_gone(
             f"--channel={channel_a}",
             "--dry-run",
             "--json",
-            # "foo",
-            "--all",
+            "foo",
         )
         assert rc == 0, err
         assert json.loads(out).get("message") == "All requested packages already installed."
