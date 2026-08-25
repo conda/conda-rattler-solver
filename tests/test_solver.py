@@ -888,7 +888,7 @@ def _write_prefix_record(
         "strict", "flexible", "disabled" 
     ],
 )
-def test_strict_channel_priority_keeps_installed_dependency_from_removed_channel(
+def test_channel_priority_keeps_installed_dependency_from_removed_channel(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
     channel_priority: str,
@@ -900,6 +900,7 @@ def test_strict_channel_priority_keeps_installed_dependency_from_removed_channel
     (`bar`) requires that newer `foo`. Currently, the installed `foo=2.0` gets excluded
     from the solver's candidate pool, and instead of leaving the environment untouched,
     both `foo` and `bar` are silently dropped from the solution.
+    Also test with other channel priority configurations.
     """
     monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", channel_priority)
     reset_context()
@@ -960,7 +961,7 @@ def test_strict_channel_priority_keeps_installed_dependency_from_removed_channel
         "strict", "flexible", "disabled" 
     ],
 )
-def test_strict_channel_priority_updates_installed_dependency(
+def test_channel_priority_updates_installed_dependency(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
     channel_priority: str
