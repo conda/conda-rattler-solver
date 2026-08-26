@@ -67,6 +67,7 @@ class RattlerIndexHelper:
         channels: Iterable[Channel | str] = None,
         subdirs: Iterable[str] = None,
         repodata_fn: str = REPODATA_FN,
+        installed_records: Iterable[PackageRecord] = (),
         pkgs_dirs: PathsType = (),
         in_state: SolverInputState | None = None,
         build_repodata_subset: BuildRepodataSubset | None = None,
@@ -79,12 +80,14 @@ class RattlerIndexHelper:
         self.in_state = in_state
         self.build_repodata_subset = build_repodata_subset
 
-        self._index: dict[str, _ChannelRepoInfo] = {}
-        self._index.update(self._load_channels())
+        self._index: list[_ChannelRepoInfo] = []
+        self._index.extend(self._load_channels())
         if pkgs_dirs:
-            self._index.update(
-                {info.noauth_url: info for info in self._load_pkgs_cache(pkgs_dirs)}
-            )
+            repo_infos = self._load_pkgs_cache(pkgs_dirs)
+            self._index.extend(repo_infos)
+        if installed_records:
+            repo_infos = self._load_installed_records(installed_records)
+            self._index.extend(repo_infos)
 
     @classmethod
     def from_platform_aware_channel(cls, channel: Channel) -> Self:
@@ -101,13 +104,13 @@ class RattlerIndexHelper:
     def reload_channel(self, channel: Channel) -> None:
         urls = {}
         for url in channel.urls(with_credentials=False, subdirs=self._subdirs):
-            for repo_info in self._index.values():
+            for repo_info in self._index:
                 if repo_info.noauth_url == url:
                     log.debug("Reloading repo %s", repo_info.noauth_url)
                     urls[repo_info.full_url] = channel
                     break
-        for new_repo_info in self._load_channels(urls).values():
-            for repo_info in self._index.values():
+        for new_repo_info in self._load_channels(urls):
+            for repo_info in self._index:
                 if repo_info.noauth_url == new_repo_info.noauth_url:
                     repo_info.repo.close()
                     repo_info.repo = new_repo_info.repo
@@ -120,22 +123,14 @@ class RattlerIndexHelper:
     ) -> int:
         count = 0
         if filter_ is not None:
-            for info in repos or self._index.values():
+            for info in repos or self._index:
                 for record in info.repo.load_all_records(self._package_format):
                     if filter_(record):
                         count += 1
         else:
-            for info in repos or self._index.values():
+            for info in repos or self._index:
                 count += info.repo.record_count(self._package_format)
         return count
-
-    def get_info(self, key: str) -> _ChannelRepoInfo:
-        if not key.startswith("file://"):
-            # The conda functions (specifically remove_auth) assume the input
-            # is a url; a file uri on windows with a drive letter messes them up.
-            # For the rest, we remove all forms of authentication
-            key = split_anaconda_token(remove_auth(key))[0]
-        return self._index[key]
 
     def _fetch_channel(self, url: str) -> tuple[str, os.PathLike]:
         channel = Channel.from_url(url)
@@ -206,11 +201,11 @@ class RattlerIndexHelper:
 
         return tuple(dict.fromkeys(urls))  # de-duplicate
 
-    def _get_root_package_from_shard(self, package_names: list[str]) -> dict[str, _ChannelRepoInfo]:
+    def _get_root_package_from_shard(self, package_names: list[str]) -> list[_ChannelRepoInfo]:
         """
         Builds the repodata subset for a set of packages. Only applicable to sharded channels.
         """
-        result: dict[str, _ChannelRepoInfo] = {}
+        result: list[_ChannelRepoInfo] = []
         urls = self._urls_from_channels()
         if self.build_repodata_subset and _is_sharded_repodata_enabled():
             urls_to_channel = {url: Channel.from_url(url) for url in urls}
@@ -222,7 +217,8 @@ class RattlerIndexHelper:
                 list(channel_data) if channel_data is not None else None,
             )
             if channel_data is not None:
-                result.update(self._load_repo_info_from_shards(channel_data))
+                repo_info = self._load_repo_info_from_shards(channel_data)
+                result.extend([repo for repo in repo_info.values()])
         return result
 
     def _load_channel_repo_info_shards(
@@ -291,7 +287,7 @@ class RattlerIndexHelper:
             index[info.noauth_url] = info
         return index
 
-    def _load_channels(self, urls: Iterable[str] | None = None) -> dict[str, _ChannelRepoInfo]:
+    def _load_channels(self, urls: Iterable[str] | None = None) -> list[_ChannelRepoInfo]:
         if urls is None:
             urls = self._urls_from_channels()
 
@@ -300,7 +296,7 @@ class RattlerIndexHelper:
             urls_to_channel = {url: Channel.from_url(url) for url in urls}
             channel_repos_info = self._load_channel_repo_info_shards(urls_to_channel)
             if channel_repos_info is not None:
-                return channel_repos_info
+                return [repo_info for repo_info in channel_repos_info.values()]
             log.debug("No sharded channels available. Fall back to non-sharded path.")
 
         # 1. Fetch URLs (if needed)
@@ -313,10 +309,9 @@ class RattlerIndexHelper:
             jsons = {url: str(path) for (url, path) in executor.map(self._fetch_channel, urls)}
 
         # 2. Create repos in same order as `urls`
-        index = {}
+        index = []
         for url in urls:
-            info = self._json_path_to_repo_info(url, jsons[url])
-            index[info.noauth_url] = info
+            index.append(self._json_path_to_repo_info(url, jsons[url]))
 
         return index
 
@@ -373,13 +368,71 @@ class RattlerIndexHelper:
                 self._unlink_on_del.append(Path(f.name))
         return repos
 
-    def _search(self, spec: rattler.MatchSpec, index: dict[str, _ChannelRepoInfo]) -> Iterable[PackageRecord]:
+    def _load_installed_records(
+        self, installed_records: Iterable[PackageRecord]
+    ) -> list[_ChannelRepoInfo]:
+        """
+        Load repository information from installed records.
+
+        This lets the solver see already-installed packages even if their originating
+        channel is no longer reachable/available, since we build the repodata straight
+        from the record metadata instead of refetching it from the channel.
+
+        Returns the list of _ChannelRepoInfo object that contains a rattler.SparseRepoData
+        object that can be used to query the installed packages.
+        """
+        repos = []
+        records_map = {}
+        for record in installed_records:
+            if record.subdir not in self._subdirs:
+                continue
+            record_data = dict(record.dump())
+            for field in (
+                "sha256",
+                "track_features",
+                "license",
+                "size",
+                "url",
+                "noarch",
+                "platform",
+                "timestamp",
+            ):
+                if field in record_data:
+                    continue  # do not overwrite
+                value = getattr(record, field, None)
+                if value is not None:
+                    record_data[field] = value
+            channel_and_subdir = (record.channel, record.subdir)
+            if channel_and_subdir not in records_map:
+                records_map[channel_and_subdir] = empty_repodata_dict(record.subdir)
+            records_map[channel_and_subdir]["packages"][record.fn] = record_data
+
+        for (channel, subdir), repodata in records_map.items():
+            with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+                f.write(json_dump(repodata))
+            noauth_url = channel.urls(with_credentials=False, subdirs=(subdir,))[0]
+            noauth_url_sans_subdir = noauth_url.rsplit("/", 1)[0]
+            repos.append(
+                _ChannelRepoInfo(
+                    repo=rattler.SparseRepoData(
+                        rattler.Channel(noauth_url_sans_subdir), subdir, f.name
+                    ),
+                    channel=channel,
+                    full_url=noauth_url,
+                    noauth_url=noauth_url,
+                    local_json=f.name,
+                )
+            )
+            self._unlink_on_del.append(Path(f.name))
+        return repos
+
+    def _search(self, spec: rattler.MatchSpec, index: list[_ChannelRepoInfo]) -> Iterable[PackageRecord]:
         """
         Search for packages matching the given spec in the index. This function does not
         build the repodata subset for the requested spec, so it may not find packages
         that are only available in sharded channels.
         """
-        for info in index.values():
+        for info in index:
             for record in info.repo.load_matching_records([spec]):
                 yield rattler_record_to_conda_record(record)
 
@@ -400,8 +453,8 @@ class RattlerIndexHelper:
         if search_expanded_index:
             # The packages loaded with `_get_root_package_from_shard` will have the most
             # up-to-date packages for the requested spec in sharded channels.
-            extra_index = self._get_root_package_from_shard([spec.name.normalized])
-            yield from self._search(spec, self._index | extra_index)
+            extra_index = self._index + self._get_root_package_from_shard([spec.name.normalized])
+            yield from self._search(spec, extra_index)
 
     @property
     def _package_format(self) -> rattler.PackageFormatSelection:
@@ -413,7 +466,7 @@ class RattlerIndexHelper:
 
     def __del__(self):
         if self._unlink_on_del:
-            for info in self._index.values():
+            for info in self._index:
                 info.repo.close()
             self._index.clear()
         for path in self._unlink_on_del:

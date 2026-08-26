@@ -219,7 +219,7 @@ class RattlerSolver(Solver):
             # We need to recover the local dirs (conda-build's local, output_folder, etc)
             # from the index. This is a bit of a hack, but it works.
             conda_build_channels = {}
-            for record in self._index or {}:
+            for record in self._index or []:
                 if record.channel.scheme == "file":
                     # Remove 'Channel.platform' to avoid missing subdirs. Channel.urls()
                     # will ignore our explicitly passed subdirs if .platform is defined!
@@ -239,11 +239,13 @@ class RattlerSolver(Solver):
         subdirs: Iterable[str],
         in_state: SolverInputState,
     ) -> RattlerIndexHelper:
+
         index = RattlerIndexHelper(
             channels=[*conda_build_channels, *channels],
             subdirs=subdirs,
             repodata_fn=self._repodata_fn,
             pkgs_dirs=context.pkgs_dirs if context.offline else (),
+            installed_records=(*in_state.installed.values(),),
             in_state=in_state,
             build_repodata_subset=self._build_repodata_subset,
         )
@@ -345,7 +347,7 @@ class RattlerSolver(Solver):
         """
         solve_kwargs = {
             **self._collect_specs(in_state, out_state),
-            "sparse_repodata": [info.repo for info in index._index.values()],
+            "sparse_repodata": [info.repo for info in index._index],
             "virtual_packages": self._rattler_virtual_packages(in_state),
             "channel_priority": (
                 rattler.ChannelPriority.Strict
