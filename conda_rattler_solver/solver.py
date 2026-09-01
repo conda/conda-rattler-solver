@@ -428,6 +428,10 @@ class RattlerSolver(Solver):
         if installed_python and to_be_installed_python:
             python_version_might_change = not to_be_installed_python.match(installed_python)
 
+        named_package_holds_python = any(
+            name in in_state.installed for name in in_state.do_not_remove
+        )
+
         # TODO: Make in_state.requested a dict[str, list[MatchSpec]]
         # This makes tests/core/test_solve.py::test_globstr_matchspec_compatible
         # and test_globstr_matchspec_non_compatible pass
@@ -472,6 +476,15 @@ class RattlerSolver(Solver):
             # Block B: main logic for user requests and installed packages
             if requested:
                 specs.extend(requested)
+                if (
+                    name == "python"
+                    and installed
+                    and in_state.is_updating
+                    and named_package_holds_python
+                    and all(spec.is_name_only_spec for spec in requested)
+                ):
+                    pyver = ".".join(installed.version.split(".")[:2])
+                    constraints.append(f"python {pyver}.*")
             elif name in in_state.always_update:
                 if in_state.update_modifier.UPDATE_ALL and conflicting and not history:
                     # with --update-all, all packages will be requested, but sometimes
