@@ -290,7 +290,7 @@ class RattlerSolver(Solver):
                 neutered=dict(out_state.neutered),
                 conflicts=dict(out_state.conflicts),
                 pins=dict(out_state.pins),
-                missing_installed=set(out_state.missing_installed),
+                installed_without_candidates=set(out_state.installed_without_candidates),
             )
         else:
             # Didn't find a solution after all attempts, let's unfreeze everything
@@ -546,9 +546,9 @@ class RattlerSolver(Solver):
                     locked_packages.append(installed)
 
         # Add packages marked as missing to the set of locked packages
-        if out_state.missing_installed:
+        if out_state.installed_without_candidates:
             already_locked = {record.name for record in locked_packages}
-            for name in out_state.missing_installed:
+            for name in out_state.installed_without_candidates:
                 if name in already_locked:
                     continue
                 if installed := in_state.installed.get(name):
@@ -671,7 +671,7 @@ class RattlerSolver(Solver):
                 # list. e.g. `conda create main::psutil` + `conda install -c conda-forge python`
                 if any(spec.match(record) for record in in_state.installed.values()):
                     unsatisfiable[spec.name] = spec
-                    out_state.missing_installed.add(spec.name)
+                    out_state.installed_without_candidates.add(spec.name)
                 else:
                     not_found[spec.name] = spec
             elif "for which no candidates were found" in line:
@@ -684,7 +684,7 @@ class RattlerSolver(Solver):
                 spec = MatchSpec(spec)
                 if any(spec.match(record) for record in in_state.installed.values()):
                     unsatisfiable[spec.name] = spec
-                    out_state.missing_installed.add(spec.name)
+                    out_state.installed_without_candidates.add(spec.name)
                 else:
                     not_found[spec.name] = spec
 
