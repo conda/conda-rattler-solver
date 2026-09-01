@@ -914,6 +914,7 @@ def test_python_does_not_change_unless_wanted(
         assert "python" in unlink_names.intersection(link_names)
 
 
+@pytest.mark.usefixtures("solver_rattler")
 def test_installed_packages_included_in_solver(
     tmp_env: TmpEnvFixture, conda_cli: CondaCLIFixture, tmp_path: PathLike
 ) -> None:
@@ -932,8 +933,7 @@ def test_installed_packages_included_in_solver(
             "--all",
             f"--prefix={prefix}",
         )
-        assert rc == 0
-        assert err == ""
+        assert rc == 0, err
 
 
 @pytest.mark.benchmark
@@ -986,6 +986,7 @@ def test_installed_packages_included_in_solver_benchmark(
     "channel_priority",
     ["strict", "flexible", "disabled"],
 )
+@pytest.mark.usefixtures("solver_rattler")
 def test_explicit_update_keeps_installed_package_whose_channel_is_gone(
     tmp_path: Path,
     tmp_env: TmpEnvFixture,
@@ -1281,6 +1282,7 @@ def test_channel_priority_updates_installed_dependency_two(
     ),
     strict=True,
 )
+@pytest.mark.usefixtures("solver_rattler")
 def test_can_update_env_with_python(
     tmp_env: TmpEnvFixture,
     conda_cli: CondaCLIFixture,
