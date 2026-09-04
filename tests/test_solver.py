@@ -267,6 +267,38 @@ def test_update_from_latest_not_downgrade(
         assert original_python.version == update_python.version
 
 
+def test_name_only_update_python_honors_named_package_lock(
+    tmp_env: TmpEnvFixture,
+) -> None:
+    args = ("--override-channels", "--channel=defaults", "--solver=rattler")
+
+    def planned_python_version(prefix: Path, command: str, python_spec: str) -> str:
+        installed_version = PrefixData(prefix).get("python").version
+        process = conda_subprocess(
+            command,
+            f"--prefix={prefix}",
+            *args,
+            "--dry-run",
+            "--json",
+            python_spec,
+        )
+        for record in json.loads(process.stdout).get("actions", {}).get("LINK", ()):
+            if record["name"] == "python":
+                return record["version"]
+        return installed_version
+
+    with tmp_env("python=3.13", "conda", *args) as prefix:
+        installed_minor = PrefixData(prefix).get("python").version.rsplit(".", 1)[0]
+        assert planned_python_version(prefix, "update", "python").startswith(f"{installed_minor}.")
+        assert planned_python_version(prefix, "install", "python=3.14").startswith("3.14.")
+
+    with tmp_env("python=3.13", *args) as prefix:
+        installed_minor = PrefixData(prefix).get("python").version.rsplit(".", 1)[0]
+        assert not planned_python_version(prefix, "update", "python").startswith(
+            f"{installed_minor}."
+        )
+
+
 @pytest.mark.skipif(not on_linux, reason="Linux only")
 def test_too_aggressive_update_to_conda_forge_packages(tmp_env: TmpEnvFixture) -> None:
     """
