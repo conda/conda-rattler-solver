@@ -3,9 +3,13 @@
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
 
+import bz2
+import io
 import json
 import os
+import shutil
 import sys
+import tarfile
 from itertools import chain, permutations, repeat
 from pathlib import Path
 from subprocess import run
@@ -13,7 +17,8 @@ from textwrap import dedent
 from typing import TYPE_CHECKING
 
 import pytest
-from conda.base.context import context
+from conda.base.constants import UpdateModifier
+from conda.base.context import context, reset_context
 from conda.common.compat import on_linux, on_mac, on_win
 from conda.core.prefix_data import PrefixData
 from conda.exceptions import (
@@ -22,6 +27,7 @@ from conda.exceptions import (
     SpecsConfigurationConflictError,
     UnsatisfiableError,
 )
+from conda.models.channel import Channel
 from conda.testing.integration import package_is_installed
 from conda.testing.solver_helpers import SolverTests
 
@@ -31,11 +37,61 @@ from conda_rattler_solver.solver import RattlerSolver as Solver
 from .utils import conda_subprocess
 
 if TYPE_CHECKING:
+    from os import PathLike
+
     from conda.testing.fixtures import CondaCLIFixture, PipCLIFixture, TmpEnvFixture
     from pytest import MonkeyPatch
+    from pytest_benchmark.fixture import BenchmarkFixture
 
 HERE = Path(__file__).parent
 DATA = HERE / "data"
+
+
+def _make_noarch_package(
+    channel_dir: Path,
+    name: str,
+    version: str,
+    build: str = "0",
+    depends: tuple[str, ...] = (),
+) -> None:
+    """
+    Write a minimal (content-free) noarch package tarball into ``channel_dir / "noarch"``,
+    for use as a throwaway local channel in tests that only care about dependency resolution.
+    """
+    noarch_dir = channel_dir / "noarch"
+    noarch_dir.mkdir(parents=True, exist_ok=True)
+    fn = f"{name}-{version}-{build}.tar.bz2"
+    index_json = {
+        "arch": None,
+        "build": build,
+        "build_number": 0,
+        "depends": list(depends),
+        "name": name,
+        "noarch": "generic",
+        "platform": None,
+        "subdir": "noarch",
+        "timestamp": 1700000000000,
+        "version": version,
+    }
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        for relpath, payload in (
+            ("info/index.json", json.dumps(index_json).encode()),
+            ("info/paths.json", json.dumps({"paths": [], "paths_version": 1}).encode()),
+        ):
+            info = tarfile.TarInfo(relpath)
+            info.size = len(payload)
+            tar.addfile(info, io.BytesIO(payload))
+    (noarch_dir / fn).write_bytes(bz2.compress(buf.getvalue()))
+
+    repodata_path = noarch_dir / "repodata.json"
+    repodata = (
+        json.loads(repodata_path.read_text())
+        if repodata_path.is_file()
+        else {"info": {"subdir": "noarch"}, "packages": {}, "packages.conda": {}}
+    )
+    repodata["packages"][fn] = index_json
+    repodata_path.write_text(json.dumps(repodata))
 
 
 class TestRattlerSolver(SolverTests):
@@ -888,3 +944,395 @@ def test_python_does_not_change_unless_wanted(
         link_names = {pkg["name"] for pkg in data["actions"]["LINK"]}
         unlink_names = {pkg["name"] for pkg in data["actions"]["UNLINK"]}
         assert "python" in unlink_names.intersection(link_names)
+
+
+@pytest.mark.usefixtures("solver_rattler")
+def test_installed_packages_included_in_solver(
+    tmp_env: TmpEnvFixture, conda_cli: CondaCLIFixture, tmp_path: PathLike
+) -> None:
+    """
+    Test that installed packages are included in the solver's consideration when
+    updating all packages.
+
+    ref: https://github.com/conda/conda-rattler-solver/issues/88
+    """
+    tmp_channel = tmp_path / "channel"
+    repo = Path(__file__).parent / "data/mamba_repo"
+    shutil.copytree(repo, tmp_channel)
+    with tmp_env("test-package", "--channel", tmp_channel) as prefix:
+        _, err, rc = conda_cli(
+            "update",
+            "--all",
+            f"--prefix={prefix}",
+        )
+        assert rc == 0, err
+
+
+@pytest.mark.benchmark
+@pytest.mark.parametrize(
+    "channel_still_present", [True, False], ids=["channel-present", "channel-missing"]
+)
+def test_installed_packages_included_in_solver_benchmark(
+    benchmark: BenchmarkFixture,
+    tmp_env: TmpEnvFixture,
+    tmp_path: Path,
+    channel_still_present: bool,
+) -> None:
+    """
+    Benchmark of the same scenario covered by ``test_installed_packages_included_in_solver``,
+    but calling ``RattlerSolver.solve_final_state()`` directly (instead of going through
+    ``conda_cli``) so we can measure the solver's own performance.
+
+    The ``channel-missing`` case reproduces the original bug report: the channel an installed
+    package came from is no longer part of the configured channels, so the solver has to fall
+    back to its "missing installed" handling to avoid dropping the package. The
+    ``channel-present`` case is the same setup without that fallback, to compare its overhead.
+
+    ref: https://github.com/conda/conda-rattler-solver/issues/88
+    """
+    tmp_channel = tmp_path / "channel"
+    repo = Path(__file__).parent / "data/mamba_repo"
+    shutil.copytree(repo, tmp_channel)
+
+    empty_channel = tmp_path / "empty_channel"
+    (empty_channel / "noarch").mkdir(parents=True)
+    (empty_channel / "noarch" / "repodata.json").write_text(
+        json.dumps({"info": {"subdir": "noarch"}, "packages": {}, "packages.conda": {}})
+    )
+
+    with tmp_env("test-package", "--channel", tmp_channel) as prefix:
+        solver = Solver(
+            prefix=prefix,
+            channels=[str(tmp_channel if channel_still_present else empty_channel)],
+            command="update",
+        )
+
+        def run():
+            return solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_ALL)
+
+        solution = benchmark(run)
+        assert "test-package" in {record.name for record in solution}
+
+
+@pytest.mark.parametrize(
+    "channel_priority",
+    ["strict", "flexible", "disabled"],
+)
+@pytest.mark.usefixtures("solver_rattler")
+def test_explicit_update_keeps_installed_package_whose_channel_is_gone(
+    tmp_path: Path,
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    monkeypatch: MonkeyPatch,
+    channel_priority: str,
+) -> None:
+    """
+    ``bar`` (installed) depends on ``foo>=2``. ``foo`` was installed at 2.0 from a channel that
+    is no longer configured; the only active channel now offers ``foo`` at 1.0. Explicitly
+    requesting an update of ``foo`` should keep the installed 2.0 (the only version that keeps
+    ``bar`` satisfiable) instead of failing outright.
+
+    Test that ``conda update`` will not change the installed packages, and that ``conda install``
+    will raise ``RattlerUnsatisfiableError``.
+    """
+    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", channel_priority)
+    reset_context()
+
+    channel_b = tmp_path / "channel-b"
+    _make_noarch_package(channel_b, "foo", "2.0")
+    _make_noarch_package(channel_b, "bar", "1.0", depends=("foo>=2",))
+
+    channel_a = tmp_path / "channel-a"
+    _make_noarch_package(channel_a, "foo", "1.0")
+
+    with tmp_env("--override-channels", f"--channel={channel_b}", "foo", "bar") as prefix:
+        out, err, rc = conda_cli(
+            "update",
+            f"--prefix={prefix}",
+            "--override-channels",
+            f"--channel={channel_a}",
+            "--dry-run",
+            "--json",
+            "foo",
+        )
+        assert rc == 0, err
+        assert json.loads(out).get("message") == "All requested packages already installed."
+
+        with pytest.raises(RattlerUnsatisfiableError):
+            conda_cli(
+                "install",
+                f"--prefix={prefix}",
+                "--override-channels",
+                f"--channel={channel_a}",
+                "--dry-run",
+                "--json",
+                "foo==1",
+            )
+
+
+@pytest.mark.parametrize(
+    "channel_priority",
+    ["strict", "flexible", "disabled"],
+)
+def test_channel_priority_keeps_installed_dependency_from_removed_channel(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    channel_priority: str,
+    tmp_env: TmpEnvFixture,
+) -> None:
+    """
+    An active channel that happens to also publish an older `foo` must not
+    take precedence over the already-installed, newer `foo` if it is a
+    dependency of another package (bar).
+    """
+    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", channel_priority)
+    reset_context()
+
+    # "bar" and its dependency "foo=2.0" were originally installed from "chan-b",
+    # which is no longer part of the active channel list below.
+    channel_b = tmp_path / "channel-b"
+    _make_noarch_package(channel_b, "foo", "2.0")
+    _make_noarch_package(channel_b, "bar", "1.0", depends=("foo>=2",))
+
+    # The only active channel, "chan-a", happens to also publish "foo", but only 1.0.
+    chan_a = tmp_path / "chan-a"
+    (chan_a / "noarch").mkdir(parents=True)
+    (chan_a / "noarch" / "repodata.json").write_text(
+        json.dumps(
+            {
+                "info": {"subdir": "noarch"},
+                "packages": {
+                    "foo-1.0-0.tar.bz2": {
+                        "build": "0",
+                        "build_number": 0,
+                        "depends": [],
+                        "constrains": [],
+                        "md5": "0" * 32,
+                        "name": "foo",
+                        "noarch": "generic",
+                        "sha256": "0" * 64,
+                        "size": 1,
+                        "subdir": "noarch",
+                        "timestamp": 0,
+                        "version": "1.0",
+                    },
+                },
+                "packages.conda": {},
+                "removed": [],
+                "repodata_version": 1,
+            }
+        )
+    )
+
+    with tmp_env("--override-channels", f"--channel={channel_b}", "foo", "bar") as prefix:
+        solver = Solver(
+            prefix=prefix,
+            channels=[Channel(str(chan_a))],
+            subdirs=("noarch",),
+        )
+        solution = solver.solve_final_state(
+            update_modifier=UpdateModifier.UPDATE_ALL, should_retry_solve=True
+        )
+        packages = {pkg.name: pkg.version for pkg in solution}
+        assert "foo" in packages
+        assert packages["foo"] == "2.0"
+        assert "bar" in packages
+        assert packages["bar"] == "1.0"
+
+
+@pytest.mark.parametrize(
+    "channel_priority",
+    ["strict", "flexible", "disabled"],
+)
+def test_channel_priority_updates_installed_dependency(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    channel_priority: str,
+    tmp_env: TmpEnvFixture,
+) -> None:
+    """
+    An active channel publishes a newer `foo` must take precedence
+    over the already-installed, `foo`.
+    """
+    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", channel_priority)
+    reset_context()
+
+    # "bar" and its dependency "foo=2.0" were originally installed from "chan-b",
+    # which is no longer part of the active channel list below.
+    channel_b = tmp_path / "channel-b"
+    _make_noarch_package(channel_b, "foo", "2.0")
+    _make_noarch_package(channel_b, "bar", "1.0", depends=("foo>=2",))
+
+    # The only active channel, "chan-a", happens to also publish "foo", but only 1.0.
+    chan_a = tmp_path / "chan-a"
+    (chan_a / "noarch").mkdir(parents=True)
+    (chan_a / "noarch" / "repodata.json").write_text(
+        json.dumps(
+            {
+                "info": {"subdir": "noarch"},
+                "packages": {
+                    "foo-1.0-0.tar.bz2": {
+                        "build": "0",
+                        "build_number": 0,
+                        "depends": [],
+                        "constrains": [],
+                        "md5": "0" * 32,
+                        "name": "foo",
+                        "noarch": "generic",
+                        "sha256": "0" * 64,
+                        "size": 1,
+                        "subdir": "noarch",
+                        "timestamp": 0,
+                        "version": "1.0",
+                    },
+                    "foo-3.0-0.tar.bz2": {
+                        "build": "0",
+                        "build_number": 0,
+                        "depends": [],
+                        "constrains": [],
+                        "md5": "0" * 32,
+                        "name": "foo",
+                        "noarch": "generic",
+                        "sha256": "0" * 64,
+                        "size": 1,
+                        "subdir": "noarch",
+                        "timestamp": 0,
+                        "version": "3.0",
+                    },
+                },
+                "packages.conda": {},
+                "removed": [],
+                "repodata_version": 1,
+            }
+        )
+    )
+
+    with tmp_env("--override-channels", f"--channel={channel_b}", "foo", "bar") as prefix:
+        solver = Solver(
+            prefix=prefix,
+            channels=[Channel(str(chan_a))],
+            subdirs=("noarch",),
+        )
+        solution = solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_ALL)
+        packages = {pkg.name: pkg.version for pkg in solution}
+
+        assert "foo" in packages
+        assert packages["foo"] == "3.0"
+        assert "bar" in packages
+        assert packages["bar"] == "1.0"
+
+
+@pytest.mark.xfail(
+    reason="known issue: c-r-s will install packages from a new channel if available ",
+    strict=True,
+)
+def test_channel_priority_updates_installed_dependency_two(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    tmp_env: TmpEnvFixture,
+) -> None:
+    """
+    An active channel that publishes a newer `foo` must take precedence
+    over the already-installed, `foo`. But should also try to minimize the
+    change.
+    """
+    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", "strict")
+    reset_context()
+
+    # "bar" and its dependency "foo=2.0" were originally installed from "chan-b",
+    # which is no longer part of the active channel list below.
+    channel_b = tmp_path / "channel-b"
+    _make_noarch_package(channel_b, "foo", "2.0")
+    _make_noarch_package(channel_b, "bar", "1.0", depends=("foo>=2",))
+
+    # The only active channel, "chan-a", happens to also publish "foo", but only 1.0.
+    chan_a = tmp_path / "chan-a"
+    (chan_a / "noarch").mkdir(parents=True)
+    (chan_a / "noarch" / "repodata.json").write_text(
+        json.dumps(
+            {
+                "info": {"subdir": "noarch"},
+                "packages": {
+                    "foo-1.0-0.tar.bz2": {
+                        "build": "0",
+                        "build_number": 0,
+                        "depends": [],
+                        "constrains": [],
+                        "md5": "0" * 32,
+                        "name": "foo",
+                        "noarch": "generic",
+                        "sha256": "0" * 64,
+                        "size": 1,
+                        "subdir": "noarch",
+                        "timestamp": 0,
+                        "version": "1.0",
+                    },
+                    "bar-3.0-0.tar.bz2": {
+                        "build": "0",
+                        "build_number": 0,
+                        "depends": ["foo>=1"],
+                        "constrains": [],
+                        "md5": "0" * 32,
+                        "name": "bar",
+                        "noarch": "generic",
+                        "sha256": "0" * 64,
+                        "size": 1,
+                        "subdir": "noarch",
+                        "timestamp": 0,
+                        "version": "3.0",
+                    },
+                },
+                "packages.conda": {},
+                "removed": [],
+                "repodata_version": 1,
+            }
+        )
+    )
+
+    with tmp_env("--override-channels", f"--channel={channel_b}", "foo", "bar") as prefix:
+        solver = Solver(
+            prefix=prefix,
+            channels=[Channel(str(chan_a))],
+            subdirs=("noarch",),
+        )
+        solution = solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_ALL)
+        packages = {pkg.name: pkg.version for pkg in solution}
+
+        # Should keep the package foo==2 from chan_b, since it satisfies the requirements
+        # of the updated package bar.
+        assert "foo" in packages
+        assert packages["foo"] == "2.0"
+        assert "bar" in packages
+        assert packages["bar"] == "3.0"
+
+
+@pytest.mark.xfail(
+    reason=(
+        "known issue: c-r-s update semantics strictly require '>=' for each package that "
+        "exists in the prefix. This causes Unsatisfiable errors when modifying channels. "
+        "xref: https://github.com/conda/conda-rattler-solver/issues/135"
+    ),
+    strict=True,
+)
+@pytest.mark.usefixtures("solver_rattler")
+def test_can_update_env_with_python(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+) -> None:
+    """
+    Ensure that we can run an update when python is in the environment
+    """
+
+    with tmp_env("--override-channels", "--channel=defaults", "python") as prefix:
+        out, err, exc = conda_cli(
+            "update",
+            f"--prefix={prefix}",
+            "--override-channels",
+            "--channel=conda-forge",
+            "--dry-run",
+            "--json",
+            "--all",
+            raises=DryRunExit,
+        )
+        data = json.loads(out)
+        assert data["success"] is True, err

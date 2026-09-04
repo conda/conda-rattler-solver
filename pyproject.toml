@@ -107,6 +107,15 @@ CONDA_TEST_SOLVERS = "rattler"
 CONDA_TEST_DATA_DIR = "$PIXI_PROJECT_ROOT/../conda/tests/data"
 CONDA_CHANNELS = "conda-forge"
 
+[tool.pixi.feature.test.tasks.benchmark]
+cmd = "python -m pytest -m benchmark --benchmark-only"
+depends-on = ["_install-self"]
+default-environment = "test-py313"
+[tool.pixi.feature.test.tasks.benchmark.env]
+CONDA_TEST_SOLVERS = "rattler"
+CONDA_TEST_DATA_DIR = "$PIXI_PROJECT_ROOT/../conda/tests/data"
+CONDA_CHANNELS = "conda-forge"
+
 [tool.pixi.feature.test.dependencies]
 anaconda-client = "*"
 conda-build = "*"
