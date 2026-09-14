@@ -10,8 +10,12 @@ from typing import TYPE_CHECKING
 import pytest
 from conda.base.constants import UpdateModifier
 from conda.base.context import context, reset_context
+from conda.exceptions import UnsatisfiableError
+
+from conda_rattler_solver.exceptions import RattlerUnsatisfiableError
 
 from .test_performance import _get_channels_from_lockfile
+from .test_solver import _make_noarch_package
 
 DATA = Path(__file__).parent / "data"
 
@@ -116,3 +120,43 @@ def test_solve_update_all_large_lockfile(
 
         solution = benchmark(run)
         assert solution
+
+
+@pytest.mark.benchmark
+@pytest.mark.parametrize("solver_name", ["rattler", "libmamba"])
+def test_solve_conflict_small_local_channel(
+    benchmark,
+    tmp_env,
+    tmp_path,
+    monkeypatch,
+    solver_name,
+):
+    monkeypatch.setenv("CONDA_SOLVER", solver_name)
+    reset_context()
+    assert context.solver == solver_name
+
+    channel = tmp_path / "conflict_repo"
+    _make_noarch_package(channel, "bar", "1.0")
+    _make_noarch_package(channel, "bar", "2.0")
+    _make_noarch_package(channel, "foo", "1.0", depends=("bar=1",))
+    _make_noarch_package(channel, "boz", "1.0", depends=("bar=2",))
+
+    with tmp_env(
+        "foo",
+        "--override-channels",
+        "--channel",
+        str(channel),
+    ) as prefix:
+        SolverBackend = context.plugin_manager.get_cached_solver_backend()
+        solver = SolverBackend(
+            prefix=prefix,
+            channels=[str(channel)],
+            specs_to_add=["boz"],
+            command="install",
+        )
+
+        def run():
+            with pytest.raises((UnsatisfiableError, RattlerUnsatisfiableError)):
+                solver.solve_final_state()
+
+        benchmark(run)
