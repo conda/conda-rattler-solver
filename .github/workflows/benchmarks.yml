@@ -43,7 +43,7 @@ jobs:
           pixi-version: v0.70.1
           working-directory: conda-rattler-solver
           environments: test-py313
-          run-install: false
+          locked: true
 
       - name: Run benchmarks
         working-directory: conda-rattler-solver
