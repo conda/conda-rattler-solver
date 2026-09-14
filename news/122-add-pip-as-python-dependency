@@ -9,7 +9,8 @@
 
 ### Deprecations
 
-* <news item>
+* Require Python 3.11 or newer for conda packages to match py-rattler's
+  conda-forge builds. (#123)
 
 ### Docs
 

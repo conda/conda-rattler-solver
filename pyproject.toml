@@ -84,7 +84,7 @@ serve = { cmd = "python -m http.server", cwd = "docs/_build/dirhtml" }
 clean = { cmd = "rm -rf _build", cwd = "docs" }
 
 [tool.pixi.feature.docs.dependencies]
-python = "3.10.*"
+python = "3.11.*"
 conda-sphinx-theme = "*"
 linkify-it-py = "*"
 myst-parser = "*"
@@ -137,9 +137,6 @@ pytest-xprocess = "*"
 responses = "*"
 tomli = "*"                    # for coverage pyproject.toml, only necessary for Python <= 3.11.0a6
 
-[tool.pixi.feature.py310.dependencies]
-python = "3.10.*"
-
 [tool.pixi.feature.py311.dependencies]
 python = "3.11.*"
 
@@ -161,11 +158,10 @@ python = "3.14.*"
 
 [tool.pixi.environments]
 build = ["build"]
-dev = ["py310", "self"]
+dev = ["py311", "self"]
 docs = ["docs"]
 release = { features = ["release"], no-default-feature = true }
 lint = ["lint"]
-test-py310 = ["test", "py310", "self"]
 test-py311 = ["test", "py311", "self"]
 test-py312 = ["test", "py312", "self"]
 test-py313 = ["test", "py313", "self"]
