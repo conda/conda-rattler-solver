@@ -82,3 +82,37 @@ def test_solve_update_all_medium_lockfile(
 
         solution = benchmark(run)
         assert solution
+
+
+@pytest.mark.benchmark
+@pytest.mark.parametrize("solver_name", ["rattler", "libmamba"])
+def test_solve_update_all_large_lockfile(
+    tmp_env: TmpEnvFixture,
+    monkeypatch: MonkeyPatch,
+    benchmark: BenchmarkFixture,
+    solver_name: str,
+):
+    monkeypatch.setenv("CONDA_SOLVER", solver_name)
+    reset_context()
+    assert context.solver == solver_name
+
+    lockfile = DATA / "pangeo_ml_notebook.linux-64.lock"
+
+    if context.subdir != "linux-64":
+        pytest.skip("large lockfile is linux-64 only")
+
+    channels = _get_channels_from_lockfile(lockfile)
+
+    with tmp_env("--file", lockfile) as prefix:
+        SolverBackend = context.plugin_manager.get_cached_solver_backend()
+        solver = SolverBackend(
+            prefix=prefix,
+            channels=channels,
+            command="update",
+        )
+
+        def run():
+            return solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_ALL)
+
+        solution = benchmark(run)
+        assert solution
