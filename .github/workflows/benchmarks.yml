@@ -1,0 +1,60 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  benchmarks:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout conda-rattler-solver
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: conda-rattler-solver
+
+      - name: Checkout conda test data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: conda/conda
+          ref: main
+          persist-credentials: false
+          path: conda
+
+      - name: Record conda test data revision
+        run: git -C conda rev-parse HEAD
+
+      - name: Setup Pixi
+        uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+        with:
+          pixi-version: v0.70.1
+          working-directory: conda-rattler-solver
+          environments: test-py313
+          run-install: false
+
+      - name: Run benchmarks
+        working-directory: conda-rattler-solver
+        run: >-
+          pixi run --locked -e test-py313 benchmark
+          --benchmark-json ../benchmark_results.json
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: benchmark-results
+          path: benchmark_results.json
+          if-no-files-found: error
+          retention-days: 7

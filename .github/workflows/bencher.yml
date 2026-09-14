@@ -1,0 +1,144 @@
+name: Track Benchmarks
+
+on:
+  workflow_run:
+    workflows: [Benchmarks]
+    types: [completed]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  track-benchmarks:
+    if: >-
+      !github.event.repository.fork
+      && github.event.workflow_run.conclusion == 'success'
+      && (
+        github.event.workflow_run.event == 'pull_request'
+        || (
+          contains(fromJSON('["push", "workflow_dispatch"]'), github.event.workflow_run.event)
+          && github.event.workflow_run.head_branch == 'main'
+        )
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: write
+      pull-requests: write
+
+    steps:
+      - name: Locate benchmark results and source commit
+        id: source
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const run = context.payload.workflow_run
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              ...context.repo,
+              run_id: run.id,
+            })
+            if (!artifacts.some(artifact => artifact.name === "benchmark-results" && !artifact.expired)) {
+              core.notice("No benchmark results were uploaded")
+              return
+            }
+
+            core.setOutput("hash", run.head_sha)
+            if (run.event === "pull_request") {
+              // Read PR metadata from GitHub, never from the untrusted artifact.
+              let candidates = run.pull_requests
+              if (!candidates.length) {
+                candidates = await github.paginate(github.rest.pulls.list, {
+                  ...context.repo,
+                  head: `${run.head_repository.owner.login}:${run.head_branch}`,
+                  base: "main",
+                  state: "all",
+                })
+              }
+              const matches = []
+              for (const candidate of candidates) {
+                const { data: pr } = await github.rest.pulls.get({
+                  ...context.repo,
+                  pull_number: candidate.number,
+                })
+                if (
+                  pr.head.sha === run.head_sha
+                  && pr.head.repo?.full_name === run.head_repository.full_name
+                  && pr.base.repo.full_name === `${context.repo.owner}/${context.repo.repo}`
+                  && pr.base.ref === "main"
+                ) {
+                  matches.push({ pr, baseSha: candidate.base.sha })
+                }
+              }
+              if (matches.length !== 1) {
+                core.notice("No unique, current pull request matches this benchmark run")
+                return
+              }
+              const { pr, baseSha } = matches[0]
+              core.setOutput("branch", `pr-${pr.number}`)
+              core.setOutput("base", pr.base.ref)
+              core.setOutput("base-hash", baseSha)
+              core.setOutput("number", pr.number)
+            } else {
+              core.setOutput("branch", run.head_branch)
+            }
+            core.setOutput("found", true)
+
+      - name: Download benchmark results
+        if: steps.source.outputs.found == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: benchmark-results
+          path: ${{ runner.temp }}/benchmark-results
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Install Bencher CLI
+        if: steps.source.outputs.found == 'true'
+        uses: bencherdev/bencher@8d75325c3bc59403a2186a056b472c4f49d42838 # v0.6.12
+        with:
+          version: '0.6.12'
+
+      - name: Track benchmarks with Bencher
+        if: steps.source.outputs.found == 'true'
+        env:
+          BENCHER_API_KEY: ${{ secrets.BENCHER_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          BENCHMARK_RESULTS: ${{ runner.temp }}/benchmark-results/benchmark_results.json
+          BRANCH: ${{ steps.source.outputs.branch }}
+          COMMIT_SHA: ${{ steps.source.outputs.hash }}
+          PR_BASE: ${{ steps.source.outputs.base }}
+          PR_BASE_SHA: ${{ steps.source.outputs.base-hash }}
+          PR_NUMBER: ${{ steps.source.outputs.number }}
+        shell: bash
+        run: |
+          if [[ -n "$PR_NUMBER" ]]; then
+            options=(
+              --start-point "$PR_BASE"
+              --start-point-hash "$PR_BASE_SHA"
+              --start-point-clone-thresholds
+              --start-point-reset
+              --ci-only-thresholds
+              --ci-only-on-alert
+              --ci-number "$PR_NUMBER"
+            )
+          else
+            options=(
+              --threshold-measure latency
+              --threshold-test t_test
+              --threshold-max-sample-size 64
+              --threshold-upper-boundary 0.99
+              --thresholds-reset
+            )
+          fi
+          bencher run \
+            --project conda-rattler-solver \
+            --key "$BENCHER_API_KEY" \
+            --branch "$BRANCH" \
+            --hash "$COMMIT_SHA" \
+            --testbed ubuntu-22.04 \
+            --err \
+            --adapter python_pytest \
+            --github-actions "$GH_TOKEN" \
+            "${options[@]}" \
+            --file "$BENCHMARK_RESULTS"
