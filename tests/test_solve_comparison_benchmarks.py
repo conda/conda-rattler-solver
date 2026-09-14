@@ -11,6 +11,8 @@ import pytest
 from conda.base.constants import UpdateModifier
 from conda.base.context import context, reset_context
 
+from .test_performance import _get_channels_from_lockfile
+
 DATA = Path(__file__).parent / "data"
 
 if TYPE_CHECKING:
@@ -48,4 +50,35 @@ def test_solve_update_all_small_local_channel(
         assert "test-package" in {rec.name for rec in solution}
 
 
-def test_solve_update_medium_local_channel(): ...
+@pytest.mark.benchmark
+@pytest.mark.parametrize("solver_name", ["rattler", "libmamba"])
+def test_solve_update_all_medium_lockfile(
+    tmp_env: TmpEnvFixture,
+    monkeypatch: MonkeyPatch,
+    benchmark: BenchmarkFixture,
+    solver_name: str,
+):
+    monkeypatch.setenv("CONDA_SOLVER", solver_name)
+    reset_context()
+    assert context.solver == solver_name
+
+    lockfile = DATA / f"scipipe.{context.subdir}.lock"
+
+    if not lockfile.exists():
+        pytest.skip(f"no lockfile for {context.subdir}")
+
+    channels = _get_channels_from_lockfile(lockfile)
+
+    with tmp_env("--file", lockfile) as prefix:
+        SolverBackend = context.plugin_manager.get_cached_solver_backend()
+        solver = SolverBackend(
+            prefix=prefix,
+            channels=channels,
+            command="update",
+        )
+
+        def run():
+            return solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_ALL)
+
+        solution = benchmark(run)
+        assert solution
