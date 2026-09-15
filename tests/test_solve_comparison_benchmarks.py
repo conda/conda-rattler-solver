@@ -135,11 +135,11 @@ def test_solve_update_all_large_lockfile(
 @pytest.mark.benchmark
 @pytest.mark.parametrize("solver_name", ["rattler", "libmamba"])
 def test_solve_conflict_small_local_channel(
-    benchmark,
-    tmp_env,
-    tmp_path,
-    monkeypatch,
-    solver_name,
+    benchmark: BenchmarkFixture,
+    tmp_env: TmpEnvFixture,
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    solver_name: str,
 ):
     """Small conflict: time unsatisfiable install on a tiny local-channel env."""
     monkeypatch.setenv("CONDA_SOLVER", solver_name)
