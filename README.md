@@ -1,5 +1,8 @@
 # conda-rattler-solver
 
+[![Benchmarks](https://github.com/conda/conda-rattler-solver/actions/workflows/benchmarks.yml/badge.svg?branch=main)](https://github.com/conda/conda-rattler-solver/actions/workflows/benchmarks.yml?query=branch%3Amain)
+[![Bencher Performance Benchmarks](https://img.shields.io/badge/benchmarks-Bencher-blue)](https://bencher.dev/perf/conda-rattler-solver)
+
 The fast pixi solver, now in conda!
 
 ## What is this exactly?
@@ -30,7 +33,8 @@ You may also try this solver in isolated commands with no changes to your config
 
 ## Contributing
 
-Please refer to [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+See the [contributor guide](./CONTRIBUTING.md) for setup and tests, and its
+[benchmarking section](./CONTRIBUTING.md#benchmarks) for local runs and performance results.
 
 ## Build status
 

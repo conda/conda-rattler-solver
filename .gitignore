@@ -157,6 +157,7 @@ rever/
 
 # pytest
 test-report.xml
+benchmark_results.json
 
 # default pytest duration files
 .test_durations
