@@ -71,7 +71,7 @@ Representative end-to-end rattler/libmamba comparisons are tracked in
 The [Benchmarks workflow](https://github.com/conda/conda-rattler-solver/actions/workflows/benchmarks.yml)
 runs on pushes to `main` and pull requests targeting `main`, and can also be run
 manually. It uses Ubuntu 24.04, Python 3.13 and the Pixi lockfile. Both revisions
-share the same checked-out conda test data. Its `benchmark-results` artifact
+share the same checked-out conda test data. Its `benchmark-results-v2` artifact
 contains the JSON measurements and runner diagnostics, retained for seven days.
 
 The [Track Benchmarks workflow](https://github.com/conda/conda-rattler-solver/actions/workflows/bencher.yml)
@@ -110,3 +110,6 @@ Dependencies can change between workflow runs even though each base/head pair
 shares an environment. Inspect the measurements and runner diagnostics before
 changing a threshold. Give benchmarks new names when their timed work or fixtures
 change so historical comparisons do not combine different workloads.
+
+The versioned artifact name prevents the older reporting workflow from treating
+Ubuntu 24.04 measurements as Ubuntu 22.04 results while this change is in review.
