@@ -1183,6 +1183,7 @@ def test_add_pip_as_python_dependency(
         repodata_use_shards,
     )
 
+    # Check that enabling pip does not affect later solves using the same index.
     for add_pip in (False, True, False):
         monkeypatch.setattr(context, "add_pip_as_python_dependency", add_pip)
         out_state = SolverOutputState(solver_input_state=in_state)
@@ -1207,6 +1208,7 @@ def test_add_pip_in_index_search(
         repodata_use_shards=False,
     )
 
+    # Check that enabling pip does not affect later searches using the same index.
     for add_pip in (False, True, False):
         monkeypatch.setattr(context, "add_pip_as_python_dependency", add_pip)
         dependencies = {
