@@ -44,16 +44,22 @@ conda-rattler-solver = "conda_rattler_solver.plugin"
 source = "vcs"
 
 [tool.pixi.workspace]
-channels = ["conda-forge"]
+channels = ["conda-forge", "conda-canary/label/conda-conda-rattler-solver-pr-123"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 
 [tool.pixi.dependencies]
 conda = ">=26.7.0"
 py-rattler = ">=0.26.0,<0.27.0a0"
 
+# Remove this bootstrap pin once a compatible conda-forge release is available.
+[tool.pixi.dependencies.conda-rattler-solver]
+version = "==0.1.1.48+g70c6242"
+build = "py_0"
+channel = "conda-canary/label/conda-conda-rattler-solver-pr-123"
+sha256 = "1aa2d71f7799082ea2681cb42a69318975fabe534b9d6d7f21e4f51b889287fe"
+
 [tool.pixi.feature.self.tasks]
-# conda-rattler-solver is on conda-forge but not PyPI; pixi pins the
-# released version during solve and blocks the local editable install.
+# Replace the bootstrap package with the local editable install.
 _install-self = { cmd = "conda pypi install -e . -q -y", default-environment = "test-py313" }
 
 [tool.pixi.feature.self.dependencies]
