@@ -57,7 +57,7 @@ jobs:
 
       - name: Record runner noise
         continue-on-error: true
-        run: bencher noise --duration 30 --quiet | tee "noise.txt"
+        run: bencher noise --duration 30 --quiet | tee "$RUNNER_TEMP/noise.txt"
 
       - name: Record benchmark runner
         env:
@@ -74,11 +74,15 @@ jobs:
               "image_version": os.environ["ImageVersion"],
               "harness_sha": os.environ["HARNESS_SHA"],
           }
-          Path("runner_metadata.json").write_text(json.dumps(metadata))
+          Path(os.environ["RUNNER_TEMP"], "runner_metadata.json").write_text(json.dumps(metadata))
 
       - name: Install benchmark package
         working-directory: conda-rattler-solver
         run: pixi run --locked -e test-py313 _install-self
+
+      - name: Record benchmark dependencies
+        working-directory: conda-rattler-solver
+        run: pixi list --locked -e test-py313 | tee "$RUNNER_TEMP/benchmark_dependencies.txt"
 
       - name: Checkout base revision
         if: github.event_name == 'pull_request'
@@ -97,11 +101,11 @@ jobs:
         working-directory: conda-rattler-solver
         run: >-
           .pixi/envs/test-py313/bin/python -m pytest -m benchmark --benchmark-only
-          --benchmark-json ../baseline_results.json
+          --benchmark-json "$RUNNER_TEMP/baseline_results.json"
 
       - name: Discard incomplete base results
         if: github.event_name == 'pull_request' && steps.baseline.outcome != 'success'
-        run: rm -f baseline_results.json
+        run: rm -f "$RUNNER_TEMP/baseline_results.json"
 
       - name: Checkout head revision
         if: github.event_name == 'pull_request'
@@ -114,25 +118,21 @@ jobs:
         working-directory: conda-rattler-solver
         run: >-
           .pixi/envs/test-py313/bin/python -m pytest -m benchmark --benchmark-only
-          --benchmark-json ../benchmark_results.json
+          --benchmark-json "$RUNNER_TEMP/benchmark_results.json"
+
+      - name: Record workflow event
+        run: cp "$GITHUB_EVENT_PATH" "$RUNNER_TEMP/event.json"
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: benchmark-results-v2
+          name: benchmark-results-v3
           path: |
-            benchmark_results.json
-            baseline_results.json
-            runner_metadata.json
-            noise.txt
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload GitHub pull request event
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: benchmark-event
-          path: ${{ github.event_path }}
+            ${{ runner.temp }}/benchmark_results.json
+            ${{ runner.temp }}/baseline_results.json
+            ${{ runner.temp }}/runner_metadata.json
+            ${{ runner.temp }}/benchmark_dependencies.txt
+            ${{ runner.temp }}/noise.txt
+            ${{ runner.temp }}/event.json
           if-no-files-found: error
           retention-days: 7

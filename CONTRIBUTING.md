@@ -71,20 +71,22 @@ Representative end-to-end rattler/libmamba comparisons are tracked in
 The [Benchmarks workflow](https://github.com/conda/conda-rattler-solver/actions/workflows/benchmarks.yml)
 runs on pushes to `main` and pull requests targeting `main`, and can also be run
 manually. It uses Ubuntu 24.04, Python 3.13 and the Pixi lockfile. Both revisions
-share the same checked-out conda test data. Its `benchmark-results-v2` artifact
-contains the JSON measurements and runner diagnostics, retained for seven days.
+share the same checked-out conda test data. Its `benchmark-results-v3` artifact
+contains the JSON measurements, workflow event, dependency list, and runner
+diagnostics, retained for seven days.
 
 The [Track Benchmarks workflow](https://github.com/conda/conda-rattler-solver/actions/workflows/bencher.yml)
-uploads available results to the
+uses the shared Bencher reporting action in
+[`conda/actions`](https://github.com/conda/actions) to upload available results to the
 [Bencher project](https://bencher.dev/perf/conda-rattler-solver).
 Select `main` for historical results. Manual runs upload only from `main`.
 
 PR measurements use the exact base and head commits on the same runner with
 `PYTHONHASHSEED=0`, the head revision's resolved dependencies, benchmark tests,
 and fixtures. Running both revisions roughly doubles the benchmark execution time.
-Only benchmark names present in both results are compared. If the base revision
-cannot run the head benchmark suite, the head results remain available and the
-`Benchmark comparison` check is neutral.
+Both results must contain the same benchmark names. If the base revision
+cannot run the complete head benchmark suite, the head results remain available
+and the `Benchmark comparison` check is neutral.
 
 The reporting workflow creates a separate baseline for each PR workflow run and
 attempt. Select `pr-<number>` for its comparison. This baseline never replaces the
