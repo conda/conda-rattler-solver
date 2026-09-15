@@ -70,17 +70,43 @@ Representative end-to-end rattler/libmamba comparisons are tracked in
 
 The [Benchmarks workflow](https://github.com/conda/conda-rattler-solver/actions/workflows/benchmarks.yml)
 runs on pushes to `main` and pull requests targeting `main`, and can also be run
-manually. It uses Ubuntu 22.04, Python 3.13 and the Pixi lockfile. Its
-`benchmark-results` artifact contains the JSON measurements and is retained for seven days.
+manually. It uses Ubuntu 24.04, Python 3.13 and the Pixi lockfile. Both revisions
+share the same checked-out conda test data. Its `benchmark-results` artifact
+contains the JSON measurements and runner diagnostics, retained for seven days.
 
 The [Track Benchmarks workflow](https://github.com/conda/conda-rattler-solver/actions/workflows/bencher.yml)
-uploads successful runs to the
+uploads available results to the
 [Bencher project](https://bencher.dev/perf/conda-rattler-solver).
-Select `main` for the baseline or `pr-<number>` for a pull request.
-Manual runs are uploaded only when run from `main`.
+Select `main` for historical results. Manual runs upload only from `main`.
 
-PR reports compare against the base branch's results. The latency threshold uses
-a t-test with an upper threshold of `0.99` and at most 64 historical samples.
-A first baseline run records measurements before comparisons can begin.
-Detected regressions fail the reporting workflow and generate PR feedback.
-Inspect the affected benchmark and its history before changing a threshold.
+PR measurements use the exact base and head commits on the same runner with
+`PYTHONHASHSEED=0`, the head revision's resolved dependencies, benchmark tests,
+and fixtures. Running both revisions roughly doubles the benchmark execution time.
+Only benchmark names present in both results are compared. If the base revision
+cannot run the head benchmark suite, the head results remain available and the
+`Benchmark comparison` check is neutral.
+
+The reporting workflow creates a separate baseline for each PR workflow run and
+attempt. Select `pr-<number>` for its comparison. This baseline never replaces the
+`main` history. PR alerts use Bencher's percentage test with one baseline
+measurement and an initial 25% slowdown tolerance, following the
+[relative benchmarking example](https://bencher.dev/docs/how-to/track-benchmarks/#relative-continuous-benchmarking).
+This is a starting tolerance for noisy shared runners, to adjust using observed
+variation. A green result does not rule out smaller regressions.
+
+Non-PR runs preserve the branch's history and use a t-test at `0.99`, with at least
+10 and at most 64 historical measurements. The `0.99` value is a statistical
+prediction level, not a 1% slowdown allowance. A new benchmark or testbed may have
+too little history to produce an alert. Missing comparison warnings remain visible.
+
+Testbeds include the producer's Ubuntu version, architecture, Python major/minor
+version, and CPU model. Ubuntu 24.04 measurements start separate histories from
+Ubuntu 22.04. Runner image versions are recorded in `runner_metadata.json` and
+`bencher noise` diagnostics in `noise.txt`, alongside the raw results. Noise
+measurements are diagnostic only and do not change timings or alert thresholds.
+
+The same CPU model can still have different contention, cache state, or frequency.
+Dependencies can change between workflow runs even though each base/head pair
+shares an environment. Inspect the measurements and runner diagnostics before
+changing a threshold. Give benchmarks new names when their timed work or fixtures
+change so historical comparisons do not combine different workloads.

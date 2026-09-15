@@ -16,7 +16,12 @@ permissions:
 
 jobs:
   benchmarks:
-    runs-on: ubuntu-22.04
+    env:
+      PYTHONHASHSEED: '0'
+      CONDA_TEST_SOLVERS: rattler
+      CONDA_TEST_DATA_DIR: ${{ github.workspace }}/conda/tests/data
+      CONDA_CHANNELS: conda-forge
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout conda-rattler-solver
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,17 +50,81 @@ jobs:
           environments: test-py313
           locked: true
 
+      - name: Install Bencher diagnostics
+        uses: bencherdev/bencher@8d75325c3bc59403a2186a056b472c4f49d42838 # v0.6.12
+        with:
+          version: '0.6.12'
+
+      - name: Record runner noise
+        continue-on-error: true
+        run: bencher noise --duration 30 --quiet | tee "noise.txt"
+
+      - name: Record benchmark runner
+        env:
+          HARNESS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: python
+        run: |
+          import json
+          import os
+          from pathlib import Path
+
+          metadata = {
+              "runner": "ubuntu-24.04",
+              "image_os": os.environ["ImageOS"],
+              "image_version": os.environ["ImageVersion"],
+              "harness_sha": os.environ["HARNESS_SHA"],
+          }
+          Path("runner_metadata.json").write_text(json.dumps(metadata))
+
+      - name: Install benchmark package
+        working-directory: conda-rattler-solver
+        run: pixi run --locked -e test-py313 _install-self
+
+      - name: Checkout base revision
+        if: github.event_name == 'pull_request'
+        working-directory: conda-rattler-solver
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git checkout --detach "$BASE_SHA"
+          git restore --source "$HEAD_SHA" --worktree -- tests pyproject.toml
+
+      - name: Run base benchmarks
+        if: github.event_name == 'pull_request'
+        id: baseline
+        continue-on-error: true
+        working-directory: conda-rattler-solver
+        run: >-
+          .pixi/envs/test-py313/bin/python -m pytest -m benchmark --benchmark-only
+          --benchmark-json ../baseline_results.json
+
+      - name: Discard incomplete base results
+        if: github.event_name == 'pull_request' && steps.baseline.outcome != 'success'
+        run: rm -f baseline_results.json
+
+      - name: Checkout head revision
+        if: github.event_name == 'pull_request'
+        working-directory: conda-rattler-solver
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git checkout --force --detach "$HEAD_SHA"
+
       - name: Run benchmarks
         working-directory: conda-rattler-solver
         run: >-
-          pixi run --locked -e test-py313 benchmark
+          .pixi/envs/test-py313/bin/python -m pytest -m benchmark --benchmark-only
           --benchmark-json ../benchmark_results.json
 
       - name: Upload benchmark results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: benchmark-results
-          path: benchmark_results.json
+          path: |
+            benchmark_results.json
+            baseline_results.json
+            runner_metadata.json
+            noise.txt
           if-no-files-found: error
           retention-days: 7
 
