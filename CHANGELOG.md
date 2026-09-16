@@ -6,8 +6,7 @@
 
 ### Enhancements
 
-
-* Publish releases to PyPI with trusted publishing and artifact attestations. (#83)
+* Publish releases to PyPI with trusted publishing and artifact attestations. (#83 via #109)
 * Suggest updating conda with `conda self` if conda self plugin is installed. (#96)
 
 ### Bug fixes
@@ -29,18 +28,16 @@
 
 ### Deprecations
 
-
 * Require Python 3.11 or newer for conda packages to match py-rattler's
   conda-forge builds. (#123)
 
 ### Docs
 
-
+* Document installation and opt-in use of the beta solver. (#74)
 * Document running and adding benchmarks, and link to Bencher results. (#144)
 * Switch to using the new on-demand release process. (#80)
 
 ### Other
-
 
 * Require `py-rattler >=0.26.0,<0.27.0a0`. (#123)
 * Track solver and index benchmarks with Bencher. (#144)
@@ -53,12 +50,12 @@
 * @danyeaw
 * @dholth
 * @jezdez
-* @kenodegard
-* @ForgottenProgramme
-* @ryanskeith
+* @kenodegard made their first contribution in https://github.com/conda/conda-rattler-solver/pull/95
+* @ForgottenProgramme made their first contribution in https://github.com/conda/conda-rattler-solver/pull/117
+* @ryanskeith made their first contribution in https://github.com/conda/conda-rattler-solver/pull/137
 * @soapy1
 * @conda-bot
-* @dependabot[bot]
+* @dependabot[bot] made their first contribution in https://github.com/conda/conda-rattler-solver/pull/86
 
 
 
