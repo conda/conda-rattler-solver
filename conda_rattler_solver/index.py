@@ -22,6 +22,13 @@ from conda.core.subdir_data import SubdirData
 from conda.models.channel import Channel
 
 try:
+    from conda.core.channel_relations import resolve_channel_relations
+except ModuleNotFoundError as exc:
+    if exc.name != "conda.core.channel_relations":
+        raise
+    resolve_channel_relations = None
+
+try:
     from conda.common.serialize.json import dumps as json_dump
 except ImportError:
     from conda.common.serialize import json_dump
@@ -73,11 +80,24 @@ class RattlerIndexHelper:
     ):
         self._unlink_on_del: list[Path] = []
 
-        self._channels = context.channels if channels is None else channels
-        self._subdirs = context.subdirs if subdirs is None else subdirs
+        self._channels = tuple(context.channels if channels is None else channels)
+        self._subdirs = tuple(context.subdirs if subdirs is None else subdirs)
         self._repodata_fn = repodata_fn
         self.in_state = in_state
         self.build_repodata_subset = build_repodata_subset
+
+        self._resolved_channels = (
+            resolve_channel_relations(
+                self._channels,
+                self._subdirs,
+                repodata_fn=self._repodata_fn,
+                use_shards=bool(
+                    self.in_state and self.build_repodata_subset and _is_sharded_repodata_enabled()
+                ),
+            )
+            if resolve_channel_relations is not None
+            else self._channels
+        )
 
         self._index: dict[str, _ChannelRepoInfo] = {}
         self._index.update(self._load_channels())
@@ -187,7 +207,7 @@ class RattlerIndexHelper:
         # 1. Obtain and deduplicate URLs from channels
         urls = []
         seen_noauth = set()
-        for _c in channels or self._channels:
+        for _c in self._resolved_channels if channels is None else channels:
             c = Channel(_c)
             noauth_urls = c.urls(with_credentials=False, subdirs=self._subdirs)
             if seen_noauth.issuperset(noauth_urls):

@@ -1,0 +1,19 @@
+### Enhancements
+
+* Use conda's shared CEP 42 resolver, when available, to load related channels in their declared priority order.
+
+### Bug fixes
+
+
+
+### Deprecations
+
+
+
+### Docs
+
+
+
+### Other
+
+
