@@ -33,6 +33,32 @@ def _clear_memory_caches() -> None:
     PackageCacheData.clear()
 
 
+@pytest.fixture(scope="session")
+def scipipe_prefix_and_channels(
+    session_tmp_env: TmpEnvFixture,
+):
+    lockfile = DATA / f"scipipe.{context.subdir}.lock"
+    if not lockfile.exists():
+        pytest.skip(f"no lockfile for {context.subdir}")
+
+    with session_tmp_env("--file", lockfile) as prefix:
+        channels = _get_channels_from_lockfile(lockfile)
+        yield prefix, channels
+
+
+@pytest.fixture(scope="session")
+def silverback_prefix_and_channels(
+    session_tmp_env: TmpEnvFixture,
+):
+    lockfile = DATA / "silverback9876.linux-64.lock"
+    if context.subdir != "linux-64":
+        pytest.skip("large lockfile is linux-64 only")
+
+    with session_tmp_env("--file", lockfile) as prefix:
+        channels = _get_channels_from_lockfile(lockfile)
+        yield prefix, channels
+
+
 @pytest.mark.benchmark
 @pytest.mark.parametrize("solver_name", ["rattler", "libmamba"])
 def test_solve_update_all_small_local_channel(
@@ -65,7 +91,7 @@ def test_solve_update_all_small_local_channel(
 @pytest.mark.benchmark
 @pytest.mark.parametrize("solver_name", ["rattler", "libmamba"])
 def test_solve_update_all_medium_lockfile(
-    tmp_env: TmpEnvFixture,
+    scipipe_prefix_and_channels: tuple[Path, tuple[str, ...]],
     monkeypatch: MonkeyPatch,
     benchmark: BenchmarkFixture,
     solver_name: str,
@@ -75,61 +101,49 @@ def test_solve_update_all_medium_lockfile(
     reset_context()
     assert context.solver == solver_name
 
-    lockfile = DATA / f"scipipe.{context.subdir}.lock"
+    prefix, channels = scipipe_prefix_and_channels
 
-    if not lockfile.exists():
-        pytest.skip(f"no lockfile for {context.subdir}")
+    SolverBackend = context.plugin_manager.get_cached_solver_backend()
+    solver = SolverBackend(
+        prefix=prefix,
+        channels=channels,
+        command="update",
+    )
 
-    channels = _get_channels_from_lockfile(lockfile)
+    def run():
+        return solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_ALL)
 
-    with tmp_env("--file", lockfile) as prefix:
-        SolverBackend = context.plugin_manager.get_cached_solver_backend()
-        solver = SolverBackend(
-            prefix=prefix,
-            channels=channels,
-            command="update",
-        )
-
-        def run():
-            return solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_ALL)
-
-        solution = benchmark(run)
-        assert solution
+    solution = benchmark(run)
+    assert solution
 
 
 @pytest.mark.benchmark
 @pytest.mark.parametrize("solver_name", ["rattler", "libmamba"])
 def test_solve_update_all_large_lockfile(
-    tmp_env: TmpEnvFixture,
+    silverback_prefix_and_channels: tuple[Path, tuple[str, ...]],
     monkeypatch: MonkeyPatch,
     benchmark: BenchmarkFixture,
     solver_name: str,
 ):
-    """Large workload: update --all on a pangeo lockfile env (linux-64 only)."""
+    """Large workload: update --all on a silverback lockfile env (linux-64 only)."""
     monkeypatch.setenv("CONDA_SOLVER", solver_name)
     reset_context()
     assert context.solver == solver_name
 
-    lockfile = DATA / "silverback9876.linux-64.lock"
+    prefix, channels = silverback_prefix_and_channels
 
-    if context.subdir != "linux-64":
-        pytest.skip("large lockfile is linux-64 only")
+    SolverBackend = context.plugin_manager.get_cached_solver_backend()
+    solver = SolverBackend(
+        prefix=prefix,
+        channels=channels,
+        command="update",
+    )
 
-    channels = _get_channels_from_lockfile(lockfile)
+    def run():
+        return solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_ALL)
 
-    with tmp_env("--file", lockfile) as prefix:
-        SolverBackend = context.plugin_manager.get_cached_solver_backend()
-        solver = SolverBackend(
-            prefix=prefix,
-            channels=channels,
-            command="update",
-        )
-
-        def run():
-            return solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_ALL)
-
-        solution = benchmark(run)
-        assert solution
+    solution = benchmark(run)
+    assert solution
 
 
 @pytest.mark.benchmark
@@ -178,7 +192,7 @@ def test_solve_conflict_small_local_channel(
 @pytest.mark.parametrize("cache_state", ["cold", "warm"])
 def test_solve_update_all_medium_lockfile_cache(
     benchmark: BenchmarkFixture,
-    tmp_env: TmpEnvFixture,
+    scipipe_prefix_and_channels: tuple[Path, tuple[str, ...]],
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
     solver_name: str,
@@ -192,38 +206,33 @@ def test_solve_update_all_medium_lockfile_cache(
     reset_context()
     assert context.solver == solver_name
 
-    lockfile = DATA / f"scipipe.{context.subdir}.lock"
-    if not lockfile.exists():
-        pytest.skip(f"no lockfile for {context.subdir}")
+    prefix, channels = scipipe_prefix_and_channels
 
-    channels = _get_channels_from_lockfile(lockfile)
+    SolverBackend = context.plugin_manager.get_cached_solver_backend()
+    solver = SolverBackend(
+        prefix=prefix,
+        channels=channels,
+        command="update",
+    )
 
-    with tmp_env("--file", lockfile) as prefix:
-        SolverBackend = context.plugin_manager.get_cached_solver_backend()
-        solver = SolverBackend(
-            prefix=prefix,
-            channels=channels,
-            command="update",
+    def run():
+        return solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_ALL)
+
+    if cache_state == "warm":
+        run()  # Fill up cache to create a "warm" state
+        solution = benchmark(run)
+        assert solution
+    else:
+        # For true cold on each round, wipe on-disk pkgs cache + memory before each iteration
+        def setup_cold():
+            shutil.rmtree(pkgs, ignore_errors=True)
+            pkgs.mkdir(parents=True, exist_ok=True)
+            _clear_memory_caches()
+
+        solution = benchmark.pedantic(
+            run,
+            setup=setup_cold,
+            rounds=3,
+            iterations=1,
         )
-
-        def run():
-            return solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_ALL)
-
-        if cache_state == "warm":
-            run()  # Fill up cache to create a "warm" state
-            solution = benchmark(run)
-            assert solution
-        else:
-            # For true cold on each round, wipe on-disk pkgs cache + memory before each iteration
-            def setup_cold():
-                shutil.rmtree(pkgs, ignore_errors=True)
-                pkgs.mkdir(parents=True, exist_ok=True)
-                _clear_memory_caches()
-
-            solution = benchmark.pedantic(
-                run,
-                setup=setup_cold,
-                rounds=3,
-                iterations=1,
-            )
-            assert solution
+        assert solution
