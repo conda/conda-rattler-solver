@@ -1,0 +1,19 @@
+### Enhancements
+
+* <news item>
+
+### Bug fixes
+
+* <news item>
+
+### Deprecations
+
+* <news item>
+
+### Docs
+
+* Document running and adding benchmarks, and link to Bencher results. (#144)
+
+### Other
+
+* Track solver and index benchmarks with Bencher. (#144)
