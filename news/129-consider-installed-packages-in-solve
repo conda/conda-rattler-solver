@@ -4,7 +4,8 @@
 
 ### Bug fixes
 
-* Ensure that packages currently installed in a prefix are included in solves. (#88 via #129)
+* Retain installed packages that are unavailable from configured channels
+  during updates. (#88 via #129)
 
 ### Deprecations
 

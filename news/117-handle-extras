@@ -4,7 +4,8 @@
 
 ### Bug fixes
 
-* Fix "invalid bracket" error caused due to malformed matchspec with `extras`. (#94)
+* Fix MatchSpec conversion for package extras, using py-rattler's support
+  for quoted extras. (#94 via #117 and #123)
 
 ### Deprecations
 
