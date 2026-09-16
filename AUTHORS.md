@@ -5,6 +5,10 @@ Authors are sorted alphabetically.
 * Daniel Holth
 * Jakov Smolić
 * Jannis Leidel
+* Ken Odegard
+* Mahe Iram Khan
+* Ryan Keith
 * Sophia Castellarin
 * conda-bot
+* dependabot[bot]
 * jaimergp
