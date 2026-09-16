@@ -110,7 +110,7 @@ def test_solve_update_all_large_lockfile(
     reset_context()
     assert context.solver == solver_name
 
-    lockfile = DATA / "pangeo_ml_notebook.linux-64.lock"
+    lockfile = DATA / "silverback9876.linux-64.lock"
 
     if context.subdir != "linux-64":
         pytest.skip("large lockfile is linux-64 only")
