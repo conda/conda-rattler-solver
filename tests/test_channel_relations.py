@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 def test_shared_resolver_runs_before_acquisition(mocker: MockerFixture, use_shards: bool) -> None:
     heads = [Channel("https://example.org/extension")]
     resolved = (Channel("https://example.org/base"), *heads)
-    resolve = mocker.patch.object(index, "resolve_channel_relations", return_value=resolved)
+    resolve = mocker.patch.object(index, "resolve_channels", return_value=resolved)
     mocker.patch.object(context, "repodata_use_shards", use_shards)
 
     def acquire(helper: RattlerIndexHelper) -> dict:
@@ -53,7 +53,7 @@ def test_shared_resolver_runs_before_acquisition(mocker: MockerFixture, use_shar
 
 
 def test_older_conda_keeps_existing_channels(mocker: MockerFixture) -> None:
-    mocker.patch.object(index, "resolve_channel_relations", None)
+    mocker.patch.object(index, "resolve_channels", None)
     mocker.patch.object(RattlerIndexHelper, "_load_channels", return_value={})
     helper = RattlerIndexHelper(channels=["https://example.org/extension"], subdirs=["noarch"])
     assert helper._urls_from_channels() == ("https://example.org/extension/noarch",)
@@ -61,9 +61,7 @@ def test_older_conda_keeps_existing_channels(mocker: MockerFixture) -> None:
 
 
 def test_relation_failure_prevents_package_acquisition(mocker: MockerFixture) -> None:
-    mocker.patch.object(
-        index, "resolve_channel_relations", side_effect=ChannelError("relation cycle")
-    )
+    mocker.patch.object(index, "resolve_channels", side_effect=ChannelError("relation cycle"))
     acquire = mocker.patch.object(RattlerIndexHelper, "_load_channels")
     with pytest.raises(ChannelError, match="relation cycle"):
         RattlerIndexHelper(channels=["https://example.org/extension"])
@@ -78,7 +76,7 @@ def test_initial_discovery_reuses_json_but_reload_fetches(
     cache.write_text('{"info":{"subdir":"noarch"},"packages":{}}')
     mocker.patch.object(
         index,
-        "resolve_channel_relations",
+        "resolve_channels",
         return_value=(Channel("https://example.org/extension"),),
     )
     subdir_data = mocker.Mock(_loaded=True, cache_path_json=str(cache))
@@ -109,7 +107,7 @@ def test_native_relations_order_local_repositories(
     relation: str | None,
     order: tuple[str, ...],
 ) -> None:
-    if relation is not None and index.resolve_channel_relations is None:
+    if relation is not None and index.resolve_channels is None:
         pytest.skip("Needs conda CEP 42 support")
     monkeypatch.setenv("CONDA_CHANNEL_RELATIONS_MAX_DEPTH", "10")
     monkeypatch.setenv("CONDA_PKGS_DIRS", str(tmp_path / "pkgs"))

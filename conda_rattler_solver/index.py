@@ -17,16 +17,10 @@ from conda.base.constants import REPODATA_FN
 from conda.base.context import context
 from conda.common.io import DummyExecutor, ThreadLimitedThreadPoolExecutor
 from conda.common.url import path_to_url, remove_auth, split_anaconda_token
+from conda.core import index as conda_index
 from conda.core.package_cache_data import PackageCacheData
 from conda.core.subdir_data import SubdirData
 from conda.models.channel import Channel
-
-try:
-    from conda.core.channel_relations import resolve_channel_relations
-except ModuleNotFoundError as exc:
-    if exc.name != "conda.core.channel_relations":
-        raise
-    resolve_channel_relations = None
 
 try:
     from conda.common.serialize.json import dumps as json_dump
@@ -48,6 +42,9 @@ if TYPE_CHECKING:
     from .state import SolverInputState
 
 log = logging.getLogger(f"conda.{__name__}")
+
+
+resolve_channels = getattr(conda_index, "resolve_channels", None)
 
 
 @dataclass
@@ -87,7 +84,7 @@ class RattlerIndexHelper:
         self.build_repodata_subset = build_repodata_subset
 
         self._resolved_channels = (
-            resolve_channel_relations(
+            resolve_channels(
                 self._channels,
                 self._subdirs,
                 repodata_fn=self._repodata_fn,
@@ -95,12 +92,12 @@ class RattlerIndexHelper:
                     self.in_state and self.build_repodata_subset and _is_sharded_repodata_enabled()
                 ),
             )
-            if resolve_channel_relations is not None
+            if resolve_channels is not None
             else self._channels
         )
 
         self._index: dict[str, _ChannelRepoInfo] = {}
-        self._reuse_relation_repodata = resolve_channel_relations is not None
+        self._reuse_relation_repodata = resolve_channels is not None
         self._index.update(self._load_channels())
         self._reuse_relation_repodata = False
         if pkgs_dirs:
