@@ -17,6 +17,7 @@ from conda.base.constants import REPODATA_FN
 from conda.base.context import context
 from conda.common.io import DummyExecutor, ThreadLimitedThreadPoolExecutor
 from conda.common.url import path_to_url, remove_auth, split_anaconda_token
+from conda.core import index as conda_index
 from conda.core.package_cache_data import PackageCacheData
 from conda.core.subdir_data import SubdirData
 from conda.models.channel import Channel
@@ -41,6 +42,9 @@ if TYPE_CHECKING:
     from .state import SolverInputState
 
 log = logging.getLogger(f"conda.{__name__}")
+
+
+resolve_channels = getattr(conda_index, "resolve_channels", None)
 
 
 @dataclass
@@ -73,14 +77,29 @@ class RattlerIndexHelper:
     ):
         self._unlink_on_del: list[Path] = []
 
-        self._channels = context.channels if channels is None else channels
-        self._subdirs = context.subdirs if subdirs is None else subdirs
+        self._channels = tuple(context.channels if channels is None else channels)
+        self._subdirs = tuple(context.subdirs if subdirs is None else subdirs)
         self._repodata_fn = repodata_fn
         self.in_state = in_state
         self.build_repodata_subset = build_repodata_subset
 
+        self._resolved_channels = (
+            resolve_channels(
+                self._channels,
+                self._subdirs,
+                repodata_fn=self._repodata_fn,
+                use_shards=bool(
+                    self.in_state and self.build_repodata_subset and _is_sharded_repodata_enabled()
+                ),
+            )
+            if resolve_channels is not None
+            else self._channels
+        )
+
         self._index: dict[str, _ChannelRepoInfo] = {}
+        self._reuse_relation_repodata = resolve_channels is not None
         self._index.update(self._load_channels())
+        self._reuse_relation_repodata = False
         if pkgs_dirs:
             self._index.update(
                 {info.noauth_url: info for info in self._load_pkgs_cache(pkgs_dirs)}
@@ -152,6 +171,12 @@ class RattlerIndexHelper:
 
         log.debug("Fetching %s with SubdirData.repo_fetch", channel)
         subdir_data = SubdirData(channel, repodata_fn=self._repodata_fn)
+        if (
+            self._reuse_relation_repodata
+            and subdir_data._loaded
+            and Path(subdir_data.cache_path_json).is_file()
+        ):
+            return url, subdir_data.cache_path_json
         json_path, _ = subdir_data.repo_fetch.fetch_latest_path()
 
         return url, json_path
@@ -187,7 +212,7 @@ class RattlerIndexHelper:
         # 1. Obtain and deduplicate URLs from channels
         urls = []
         seen_noauth = set()
-        for _c in channels or self._channels:
+        for _c in self._resolved_channels if channels is None else channels:
             c = Channel(_c)
             noauth_urls = c.urls(with_credentials=False, subdirs=self._subdirs)
             if seen_noauth.issuperset(noauth_urls):
