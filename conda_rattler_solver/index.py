@@ -100,7 +100,9 @@ class RattlerIndexHelper:
         )
 
         self._index: dict[str, _ChannelRepoInfo] = {}
+        self._reuse_relation_repodata = resolve_channel_relations is not None
         self._index.update(self._load_channels())
+        self._reuse_relation_repodata = False
         if pkgs_dirs:
             self._index.update(
                 {info.noauth_url: info for info in self._load_pkgs_cache(pkgs_dirs)}
@@ -172,6 +174,12 @@ class RattlerIndexHelper:
 
         log.debug("Fetching %s with SubdirData.repo_fetch", channel)
         subdir_data = SubdirData(channel, repodata_fn=self._repodata_fn)
+        if (
+            self._reuse_relation_repodata
+            and subdir_data._loaded
+            and Path(subdir_data.cache_path_json).is_file()
+        ):
+            return url, subdir_data.cache_path_json
         json_path, _ = subdir_data.repo_fetch.fetch_latest_path()
 
         return url, json_path

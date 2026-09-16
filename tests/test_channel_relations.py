@@ -2,14 +2,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import TYPE_CHECKING
 
 import pytest
-import rattler
 from conda.base.context import context
-from conda.exceptions import ChannelError
+from conda.exceptions import ChannelError, DryRunExit
 from conda.models.channel import Channel
 
 from conda_rattler_solver import index
@@ -18,6 +16,7 @@ from conda_rattler_solver.index import RattlerIndexHelper
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from conda.testing.fixtures import CondaCLIFixture
     from pytest_mock import MockerFixture
 
 
@@ -71,19 +70,56 @@ def test_relation_failure_prevents_package_acquisition(mocker: MockerFixture) ->
     acquire.assert_not_called()
 
 
-@pytest.mark.skipif(index.resolve_channel_relations is None, reason="Needs conda CEP 42 support")
+def test_initial_discovery_reuses_json_but_reload_fetches(
+    tmp_path: Path, mocker: MockerFixture
+) -> None:
+    url = "https://example.org/extension/noarch"
+    cache = tmp_path / "repodata.json"
+    cache.write_text('{"info":{"subdir":"noarch"},"packages":{}}')
+    mocker.patch.object(
+        index,
+        "resolve_channel_relations",
+        return_value=(Channel("https://example.org/extension"),),
+    )
+    subdir_data = mocker.Mock(_loaded=True, cache_path_json=str(cache))
+    subdir_data.repo_fetch.fetch_latest_path.return_value = (cache, {})
+    mocker.patch.object(index, "SubdirData", return_value=subdir_data)
+
+    helper = RattlerIndexHelper(channels=["https://example.org/extension"], subdirs=["noarch"])
+    assert tuple(helper._index) == (url,)
+    subdir_data.repo_fetch.fetch_latest_path.assert_not_called()
+
+    helper.reload_channel(Channel("https://example.org/extension"))
+    subdir_data.repo_fetch.fetch_latest_path.assert_called_once_with()
+
+
+@pytest.mark.usefixtures("solver_rattler")
 @pytest.mark.parametrize(
-    "relation, order", [("base", ("base", "extension")), ("overrides", ("extension", "base"))]
+    "relation, order",
+    [
+        ("base", ("base", "extension")),
+        ("overrides", ("extension", "base")),
+        (None, ("extension",)),
+    ],
 )
 def test_native_relations_order_local_repositories(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, relation: str, order: tuple[str, str]
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    conda_cli: CondaCLIFixture,
+    relation: str | None,
+    order: tuple[str, ...],
 ) -> None:
+    if relation is not None and index.resolve_channel_relations is None:
+        pytest.skip("Needs conda CEP 42 support")
     monkeypatch.setenv("CONDA_CHANNEL_RELATIONS_MAX_DEPTH", "10")
+    monkeypatch.setenv("CONDA_PKGS_DIRS", str(tmp_path / "pkgs"))
+    monkeypatch.setenv("CONDA_ENVS_PATH", str(tmp_path / "envs"))
+    monkeypatch.setenv("CONDA_REPODATA_USE_SHARDS", "false")
     for name in ("base", "extension"):
         subdir = tmp_path / name / "noarch"
         subdir.mkdir(parents=True)
         info = {"subdir": "noarch"}
-        if name == "extension":
+        if name == "extension" and relation is not None:
             info["channel_relations"] = {relation: "../base"}
         version = "1.0" if name == "base" else "2.0"
         package = {
@@ -102,11 +138,24 @@ def test_native_relations_order_local_repositories(
     helper = RattlerIndexHelper(channels=[head], subdirs=["noarch"])
     assert tuple(helper._index) == tuple((tmp_path / name / "noarch").as_uri() for name in order)
     assert helper.channels == [Channel(head)]
-    solution = asyncio.run(
-        rattler.solve_with_sparse_repodata(
-            ["example"],
-            [info.repo for info in helper._index.values()],
-            channel_priority=rattler.ChannelPriority.Strict,
-        )
+    stdout, _, _ = conda_cli(
+        "create",
+        "--prefix",
+        str(tmp_path / "environment"),
+        "--dry-run",
+        "--json",
+        "--solver",
+        "rattler",
+        "--strict-channel-priority",
+        "--override-channels",
+        "--channel",
+        head,
+        "--no-default-packages",
+        "example",
+        raises=DryRunExit,
     )
-    assert [str(record.version) for record in solution] == ["1.0" if relation == "base" else "2.0"]
+    result = json.loads(stdout)
+    assert result["success"]
+    assert [(record["name"], record["version"]) for record in result["actions"]["LINK"]] == [
+        ("example", "1.0" if relation == "base" else "2.0")
+    ]
