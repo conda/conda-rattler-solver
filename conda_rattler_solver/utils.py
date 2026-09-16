@@ -40,7 +40,11 @@ def _hash_to_str(bytes_or_str: bytes | str | None) -> None | str:
     return bytes_or_str.lower()
 
 
-def rattler_record_to_conda_record(record: rattler.PackageRecord) -> PackageRecord:
+def rattler_record_to_conda_record(
+    record: rattler.PackageRecord,
+    *,
+    add_pip_as_python_dependency: bool = False,
+) -> PackageRecord:
     if timestamp := record.timestamp:
         timestamp = int(timestamp.timestamp() * 1000)
     else:
@@ -65,6 +69,14 @@ def rattler_record_to_conda_record(record: rattler.PackageRecord) -> PackageReco
     else:
         channel_url = ""
 
+    depends = record.depends or ()
+    if (
+        add_pip_as_python_dependency
+        and record.name.source == "python"
+        and str(record.version).startswith(("2.", "3."))
+    ):
+        depends = (*depends, "pip")
+
     return PackageRecord(
         name=record.name.source,
         version=str(record.version),
@@ -80,7 +92,7 @@ def rattler_record_to_conda_record(record: rattler.PackageRecord) -> PackageReco
         sha256=_hash_to_str(record.sha256),
         arch=record.arch,
         platform=str(record.platform or "") or None,
-        depends=record.depends or (),
+        depends=depends,
         constrains=record.constrains or (),
         track_features=record.track_features or (),
         features=record.features or (),
@@ -173,9 +185,6 @@ def conda_prefix_record_to_rattler_prefix_record(
 
 
 _NAME_EQUALS_BRACKET = re.compile(r"^([^\[\]=]+)=\[")
-# TODO: remove once py-rattler gains quoted-extras support (conda/rattler#2552).
-# conda's MatchSpec.__str__ emits extras=['a', 'b']; py-rattler 0.25 rejects that.
-_EXTRAS_QUOTED_ITEMS = re.compile(r"extras=\[([^\]]*)\]")
 
 
 def conda_match_spec_to_rattler_match_spec(spec: MatchSpec) -> rattler.MatchSpec:
@@ -188,13 +197,6 @@ def conda_match_spec_to_rattler_match_spec(spec: MatchSpec) -> rattler.MatchSpec
     intermediate = str(match_spec).rstrip("=")
 
     intermediate = _NAME_EQUALS_BRACKET.sub(r"\1[", intermediate, count=1)
-
-    # extras=['a', 'b'] -> extras=[a, b]  (temporary, do not strip quotes elsewhere)
-    # this should be removed when pin is updated to py-rattler 0.26
-    intermediate = _EXTRAS_QUOTED_ITEMS.sub(
-        lambda m: "extras=[" + m.group(1).replace("'", "").replace('"', "") + "]",
-        intermediate,
-    )
 
     return rattler.MatchSpec(
         intermediate,
