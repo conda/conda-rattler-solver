@@ -158,6 +158,11 @@ hatchling = ">=1.12.2"
 python = ">=3.13,<3.14"
 python-build = ">=1.2"
 rever = "*"
+twine = ">=6.1"
+
+[tool.pixi.feature.release.tasks]
+build = "python -m build --no-isolation"
+check-dist = "python -m twine check --strict dist/*"
 
 [tool.pixi.feature.py314.dependencies]
 python = "3.14.*"
