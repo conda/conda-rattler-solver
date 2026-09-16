@@ -223,7 +223,7 @@ def test_solve_update_all_medium_lockfile_cache(
             solution = benchmark.pedantic(
                 run,
                 setup=setup_cold,
-                rounds=5,
+                rounds=3,
                 iterations=1,
             )
             assert solution
