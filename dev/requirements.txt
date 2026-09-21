@@ -1,2 +1,2 @@
-conda >=25.5.0
-py-rattler >=0.23.0,<0.24.0a0
+conda >=26.5.0
+py-rattler >=0.26.0,<0.27.0a0

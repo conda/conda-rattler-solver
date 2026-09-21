@@ -48,6 +48,7 @@ if TYPE_CHECKING:
         UpdateModifier,
     )
     from conda.common.path import PathType
+    from conda.gateways.shards import BuildRepodataSubset
     from conda.models.records import PackageRecord
 
 log = logging.getLogger(f"conda.{__name__}")
@@ -74,6 +75,7 @@ class RattlerSolver(Solver):
         specs_to_remove: Iterable[MatchSpec | str] = (),
         repodata_fn: str = REPODATA_FN,
         command: str | _Null = NULL,
+        build_repodata_subset: BuildRepodataSubset | None = None,
     ):
         if specs_to_add and specs_to_remove:
             raise ValueError(
@@ -83,6 +85,7 @@ class RattlerSolver(Solver):
             command = "remove"
 
         self._unmerged_specs_to_add = frozenset(MatchSpec(spec) for spec in specs_to_add)
+        self._build_repodata_subset = build_repodata_subset
         super().__init__(
             os.fspath(prefix),
             channels,
@@ -140,6 +143,7 @@ class RattlerSolver(Solver):
                 channels=channels,
                 conda_build_channels=conda_build_channels,
                 subdirs=self.subdirs,
+                in_state=in_state,
             )
             out_state.check_for_pin_conflicts(index)
 
@@ -233,12 +237,15 @@ class RattlerSolver(Solver):
         channels: Iterable[Channel],
         conda_build_channels: Iterable[Channel],
         subdirs: Iterable[str],
+        in_state: SolverInputState,
     ) -> RattlerIndexHelper:
         index = RattlerIndexHelper(
             channels=[*conda_build_channels, *channels],
             subdirs=subdirs,
             repodata_fn=self._repodata_fn,
             pkgs_dirs=context.pkgs_dirs if context.offline else (),
+            in_state=in_state,
+            build_repodata_subset=self._build_repodata_subset,
         )
         for channel in conda_build_channels:
             index.reload_channel(channel)
@@ -283,6 +290,7 @@ class RattlerSolver(Solver):
                 neutered=dict(out_state.neutered),
                 conflicts=dict(out_state.conflicts),
                 pins=dict(out_state.pins),
+                installed_without_candidates=set(out_state.installed_without_candidates),
             )
         else:
             # Didn't find a solution after all attempts, let's unfreeze everything
@@ -351,6 +359,7 @@ class RattlerSolver(Solver):
                 if context.use_only_tar_bz2
                 else rattler.PackageFormatSelection.PREFER_CONDA_WITH_WHL
             ),
+            "add_pip_as_python_dependency": context.add_pip_as_python_dependency,
         }
         if log.isEnabledFor(logging.DEBUG):
             dumped = json.dumps(solve_kwargs, indent=2, default=str, sort_keys=True)
@@ -428,6 +437,14 @@ class RattlerSolver(Solver):
         for spec in self._unmerged_specs_to_add:
             requested_specs[spec.name].append(spec)
 
+        python_requested = requested_specs.get("python", ())
+        keep_python_dependencies = (
+            in_state.is_updating
+            and installed_python is not None
+            and bool(python_requested)
+            and all(spec.is_name_only_spec for spec in python_requested)
+        )
+
         for name in out_state.specs:
             if "*" in name:
                 continue
@@ -453,8 +470,14 @@ class RattlerSolver(Solver):
                     # name-only pins are considered 'frozen' if also installed (see below)
                     constraints.append(pinned)
             elif name == "python" and installed and not requested:
+                # Classic major.minor business rule: do not float python beyond X.Y.*
+                # unless the user requested python explicitly. Compatible with
+                # always_update / --update-all so patch releases can still be taken.
                 pyver = ".".join(installed.version.split(".")[:2])
                 constraints.append(f"python {pyver}.*")
+
+            if in_state.is_updating and installed and not installed.is_unmanageable:
+                constraints.append(MatchSpec(name=name, version=f">={installed.version}"))
 
             # Block B: main logic for user requests and installed packages
             if requested:
@@ -473,6 +496,16 @@ class RattlerSolver(Solver):
                 # If prune is enabled, conda will act as if there were no history
                 # or installed packages freezing. Akin to creating an environment from scratch.
                 continue
+            elif (
+                keep_python_dependencies
+                and installed
+                and name in in_state.do_not_remove
+                and not conflicting
+            ):
+                # Retain the installed package and its actual dependency requirements.
+                # A conflict releases this record on the next solve attempt.
+                specs.append(history or name)
+                pinned_packages.append(installed)
             elif history:
                 if conflicting and history.strictness == 3:
                     # relax name-version-build (strictness=3) history specs that cause
@@ -507,7 +540,9 @@ class RattlerSolver(Solver):
                 ]
                 # TODO: Study whether we want to keep all not conflicting installed packages around
                 # This may prevent environments from dropping transitive deps they no longer need.
-                keep: bool = not conflicting
+                keep: bool = not conflicting or (
+                    keep_python_dependencies and name in in_state.do_not_remove
+                )
 
                 # Name-only user pins act as freezing pins (instead of a constraint)
                 if pinned and pinned.is_name_only_spec:
@@ -529,6 +564,15 @@ class RattlerSolver(Solver):
                 if action == "freeze":
                     pinned_packages.append(installed)
                 elif action == "lock":
+                    locked_packages.append(installed)
+
+        # Add packages marked as missing to the set of locked packages
+        if out_state.installed_without_candidates:
+            already_locked = {record.name for record in locked_packages}
+            for name in out_state.installed_without_candidates:
+                if name in already_locked:
+                    continue
+                if installed := in_state.installed.get(name):
                     locked_packages.append(installed)
 
         return {
@@ -648,8 +692,29 @@ class RattlerSolver(Solver):
                 # list. e.g. `conda create main::psutil` + `conda install -c conda-forge python`
                 if any(spec.match(record) for record in in_state.installed.values()):
                     unsatisfiable[spec.name] = spec
+                    out_state.installed_without_candidates.add(spec.name)
                 else:
                     not_found[spec.name] = spec
+            elif "for which no candidates were found" in line:
+                # Same situation as "No candidates were found for" above, but reported as a
+                # nested reason under some other unsatisfiable package instead of as a
+                # standalone line, e.g. "foo >=2, for which no candidates were found." This
+                # happens when the name does have candidates in the index, just not any that
+                # satisfy the requested version (as opposed to being fully absent from it).
+                spec = line.split(", for which no candidates were found", 1)[0].strip()
+                spec = MatchSpec(spec)
+                if any(spec.match(record) for record in in_state.installed.values()):
+                    unsatisfiable[spec.name] = spec
+                    out_state.installed_without_candidates.add(spec.name)
+                else:
+                    not_found[spec.name] = spec
+
+        # Raise the exception for conda-build if needed
+        self._maybe_raise_for_conda_build(
+            {**unsatisfiable, **not_found},
+            message=problems,
+        )
+
         if not unsatisfiable and not_found:
             log.debug(
                 "Inferred PackagesNotFoundError %s from conflicts:\n%s",
@@ -716,6 +781,8 @@ class RattlerSolver(Solver):
     def _export_solved_records(self, records, out_state):
         out_state.records.clear()
         for rattler_record in records:
+            # Repository candidates are patched by py-rattler before solving. Do not
+            # patch here because locked records must preserve their installed metadata.
             conda_record = rattler_record_to_conda_record(rattler_record)
             out_state.records[conda_record.name] = conda_record
 

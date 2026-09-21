@@ -1,5 +1,40 @@
 # Changelog
 
+[//]: # (current developments)
+
+## 0.1.1 (2026-06-11)
+
+### Enhancements
+
+* Bump `py-rattler` to `>=0.25.0,<0.26.0a0` to restore `ppc64le` support for the conda-forge build of conda. (#69)
+
+### Bug fixes
+
+* Raise the conda-build-specific exception when solver problems are inferred, so conda-build receives the expected error type instead of a generic conflict. (#65)
+
+### Other
+
+* Update the conda dependency to `conda >=26.5.0` and correct the 0.1.0 release date in the changelog. (#63, #64)
+
+### Contributors
+
+* @danyeaw
+* @jsmolic made their first contribution in https://github.com/conda/conda-rattler-solver/pull/65
+* @jezdez
+* @conda-bot made their first contribution in https://github.com/conda/conda-rattler-solver/pull/71
+
+
+
+## 0.1.0 (2026-05-16)
+
+* Bump conda dependency to 26.5.0 by @soapy1 #61
+* Enable conditional dependencies and extras for user input by @jaimergp in #28
+* Handle `PackagesNotFoundInChannelsError` introduced in conda v26.3.0 by @soapy1 in #54
+* Add support for sharded repodata (v3) via conda's `repodata_use_shards` config by @soapy1 in #53
+* CI: Build and upload noarch packages by @soapy1 in #56
+* CI: Fix Windows canary build test syntax by @jezdez in #57
+* CI: Build canary on linux-64 only (noarch package) by @jezdez in #59
+
 ## 0.0.6 (2026-03-16)
 
 * Bump to py-rattler 0.23 by @jaimergp in #43

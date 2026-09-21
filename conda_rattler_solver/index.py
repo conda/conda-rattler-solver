@@ -33,8 +33,12 @@ if TYPE_CHECKING:
     from typing import Self
 
     from conda.common.path import PathsType
+    from conda.gateways.shards import BuildRepodataSubset
+    from conda.gateways.shards.typing import Shards
     from conda.models.match_spec import MatchSpec
     from conda.models.records import PackageCacheRecord, PackageRecord
+
+    from .state import SolverInputState
 
 log = logging.getLogger(f"conda.{__name__}")
 
@@ -50,6 +54,13 @@ class _ChannelRepoInfo:
     local_json: str | None
 
 
+def _is_sharded_repodata_enabled():
+    """
+    Flag to see whether we should check for sharded repodata.
+    """
+    return getattr(context, "repodata_use_shards", True)
+
+
 class RattlerIndexHelper:
     def __init__(
         self,
@@ -57,12 +68,16 @@ class RattlerIndexHelper:
         subdirs: Iterable[str] = None,
         repodata_fn: str = REPODATA_FN,
         pkgs_dirs: PathsType = (),
+        in_state: SolverInputState | None = None,
+        build_repodata_subset: BuildRepodataSubset | None = None,
     ):
         self._unlink_on_del: list[Path] = []
 
         self._channels = context.channels if channels is None else channels
         self._subdirs = context.subdirs if subdirs is None else subdirs
         self._repodata_fn = repodata_fn
+        self.in_state = in_state
+        self.build_repodata_subset = build_repodata_subset
 
         self._index: dict[str, _ChannelRepoInfo] = {}
         self._index.update(self._load_channels())
@@ -191,9 +206,104 @@ class RattlerIndexHelper:
 
         return tuple(dict.fromkeys(urls))  # de-duplicate
 
+    def _get_root_package_from_shard(
+        self, package_names: list[str]
+    ) -> dict[str, _ChannelRepoInfo]:
+        """
+        Builds the repodata subset for a set of packages. Only applicable to sharded channels.
+        """
+        result: dict[str, _ChannelRepoInfo] = {}
+        urls = self._urls_from_channels()
+        if self.build_repodata_subset and _is_sharded_repodata_enabled():
+            urls_to_channel = {url: Channel.from_url(url) for url in urls}
+            channel_data = self.build_repodata_subset(
+                package_names, urls_to_channel, repodata_version=3
+            )
+            log.debug(
+                "build_repodata_subset returned channels: %s",
+                list(channel_data) if channel_data is not None else None,
+            )
+            if channel_data is not None:
+                result.update(self._load_repo_info_from_shards(channel_data))
+        return result
+
+    def _load_channel_repo_info_shards(
+        self, urls_to_channel: dict[str, Channel]
+    ) -> dict[str, _ChannelRepoInfo] | None:
+        """
+        Load repository information from sharded repodata.
+
+        Returns None if shards are unavailable for the given channels, in which
+        case the caller falls back to the standard repodata.json path.
+        """
+        root_packages = (*self.in_state.installed.keys(), *self.in_state.requested)
+        log.debug("build_repodata_subset root_packages: %s", root_packages)
+        channel_data = self.build_repodata_subset(
+            root_packages, urls_to_channel, repodata_version=3
+        )
+        log.debug(
+            "build_repodata_subset returned channels: %s",
+            list(channel_data) if channel_data is not None else None,
+        )
+        if channel_data is None:
+            return None
+        return self._load_repo_info_from_shards(channel_data)
+
+    def _load_repo_info_from_shards(
+        self, channel_data: dict[str, Shards]
+    ) -> dict[str, _ChannelRepoInfo]:
+        """
+        Convert a dict[url, Shards] returned by build_repodata_subset into
+        the same dict[noauth_url, _ChannelRepoInfo] format used by _load_channels.
+        Each Shards object is serialised to a temporary repodata JSON file so that
+        rattler.SparseRepoData can consume it without any changes to the rattler API.
+        """
+        index = {}
+        for url, shards in channel_data.items():
+            subdir = Channel.from_url(url).subdir
+            repodata = empty_repodata_dict(subdir, base_url=url)
+            for (key, section), record in shards.iter_records_v3():
+                if section == "packages":
+                    repodata["packages"][key] = record
+                elif section == "packages.conda":
+                    repodata["packages.conda"][key] = record
+                elif section.startswith("v3."):
+                    # Extract v3 package type (whl, conda, tar.bz2) from section name
+                    v3_type = section[3:]  # Remove "v3." prefix
+                    repodata["v3"][v3_type][key] = record
+            n_packages = (
+                len(repodata["packages"])
+                + len(repodata["packages.conda"])
+                + sum(len(group) for group in repodata["v3"].values())
+            )
+            log.debug(
+                "_load_repo_info_from_shards: %s packages for %s",
+                n_packages,
+                url,
+            )
+            if n_packages > 0:
+                log.debug(
+                    "_load_repo_info_from_shards: sample filenames: %s",
+                    list(repodata["packages"])[:3] + list(repodata["packages.conda"])[:3],
+                )
+            with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+                f.write(json_dump(repodata))
+            self._unlink_on_del.append(Path(f.name))
+            info = self._json_path_to_repo_info(url, f.name)
+            index[info.noauth_url] = info
+        return index
+
     def _load_channels(self, urls: Iterable[str] | None = None) -> dict[str, _ChannelRepoInfo]:
         if urls is None:
             urls = self._urls_from_channels()
+
+        # Prefer sharded repodata loading if enabled and the solver provided the callable
+        if self.in_state and self.build_repodata_subset and _is_sharded_repodata_enabled():
+            urls_to_channel = {url: Channel.from_url(url) for url in urls}
+            channel_repos_info = self._load_channel_repo_info_shards(urls_to_channel)
+            if channel_repos_info is not None:
+                return channel_repos_info
+            log.debug("No sharded channels available. Fall back to non-sharded path.")
 
         # 1. Fetch URLs (if needed)
         Executor = (
@@ -265,11 +375,42 @@ class RattlerIndexHelper:
                 self._unlink_on_del.append(Path(f.name))
         return repos
 
-    def search(self, spec: str | MatchSpec) -> Iterable[PackageRecord]:
-        spec = rattler.MatchSpec(str(spec))
-        for info in self._index.values():
+    def _search(
+        self, spec: rattler.MatchSpec, index: dict[str, _ChannelRepoInfo]
+    ) -> Iterable[PackageRecord]:
+        """
+        Search for packages matching the given spec in the index. This function does not
+        build the repodata subset for the requested spec, so it may not find packages
+        that are only available in sharded channels.
+        """
+        for info in index.values():
             for record in info.repo.load_matching_records([spec]):
-                yield rattler_record_to_conda_record(record)
+                yield rattler_record_to_conda_record(
+                    record,
+                    add_pip_as_python_dependency=context.add_pip_as_python_dependency,
+                )
+
+    def search(
+        self, spec: str | MatchSpec, search_expanded_index: bool = False
+    ) -> Iterable[PackageRecord]:
+        """
+        Search for packages matching the given spec in the index. For channels that are sharded,
+        the requested spec may not be in the loaded index. So, this function will additionally
+        build the repodata subset for the requested spec. This will not update the loaded index.
+        """
+        spec = rattler.MatchSpec(str(spec))
+        search_result = list(self._search(spec, self._index))
+        if search_result:
+            yield from search_result
+            return
+
+        # If there are no search results in the regular index, try to build the repodata
+        # subset for the requested spec and search again.
+        if search_expanded_index:
+            # The packages loaded with `_get_root_package_from_shard` will have the most
+            # up-to-date packages for the requested spec in sharded channels.
+            extra_index = self._get_root_package_from_shard([spec.name.normalized])
+            yield from self._search(spec, self._index | extra_index)
 
     @property
     def _package_format(self) -> rattler.PackageFormatSelection:

@@ -1,0 +1,35 @@
+- name: Daniel Holth
+  email: dholth@anaconda.com
+  github: dholth
+  num_commits: 1
+  first_commit: 2026-01-23 10:06:36
+- name: Dan Yeaw
+  email: dan@yeaw.me
+  github: danyeaw
+  num_commits: 6
+  first_commit: 2026-01-23 13:23:50
+- name: Sophia Castellarin
+  email: scastellarin@openteams.com
+  github: soapy1
+  num_commits: 5
+  first_commit: 2026-05-13 12:46:15
+- name: Jannis Leidel
+  email: jannis@leidel.info
+  github: jezdez
+  num_commits: 3
+  first_commit: 2025-10-20 04:49:07
+- name: conda-bot
+  email: 18747875+conda-bot@users.noreply.github.com
+  github: conda-bot
+  num_commits: 2
+  first_commit: 2026-06-10 15:19:32
+- name: jaimergp
+  email: jaimergp@users.noreply.github.com
+  github: jaimergp
+  num_commits: 30
+  first_commit: 2023-10-12 14:16:23
+- name: Jakov Smolić
+  email: jsmolic@gentoo.org
+  github: jsmolic
+  num_commits: 1
+  first_commit: 2026-05-29 03:12:39

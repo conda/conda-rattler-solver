@@ -15,6 +15,7 @@ from conda import __version__ as _conda_version
 from conda.base.constants import KNOWN_SUBDIRS, REPODATA_FN, UNKNOWN_CHANNEL
 from conda.base.context import context
 from conda.common.path import paths_equal
+from conda.core.prefix_data import PrefixData
 from conda.exceptions import InvalidMatchSpec, PackagesNotFoundError
 from conda.models.match_spec import MatchSpec
 from conda.models.records import PackageRecord, PrefixRecord
@@ -39,7 +40,11 @@ def _hash_to_str(bytes_or_str: bytes | str | None) -> None | str:
     return bytes_or_str.lower()
 
 
-def rattler_record_to_conda_record(record: rattler.PackageRecord) -> PackageRecord:
+def rattler_record_to_conda_record(
+    record: rattler.PackageRecord,
+    *,
+    add_pip_as_python_dependency: bool = False,
+) -> PackageRecord:
     if timestamp := record.timestamp:
         timestamp = int(timestamp.timestamp() * 1000)
     else:
@@ -64,6 +69,14 @@ def rattler_record_to_conda_record(record: rattler.PackageRecord) -> PackageReco
     else:
         channel_url = ""
 
+    depends = record.depends or ()
+    if (
+        add_pip_as_python_dependency
+        and record.name.source == "python"
+        and str(record.version).startswith(("2.", "3."))
+    ):
+        depends = (*depends, "pip")
+
     return PackageRecord(
         name=record.name.source,
         version=str(record.version),
@@ -79,7 +92,7 @@ def rattler_record_to_conda_record(record: rattler.PackageRecord) -> PackageReco
         sha256=_hash_to_str(record.sha256),
         arch=record.arch,
         platform=str(record.platform or "") or None,
-        depends=record.depends or (),
+        depends=depends,
         constrains=record.constrains or (),
         track_features=record.track_features or (),
         features=record.features or (),
@@ -171,21 +184,45 @@ def conda_prefix_record_to_rattler_prefix_record(
     )
 
 
+_NAME_EQUALS_BRACKET = re.compile(r"^([^\[\]=]+)=\[")
+
+
 def conda_match_spec_to_rattler_match_spec(spec: MatchSpec) -> rattler.MatchSpec:
     match_spec = MatchSpec(spec)
     if os.sep in match_spec.name or "/" in match_spec.name:
         raise InvalidMatchSpec(match_spec, "Cannot contain slashes.")
-    return rattler.MatchSpec(str(match_spec).rstrip("=").replace("=[", "["))
+
+    # numpy=[build=0]  ->  numpy[build=0]
+    # requests[extras=[a,b]]  ->  unchanged (already has [ after the name)
+    intermediate = str(match_spec).rstrip("=")
+
+    intermediate = _NAME_EQUALS_BRACKET.sub(r"\1[", intermediate, count=1)
+
+    return rattler.MatchSpec(
+        intermediate,
+        conditionals=True,
+        extras=True,
+    )
 
 
 def empty_repodata_dict(subdir: str, **info_kwargs) -> dict[str, Any]:
     return {
+        "repodata_version": 2 if info_kwargs.get("base_url") else 1,
         "info": {
             "subdir": subdir,
+            # See https://github.com/conda/ceps/pull/146
+            "repodata_revisions": {
+                "v3": {},
+            },
             **info_kwargs,
         },
         "packages": {},
         "packages.conda": {},
+        "v3": {
+            "tar.bz2": {},
+            "conda": {},
+            "whl": {},
+        },
     }
 
 
@@ -235,7 +272,7 @@ def notify_conda_outdated(
     # manually check base prefix since `PrefixData(...).get("conda", None) is expensive
     # once prefix data is lazy this might be a different situation
     current_conda_prefix_rec = None
-    conda_meta_prefix_directory = os.path.join(context.conda_prefix, "conda-meta")
+    conda_meta_prefix_directory = os.path.join(context.root_prefix, "conda-meta")
     with suppress(OSError, ValueError):
         if os.path.lexists(conda_meta_prefix_directory):
             for entry in os.scandir(conda_meta_prefix_directory):
@@ -247,6 +284,7 @@ def notify_conda_outdated(
                     with open(entry.path) as f:
                         current_conda_prefix_rec = PrefixRecord(**json.loads(f.read()))
                     break
+
     if not current_conda_prefix_rec:
         # We are checking whether conda can be found in the environment conda is
         # running from. Unless something is really wrong, this should never happen.
@@ -274,11 +312,19 @@ def notify_conda_outdated(
             return
 
     # check if the loaded index contains records that match a more recent conda version
-    conda_newer_records = list(index.search(conda_newer_str))
+    conda_newer_records = list(index.search(conda_newer_str, search_expanded_index=True))
 
     # print instructions to stderr if we found a newer conda
     if conda_newer_records:
+        prefix_data = PrefixData(context.root_prefix)
         newest = max(conda_newer_records, key=lambda x: VersionOrder(x.version))
+        if prefix_data.get("conda-self", None):
+            conda_update_message = "conda self update"
+        else:
+            conda_update_message = f"conda update -n base -c {channel_name} conda"
+            if prefix_data.is_frozen():
+                conda_update_message += " --override-frozen"
+
         print(
             dedent(
                 f"""
@@ -289,7 +335,7 @@ def notify_conda_outdated(
 
                     Please update conda by running
 
-                        $ conda update -n base -c {channel_name} conda
+                        $ {conda_update_message}
 
                     """
             ),

@@ -1,32 +1,41 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling>=1.12.2", "hatch-vcs>=0.2.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "conda-rattler-solver"
 description = "The fast pixi solver, now in conda"
-readme = "README.md"
+readme = { file = "README.md", content-type = "text/markdown" }
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
+keywords = ["conda", "dependency-solving", "plugin", "rattler", "solver"]
 classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Programming Language :: Python :: Implementation :: CPython",
-  "Programming Language :: Python :: Implementation :: PyPy",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: System :: Software Distribution",
 ]
 requires-python = ">=3.10"
 dependencies = [
-  "conda >=25.5.0",
-  "py-rattler >=0.23.0,<0.24.0a0",
+  # "conda >=26.7.0",
+  "py-rattler >=0.26.0,<0.27.0a0",
 ]
 dynamic = ["version"]
 
 [project.urls]
-homepage = "https://github.com/conda-incubator/conda-rattler-solver"
+Changelog = "https://github.com/conda/conda-rattler-solver/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/conda/conda-rattler-solver"
+Issues = "https://github.com/conda/conda-rattler-solver/issues"
+Repository = "https://github.com/conda/conda-rattler-solver"
 
 [project.entry-points.conda]
 conda-rattler-solver = "conda_rattler_solver.plugin"
@@ -35,20 +44,45 @@ conda-rattler-solver = "conda_rattler_solver.plugin"
 source = "vcs"
 
 [tool.pixi.workspace]
-channels = ["conda-forge"]
+channels = ["conda-forge", "conda-canary/label/conda-conda-rattler-solver-pr-123"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 
 [tool.pixi.dependencies]
-conda = ">=25.5.0"
-py-rattler = ">=0.23.0,<0.24.0a0"
+conda = ">=26.7.0"
+py-rattler = ">=0.26.0,<0.27.0a0"
 
-[tool.pixi.pypi-dependencies]
-conda-rattler-solver = { path = ".", editable = true }
+# Remove this bootstrap pin once a compatible conda-forge release is available.
+[tool.pixi.dependencies.conda-rattler-solver]
+version = "==0.1.1.48+g70c6242"
+build = "py_0"
+channel = "conda-canary/label/conda-conda-rattler-solver-pr-123"
+sha256 = "1aa2d71f7799082ea2681cb42a69318975fabe534b9d6d7f21e4f51b889287fe"
+
+[tool.pixi.feature.self.tasks]
+# Replace the bootstrap package with the local editable install.
+_install-self = { cmd = "conda pypi install -e . -q -y", default-environment = "test-py313" }
+
+[tool.pixi.feature.self.dependencies]
+hatchling = ">=1.12.2"
+hatch-vcs = ">=0.2.0"
 
 [tool.pixi.feature.build]
 dependencies = { conda-build = "*" }
 [tool.pixi.feature.build.tasks]
-build = { cmd = "conda build recipe --override-channels -c conda-forge", env = {CONDA_SOLVER = "libmamba"} }
+build = { cmd = "conda build recipe", env = {CONDA_SOLVER = "libmamba"} }
+
+[tool.pixi.feature.lint.dependencies]
+python = "3.12.*"
+pre-commit = "*"
+
+[tool.pixi.feature.lint.tasks.pre-commit]
+cmd = "pre-commit"
+description = "Run pre-commit hooks to lint the codebase."
+
+[tool.pixi.feature.lint.tasks.lint]
+cmd = "pre-commit"
+description = "Run pre-commit hooks to lint the codebase. Alias for `pre-commit` task."
+
 
 [tool.pixi.feature.docs.tasks]
 docs = { cmd = "python -m sphinx.cmd.build -M dirhtml . _build", cwd = "docs" }
@@ -56,7 +90,7 @@ serve = { cmd = "python -m http.server", cwd = "docs/_build/dirhtml" }
 clean = { cmd = "rm -rf _build", cwd = "docs" }
 
 [tool.pixi.feature.docs.dependencies]
-python = "3.10.*"
+python = "3.11.*"
 conda-sphinx-theme = "*"
 linkify-it-py = "*"
 myst-parser = "*"
@@ -72,23 +106,34 @@ pre-commit = 'pre-commit'
 
 [tool.pixi.feature.test.tasks.test]
 cmd = "python -m pytest"
+depends-on = ["_install-self"]
+default-environment = "test-py313"
 [tool.pixi.feature.test.tasks.test.env]
 CONDA_TEST_SOLVERS = "rattler"
 CONDA_TEST_DATA_DIR = "$PIXI_PROJECT_ROOT/../conda/tests/data"
+CONDA_CHANNELS = "conda-forge"
+
+[tool.pixi.feature.test.tasks.benchmark]
+cmd = "python -m pytest -m benchmark --benchmark-only"
+depends-on = ["_install-self"]
+default-environment = "test-py313"
+[tool.pixi.feature.test.tasks.benchmark.env]
+CONDA_TEST_SOLVERS = "rattler"
+CONDA_TEST_DATA_DIR = "$PIXI_PROJECT_ROOT/../conda/tests/data"
+CONDA_CHANNELS = "conda-forge"
 
 [tool.pixi.feature.test.dependencies]
 anaconda-client = "*"
 conda-build = "*"
 conda-index = "*"
-conda-libmamba-solver = ">=25.11"
+conda-libmamba-solver = ">=26.4.2"
 conda-lock = "*"
 coverage = "*"
-flask = ">=2.2"                # jlap pytest fixture
 git = "*"
 importlib_resources = ">=5.10" # only necessary for Python < 3.12
 pexpect = "*"
-pip = "*"
 pytest = "*"
+pytest-benchmark = "*"
 pytest-cov = "*"
 pytest-mock = "*"
 pytest-rerunfailures = "*"
@@ -97,11 +142,6 @@ pytest-timeout = "*"
 pytest-xprocess = "*"
 responses = "*"
 tomli = "*"                    # for coverage pyproject.toml, only necessary for Python <= 3.11.0a6
-werkzeug = ">=2.2"             # jlap pytest fixture
-
-
-[tool.pixi.feature.py310.dependencies]
-python = "3.10.*"
 
 [tool.pixi.feature.py311.dependencies]
 python = "3.11.*"
@@ -112,14 +152,26 @@ python = "3.12.*"
 [tool.pixi.feature.py313.dependencies]
 python = "3.13.*"
 
+[tool.pixi.feature.release.dependencies]
+hatch-vcs = ">=0.2.0"
+hatchling = ">=1.12.2"
+python = ">=3.13,<3.14"
+python-build = ">=1.2"
+rever = "*"
+
+[tool.pixi.feature.py314.dependencies]
+python = "3.14.*"
+
 [tool.pixi.environments]
-dev = ["py310"]
 build = ["build"]
+dev = ["py311", "self"]
 docs = ["docs"]
-test-py310 = ["test", "py310"]
-test-py311 = ["test", "py311"]
-test-py312 = ["test", "py312"]
-test-py313 = ["test", "py313"]
+release = { features = ["release"], no-default-feature = true }
+lint = ["lint"]
+test-py311 = ["test", "py311", "self"]
+test-py312 = ["test", "py312", "self"]
+test-py313 = ["test", "py313", "self"]
+test-py314 = ["test", "py314", "self"]
 
 [tool.hatch.build.hooks.vcs]
 version-file = "conda_rattler_solver/_version.py"
@@ -142,6 +194,7 @@ addopts = [
 markers = [
   "integration: integration tests that usually require an internet connect",
   "slow: slow running tests",
+  "benchmark: benchmark tests",
 ]
 
 [tool.ruff]

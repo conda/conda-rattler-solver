@@ -1,0 +1,40 @@
+name: Automate Issues
+
+on:
+  # NOTE: github.event is issue_comment payload:
+  # https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#issue_comment
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: true
+
+# built-in GitHub token/permissions are not used
+permissions: {}
+
+env:
+  FEEDBACK_LBL: pending::feedback
+  SUPPORT_LBL: pending::support
+
+jobs:
+  # NOTE: will update label if anyone responds, not just the author/reporter
+  pending_support:
+    name: Update pending support label
+    # if [pending::feedback] and anyone responds
+    if: >-
+      !github.event.repository.fork
+      && !github.event.issue.pull_request
+      && contains(github.event.issue.labels.*.name, 'pending::feedback')
+    runs-on: ubuntu-slim
+    steps:
+      # remove [pending::feedback]
+      - run: gh issue edit --remove-label "${FEEDBACK_LBL}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+
+      # add [pending::support], if still open
+      - if: github.event.issue.state == 'open'
+        run: gh issue edit --add-label "${SUPPORT_LBL}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.PROJECT_TOKEN }}

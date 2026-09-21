@@ -21,7 +21,16 @@ def test_repoquery():
     data = json.loads(p.stdout)
     assert data["result"]["status"] == "OK"
     assert len(data["result"]["pkgs"]) > 0
-    assert len([p for p in data["result"]["pkgs"] if p["name"] == "python"]) == 1
+    python = [p for p in data["result"]["pkgs"] if p["name"] == "python"]
+    # Presence is required; uniqueness is not.
+    # Duplicate `python` entries can appear when the queried package (e.g. recent
+    # conda-forge builds of conda) depends on both unconstrained `python` and a
+    # pinned `python X.Y.* *_cpython`. `repoquery depends` resolves each MatchSpec
+    # independently, so both (e.g. 3.14 and 3.10) may show up.
+    # Upstream: https://github.com/mamba-org/mamba/issues/4346
+    # Same carve-out pattern in conda-libmamba-solver tests/test_repoquery.py
+    # (https://github.com/conda/conda-libmamba-solver/pull/964).
+    assert python
 
 
 def test_query_search():
