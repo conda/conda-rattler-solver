@@ -659,6 +659,14 @@ class RattlerSolver(Solver):
     def _maybe_raise_for_problems(
         self, problems: str, in_state: SolverInputState, out_state: SolverOutputState
     ):
+        """
+        Parse `problems` for a suitable MatchSpec and then mutate out_state to add more
+        context for an error report.
+
+        TODO: This is temporary work around until we can receive more structured output from
+              rattler solver that includes MatchSpec definitions.
+              See: https://github.com/conda/rattler/issues/1961
+        """
         unsatisfiable = {}
         not_found = {}
         for line in problems.splitlines():
