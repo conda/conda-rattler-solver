@@ -1630,6 +1630,45 @@ def test_installed_packages_included_in_solver_benchmark(
 
 
 @pytest.mark.parametrize(
+    "channel_priority,expected_foo",
+    [
+        ("strict", "1.0"),
+        ("flexible", "1.0"),
+        ("disabled", "2.0"),
+    ],
+)
+def test_channel_priority_version_against_channel_order(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    channel_priority: str,
+    expected_foo: str,
+) -> None:
+    """
+    The higher-priority channel carries only ``foo 1.0``, while the
+    lower-priority channel carries ``foo 2.0``. Strict and flexible priority
+    should resolve ``foo`` from the higher-priority channel. However, only
+    disabled priority should trade the channel order for the newer version.
+    """
+    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", channel_priority)
+    reset_context()
+
+    channel_a = tmp_path / "channel-a"
+    _make_noarch_package(channel_a, "foo", "1.0")
+    channel_b = tmp_path / "channel-b"
+    _make_noarch_package(channel_b, "foo", "2.0")
+
+    solver = Solver(
+        prefix=str(tmp_path / "prefix"),
+        channels=[Channel(str(channel_a)), Channel(str(channel_b))],
+        subdirs=("noarch",),
+        specs_to_add=("foo",),
+    )
+    solution = solver.solve_final_state()
+    packages = {record.name: record.version for record in solution}
+    assert packages == {"foo": expected_foo}
+
+
+@pytest.mark.parametrize(
     "channel_priority",
     ["strict", "flexible", "disabled"],
 )
