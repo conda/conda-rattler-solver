@@ -661,6 +661,19 @@ class RattlerSolver(Solver):
     def _maybe_raise_for_problems(
         self, problems: str, in_state: SolverInputState, out_state: SolverOutputState
     ):
+        """
+        Parse `problems` for suitable MatchSpecs and then mutate out_state to add more
+        context for an error report. Two exceptions may be raised:
+        - PackagesNotFoundError: One or more packages are missing in the channel
+        - RattlerUnsatisfiableError: A solver conflict was found
+        
+        When called from conda-build, the parsed specs are dispatched to
+        `._maybe_raise_for_conda_build()`.
+
+        TODO: This is temporary work around until we can receive more structured output from
+              rattler solver that includes MatchSpec definitions.
+              See: https://github.com/conda/rattler/issues/1961
+        """
         unsatisfiable = {}
         not_found = {}
         for line in problems.splitlines():
