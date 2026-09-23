@@ -1291,6 +1291,38 @@ def test_add_pip_requires_a_pip_candidate(
     assert "pip *, for which no candidates were found" in str(result)
 
 
+@pytest.mark.usefixtures("solver_rattler")
+def test_maybe_raise_for_problems_survives_bare_extras_brackets(
+    tmp_path: Path,
+) -> None:
+    """
+    Regression test: rattler's solver renders a requested "extra" as a bare
+    bracket synthetic name (`httpx[cli]`, no `extras=` key) in its
+    human-readable diagnostic text. Re-parsing that text as a conda
+    MatchSpec must not crash with InvalidMatchSpec; it should degrade to a
+    name(+version) MatchSpec so the real "no candidates"/"unsatisfiable"
+    problem can still be reported.
+    """
+    prefix = tmp_path / "env"
+    solver = Solver(
+        prefix=prefix,
+        channels=(),
+        subdirs=("noarch",),
+        specs_to_add=("httpx[extras=cli]",),
+    )
+    in_state = SolverInputState(prefix, requested=("httpx[extras=cli]",))
+    out_state = SolverOutputState(solver_input_state=in_state)
+    problems = (
+        "Cannot solve the request because of:\n"
+        "  ├─ No candidates were found for httpx[cli] ==0.28.0.\n"
+    )
+
+    with pytest.raises(PackagesNotFoundError) as exc_info:
+        solver._maybe_raise_for_problems(problems, in_state, out_state)
+
+    assert "httpx==0.28.0" in str(exc_info.value)
+
+
 @pytest.mark.parametrize(
     "python_depends,expected_names",
     (

@@ -32,6 +32,7 @@ from .utils import (
     conda_match_spec_to_rattler_match_spec,
     conda_prefix_record_to_rattler_prefix_record,
     fix_version_field_for_conda_build,
+    matchspec_from_solver_diagnostic,
     maybe_ignore_current_repodata,
     notify_conda_outdated,
     rattler_record_to_conda_record,
@@ -669,24 +670,30 @@ class RattlerSolver(Solver):
                 line = line.split(":", 1)[1]
             words = line.split()
             if "is locked, but another version is required as reported above" in line:
-                unsatisfiable[words[0]] = MatchSpec(f"{words[0]} {words[1]}")
+                unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(
+                    f"{words[0]} {words[1]}"
+                )
             elif "which cannot be installed because there are no viable options" in line:
-                unsatisfiable[words[0]] = MatchSpec(f"{words[0]} {words[1].strip(',')}")
+                unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(
+                    f"{words[0]} {words[1].strip(',')}"
+                )
             elif "cannot be installed because there are no viable options" in line:
-                unsatisfiable[words[0]] = MatchSpec(f"{words[0]} {words[1]}")
+                unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(
+                    f"{words[0]} {words[1]}"
+                )
             elif "the constraint" in line and "cannot be fulfilled" in line:
-                unsatisfiable[words[2]] = MatchSpec(" ".join(words[2:-3]))
+                unsatisfiable[words[2]] = matchspec_from_solver_diagnostic(" ".join(words[2:-3]))
             elif (
                 "can be installed with any of the following options" in line
                 and "which" not in line
             ):
                 position = line.index(" can be installed with")
-                unsatisfiable[words[0]] = MatchSpec(line[:position])
+                unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(line[:position])
             elif "No candidates were found for" in line:
                 position = line.index("No candidates were found for ")
                 position += len("No candidates were found for ")
                 spec = line[position:].rstrip(".")
-                spec = MatchSpec(spec)
+                spec = matchspec_from_solver_diagnostic(spec)
                 # Do not consider "not found" if it's already installed; this happens
                 # when user requested a package from a channel that is no longer in the
                 # list. e.g. `conda create main::psutil` + `conda install -c conda-forge python`
@@ -702,7 +709,7 @@ class RattlerSolver(Solver):
                 # happens when the name does have candidates in the index, just not any that
                 # satisfy the requested version (as opposed to being fully absent from it).
                 spec = line.split(", for which no candidates were found", 1)[0].strip()
-                spec = MatchSpec(spec)
+                spec = matchspec_from_solver_diagnostic(spec)
                 if any(spec.match(record) for record in in_state.installed.values()):
                     unsatisfiable[spec.name] = spec
                     out_state.installed_without_candidates.add(spec.name)
