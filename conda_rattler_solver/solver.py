@@ -53,6 +53,12 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(f"conda.{__name__}")
 
+CHANNEL_PRIORITY_MAP = {
+    ChannelPriority.STRICT: rattler.ChannelPriority.Strict,
+    ChannelPriority.FLEXIBLE: rattler.ChannelPriority.Flexible,
+    ChannelPriority.DISABLED: rattler.ChannelPriority.Disabled,
+}
+
 
 class RattlerSolver(Solver):
     MAX_SOLVER_ATTEMPTS_CAP = 10
@@ -348,11 +354,7 @@ class RattlerSolver(Solver):
             **self._collect_specs(in_state, out_state),
             "sparse_repodata": [info.repo for info in index._index.values()],
             "virtual_packages": self._rattler_virtual_packages(in_state),
-            "channel_priority": (
-                rattler.ChannelPriority.Strict
-                if context.channel_priority == ChannelPriority.STRICT
-                else rattler.ChannelPriority.Disabled
-            ),
+            "channel_priority": CHANNEL_PRIORITY_MAP[context.channel_priority],
             "strategy": "highest",
             "package_format_selection": (
                 rattler.PackageFormatSelection.ONLY_TAR_BZ2
