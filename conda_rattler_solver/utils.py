@@ -205,6 +205,35 @@ def conda_match_spec_to_rattler_match_spec(spec: MatchSpec) -> rattler.MatchSpec
     )
 
 
+# Rattler renders requested "extras" as bare `name[extra1,extra2]` brackets in
+# diagnostic text, which isn't valid conda MatchSpec syntax (CEP 44 needs
+# `extras=[...]`). Strip only that shape, leaving real `key=value` brackets alone.
+_BARE_NAME_BRACKET_RE = re.compile(r"^([A-Za-z0-9_.-]+)\[([^\[\]=]*)\]")
+
+
+def matchspec_from_solver_diagnostic(text: str) -> MatchSpec:
+    """
+    Build a conda MatchSpec from a raw substring lifted out of a rattler
+    solver diagnostic/problem message (see module docstring above
+    `_BARE_NAME_BRACKET_RE` for why this needs special handling).
+    """
+    cleaned = _BARE_NAME_BRACKET_RE.sub(r"\1", text, count=1)
+    try:
+        return MatchSpec(cleaned)
+    except InvalidMatchSpec:
+        # Last-resort fallback: still surface *something* rather than crash
+        # the solver's error-reporting path entirely.
+        name = cleaned.split()[0] if cleaned.split() else cleaned
+        log.debug(
+            "Could not parse solver diagnostic spec %r (cleaned: %r); "
+            "falling back to name-only %r",
+            text,
+            cleaned,
+            name,
+        )
+        return MatchSpec(name)
+
+
 def empty_repodata_dict(subdir: str, **info_kwargs) -> dict[str, Any]:
     return {
         "repodata_version": 2 if info_kwargs.get("base_url") else 1,
