@@ -1,3 +1,5 @@
+<!-- edit this in https://github.com/conda/infrastructure -->
+
 [compare]: https://github.com/conda/conda-rattler-solver/compare
 [new release]: https://github.com/conda/conda-rattler-solver/releases/new
 [release docs]: https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
@@ -10,10 +12,6 @@
 
 > [!NOTE]
 > Throughout this document are references to the version number as `MAJOR.MINOR.PATCH`, this should be replaced with the correct version number. Do **not** prefix the version with a lowercase `v`.
-
-The [release workflow](.github/workflows/release.yml) starts when a version tag is pushed. It builds and checks the distributions, records their provenance, attaches them to a draft GitHub release, publishes the same files to PyPI, and publishes the GitHub release last. Keep the release as a draft until the workflow finishes.
-
-Before the first PyPI release, confirm its trusted publisher uses owner `conda`, repository `conda-rattler-solver`, workflow `release.yml`, and environment `pypi`. The GitHub `pypi` environment requires approval and permits version tags only.
 
 ## 1. Open the release issue.
 
@@ -50,7 +48,7 @@ Placeholder for `conda-rattler-solver MAJOR.MINOR.PATCH` release.
 - [ ] Create release PR (see [release process][process])
 - [ ] Create Zulip thread on [#releases][zulip]
     - [ ] Announce `MAJOR.MINOR.PATCH` in-progress
-- [ ] [Publish release][releases]
+- [ ] Push the `MAJOR.MINOR.PATCH` tag and complete the release workflow
 - [ ] Bump/update feedstocks
     - [ ] [Anaconda, Inc.'s feedstock][main]
     - [ ] [conda-forge feedstock][conda-forge]
@@ -161,7 +159,7 @@ Install [`rever`][rever docs] using whatever your project defines (e.g., a conda
     | Target | `main` |
     | Body | copy/paste from `CHANGELOG.md` |
 
-    > **Note:** Leave the release as a draft. The workflow preserves these notes and publishes the release after the distributions reach PyPI.
+    > **Note:** Leave this release as a draft. The publishing workflow publishes it after its package publication steps succeed.
 
 </details>
 
@@ -169,17 +167,22 @@ Install [`rever`][rever docs] using whatever your project defines (e.g., a conda
 
 ## 4. Merge the release PR and push the version tag.
 
-After the release PR is reviewed and merged, confirm the intended commit has passed its required checks. Fetch it and push a signed version tag:
+Follow the [repository-specific publishing instructions](RELEASE_PUBLISHING.md) to complete any required setup before pushing the tag.
+
+After the release PR is reviewed and merged, fetch `main`:
 
 ```bash
 git fetch origin main
+```
+
+Confirm that `origin/main` is the intended release commit and that its required checks have passed. Then create and push a signed version tag:
+
+```bash
 git tag -s MAJOR.MINOR.PATCH origin/main -m "Release MAJOR.MINOR.PATCH"
 git push origin MAJOR.MINOR.PATCH
 ```
 
-Follow the release workflow and approve the `pypi` deployment after checking the tag and draft assets. The workflow publishes GitHub only after PyPI succeeds. Confirm both services contain the expected wheel and source archive before updating feedstocks.
-
-If a publication job fails, rerun the failed jobs to reuse the already-built distributions. Existing draft assets are accepted only when their bytes match. Do not replace published files or move a released tag. For a partial PyPI upload, inspect which files were accepted before retrying.
+Follow the publishing workflow and complete any required approvals. The workflow publishes the draft release after its package publication steps succeed. Verify the published assets before updating feedstocks.
 
 ## 5. Bump [Anaconda Recipes][Anaconda Recipes] and [conda-forge][conda-forge] feedstocks to use `MAJOR.MINOR.PATCH`.
 

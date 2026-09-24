@@ -57,8 +57,12 @@ conda/infrastructure:
       pre_commit: true
       docs: false
 
-  # RELEASE.md follows this repository's tag-triggered publishing workflow.
-  # Keep the shared rever configuration and news template.
+  # [optional] on-demand release process
+  - src: templates/releases/RELEASE_ON_DEMAND.md
+    dst: RELEASE.md
+    with:
+      placeholder: MAJOR.MINOR.PATCH
+      tag_triggered_release: true
   - src: templates/releases/rever.xsh
     dst: rever.xsh
   - src: templates/releases/TEMPLATE
