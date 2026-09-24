@@ -1323,6 +1323,49 @@ def test_maybe_raise_for_problems_survives_bare_extras_brackets(
     assert "httpx==0.28.0" in str(exc_info.value)
 
 
+@pytest.mark.usefixtures("solver_rattler")
+@pytest.mark.parametrize(
+    "diagnostic_spec",
+    (
+        pytest.param("httpx [extras=[cli]]", id="bare-extras-conflict"),
+        pytest.param(
+            'httpx [extras=[cli], md5="7cb326b464b75a04aa57954631097aa4"]',
+            id="truncated-extras-and-md5",
+        ),
+    ),
+)
+def test_maybe_raise_for_problems_preserves_extras_conflict(
+    tmp_path: Path, diagnostic_spec: str
+) -> None:
+    """Preserve the solver diagnostic reported in conda/conda#16724 after a retry."""
+    prefix = tmp_path / "env"
+    solver = Solver(
+        prefix=prefix,
+        channels=(),
+        subdirs=("noarch",),
+        specs_to_add=(diagnostic_spec,),
+    )
+    in_state = SolverInputState(prefix, requested=(diagnostic_spec,))
+    out_state = SolverOutputState(solver_input_state=in_state)
+    problems = (
+        f"Cannot solve the request because of: {diagnostic_spec} "
+        "cannot be installed because there are no viable options:\n"
+        "└─ httpx 0.28.0 would require\n"
+        "   └─ rich <14,>=10, for which no candidates were found.\n"
+        "The following packages are incompatible\n"
+        "└─ httpx[cli] can be installed with any of the following options:\n"
+        "   └─ httpx[cli]\n"
+    )
+
+    solver._maybe_raise_for_problems(problems, in_state, out_state)
+
+    with pytest.raises(RattlerUnsatisfiableError) as exc_info:
+        solver._maybe_raise_for_problems(problems, in_state, out_state)
+
+    assert str(exc_info.value) == problems
+    assert exc_info.value.allow_retry is False
+
+
 @pytest.mark.parametrize(
     "python_depends,expected_names",
     (

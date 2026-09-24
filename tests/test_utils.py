@@ -216,6 +216,7 @@ def test_normalize_name_equals_bracket(raw: str, expected: str) -> None:
             "httpx[version='>=0.20,<1.0']",
             id="multiple-extras-and-version",
         ),
+        pytest.param("httpx [extras=[cli],", "httpx", id="truncated-md5-diagnostic"),
         # Legitimate conda extras syntax must be preserved untouched.
         pytest.param(
             "httpx==0.28.0[extras=['cli']]",
