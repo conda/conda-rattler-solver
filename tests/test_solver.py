@@ -2033,3 +2033,26 @@ def test_can_update_env_with_python(
         )
         data = json.loads(out)
         assert data["success"] is True, err
+
+def test_can_update_env_with_python(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+) -> None:
+    """
+    Ensure that we can run an update when python is in the environment
+    """
+
+    with tmp_env("--override-channels", "--channel=defaults", "python", "--solver=rattler") as prefix:
+        out, err, exc = conda_cli(
+            "update",
+            f"--prefix={prefix}",
+            "--override-channels",
+            "--channel=conda-forge",
+            "--dry-run",
+            "--json",
+            "--all",
+            "--solver=rattler",
+            raises=DryRunExit,
+        )
+        data = json.loads(out)
+        assert data["success"] is True, err
