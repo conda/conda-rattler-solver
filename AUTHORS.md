@@ -1,6 +1,7 @@
 All of the people who have made at least one contribution to conda-rattler-solver.
 Authors are sorted alphabetically.
 
+* Agriya Khetarpal
 * Dan Yeaw
 * Daniel Holth
 * Jakov Smolić
@@ -9,6 +10,7 @@ Authors are sorted alphabetically.
 * Mahe Iram Khan
 * Ryan Keith
 * Sophia Castellarin
+* Travis Hathaway
 * conda-bot
 * dependabot[bot]
 * jaimergp

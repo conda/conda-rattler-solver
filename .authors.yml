@@ -18,12 +18,12 @@
 - name: Jannis Leidel
   email: jannis@leidel.info
   github: jezdez
-  num_commits: 10
+  num_commits: 15
   first_commit: 2025-10-20 04:49:07
 - name: conda-bot
   email: 18747875+conda-bot@users.noreply.github.com
   github: conda-bot
-  num_commits: 13
+  num_commits: 14
   first_commit: 2026-06-10 15:19:32
 - name: jaimergp
   email: jaimergp@users.noreply.github.com
@@ -43,7 +43,7 @@
 - name: Mahe Iram Khan
   email: 65779580+ForgottenProgramme@users.noreply.github.com
   github: ForgottenProgramme
-  num_commits: 1
+  num_commits: 2
   first_commit: 2026-08-13 16:25:05
 - name: Ryan Keith
   email: rkeith@anaconda.com
@@ -55,3 +55,13 @@
   github: kenodegard
   num_commits: 4
   first_commit: 2026-07-09 16:51:56
+- name: Agriya Khetarpal
+  email: 74401230+agriyakhetarpal@users.noreply.github.com
+  github: agriyakhetarpal
+  num_commits: 2
+  first_commit: 2026-09-21 16:10:16
+- name: Travis Hathaway
+  email: travis.j.hathaway@gmail.com
+  github: travishathaway
+  num_commits: 2
+  first_commit: 2026-09-23 08:26:56
