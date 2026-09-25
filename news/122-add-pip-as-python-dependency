@@ -1,0 +1,21 @@
+### Enhancements
+
+* <news item>
+
+### Bug fixes
+
+* Honor `add_pip_as_python_dependency` across normal, sharded, and offline
+  repodata sources. (#122)
+
+### Deprecations
+
+* Require Python 3.11 or newer for conda packages to match py-rattler's
+  conda-forge builds. (#123)
+
+### Docs
+
+* <news item>
+
+### Other
+
+* <news item>
