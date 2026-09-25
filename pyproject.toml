@@ -7,11 +7,11 @@ name = "conda-rattler-solver"
 description = "The fast pixi solver, now in conda"
 readme = { file = "README.md", content-type = "text/markdown" }
 license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 keywords = ["conda", "dependency-solving", "plugin", "rattler", "solver"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: BSD License",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",

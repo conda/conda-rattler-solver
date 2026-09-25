@@ -1291,6 +1291,81 @@ def test_add_pip_requires_a_pip_candidate(
     assert "pip *, for which no candidates were found" in str(result)
 
 
+@pytest.mark.usefixtures("solver_rattler")
+def test_maybe_raise_for_problems_survives_bare_extras_brackets(
+    tmp_path: Path,
+) -> None:
+    """
+    Regression test: rattler's solver renders a requested "extra" as a bare
+    bracket synthetic name (`httpx[cli]`, no `extras=` key) in its
+    human-readable diagnostic text. Re-parsing that text as a conda
+    MatchSpec must not crash with InvalidMatchSpec; it should degrade to a
+    name(+version) MatchSpec so the real "no candidates"/"unsatisfiable"
+    problem can still be reported.
+    """
+    prefix = tmp_path / "env"
+    solver = Solver(
+        prefix=prefix,
+        channels=(),
+        subdirs=("noarch",),
+        specs_to_add=("httpx[extras=cli]",),
+    )
+    in_state = SolverInputState(prefix, requested=("httpx[extras=cli]",))
+    out_state = SolverOutputState(solver_input_state=in_state)
+    problems = (
+        "Cannot solve the request because of:\n"
+        "  ├─ No candidates were found for httpx[cli] ==0.28.0.\n"
+    )
+
+    with pytest.raises(PackagesNotFoundError) as exc_info:
+        solver._maybe_raise_for_problems(problems, in_state, out_state)
+
+    assert "httpx==0.28.0" in str(exc_info.value)
+
+
+@pytest.mark.usefixtures("solver_rattler")
+@pytest.mark.parametrize(
+    "diagnostic_spec",
+    (
+        pytest.param("httpx [extras=[cli]]", id="bare-extras-conflict"),
+        pytest.param(
+            'httpx [extras=[cli], md5="7cb326b464b75a04aa57954631097aa4"]',
+            id="truncated-extras-and-md5",
+        ),
+    ),
+)
+def test_maybe_raise_for_problems_preserves_extras_conflict(
+    tmp_path: Path, diagnostic_spec: str
+) -> None:
+    """Preserve the solver diagnostic reported in conda/conda#16724 after a retry."""
+    prefix = tmp_path / "env"
+    solver = Solver(
+        prefix=prefix,
+        channels=(),
+        subdirs=("noarch",),
+        specs_to_add=(diagnostic_spec,),
+    )
+    in_state = SolverInputState(prefix, requested=(diagnostic_spec,))
+    out_state = SolverOutputState(solver_input_state=in_state)
+    problems = (
+        f"Cannot solve the request because of: {diagnostic_spec} "
+        "cannot be installed because there are no viable options:\n"
+        "└─ httpx 0.28.0 would require\n"
+        "   └─ rich <14,>=10, for which no candidates were found.\n"
+        "The following packages are incompatible\n"
+        "└─ httpx[cli] can be installed with any of the following options:\n"
+        "   └─ httpx[cli]\n"
+    )
+
+    solver._maybe_raise_for_problems(problems, in_state, out_state)
+
+    with pytest.raises(RattlerUnsatisfiableError) as exc_info:
+        solver._maybe_raise_for_problems(problems, in_state, out_state)
+
+    assert str(exc_info.value) == problems
+    assert exc_info.value.allow_retry is False
+
+
 @pytest.mark.parametrize(
     "python_depends,expected_names",
     (
@@ -1595,6 +1670,45 @@ def test_installed_packages_included_in_solver_benchmark(
 
         solution = benchmark(run)
         assert "test-package" in {record.name for record in solution}
+
+
+@pytest.mark.parametrize(
+    "channel_priority,expected_foo",
+    [
+        ("strict", "1.0"),
+        ("flexible", "1.0"),
+        ("disabled", "2.0"),
+    ],
+)
+def test_channel_priority_version_against_channel_order(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    channel_priority: str,
+    expected_foo: str,
+) -> None:
+    """
+    The higher-priority channel carries only ``foo 1.0``, while the
+    lower-priority channel carries ``foo 2.0``. Strict and flexible priority
+    should resolve ``foo`` from the higher-priority channel. However, only
+    disabled priority should trade the channel order for the newer version.
+    """
+    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", channel_priority)
+    reset_context()
+
+    channel_a = tmp_path / "channel-a"
+    _make_noarch_package(channel_a, "foo", "1.0")
+    channel_b = tmp_path / "channel-b"
+    _make_noarch_package(channel_b, "foo", "2.0")
+
+    solver = Solver(
+        prefix=str(tmp_path / "prefix"),
+        channels=[Channel(str(channel_a)), Channel(str(channel_b))],
+        subdirs=("noarch",),
+        specs_to_add=("foo",),
+    )
+    solution = solver.solve_final_state()
+    packages = {record.name: record.version for record in solution}
+    assert packages == {"foo": expected_foo}
 
 
 @pytest.mark.parametrize(
