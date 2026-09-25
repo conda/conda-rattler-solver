@@ -2,6 +2,68 @@
 
 [//]: # (current developments)
 
+## 0.2.0 (2026-09-16)
+
+### Enhancements
+
+* Publish releases to PyPI with trusted publishing and artifact attestations. (#83 via #109)
+* Suggest updating conda with `conda self` if conda self plugin is installed. (#96)
+* Map conda's flexible channel priority to rattler's `Flexible` mode, instead of falling back to `Disabled`. Solves under the default priority setting now prefer higher-priority channels, matching classic and libmamba solver behaviour. (#125 via #152)
+
+### Bug fixes
+
+* Preserve the installed `conda` package and its Python requirements during
+  `conda update python`, while honoring explicit Python pins and allowing
+  `conda` to change when requested or needed to resolve a dependency conflict.
+  (#100 via #137)
+* Support searching channels with sharded repodata as part of `RattlerIndexHelper`. (#111)
+* Fix `conda update --all` so Python is updated within the current major.minor series (e.g. 3.13.9 → 3.13.14), matching classic solver behavior. (#112 via #113)
+* Fix MatchSpec conversion for package extras, using py-rattler's support
+  for quoted extras. (#94 via #117 and #123)
+* Honor `add_pip_as_python_dependency` across normal, sharded, and offline
+  repodata sources. (#122)
+* Prevent updates from selecting package versions older than those already installed. (#126)
+* Retain installed packages that are unavailable from configured channels
+  during updates. (#88 via #129)
+* Load v3 package records from sharded channels via `iter_records_v3()`, fixing installs from v3-native channels. (#92 via #66)
+* Fix `InvalidMatchSpec` errors being raised when parsing rattler solver diagnostics that reference requested extras. (#154)
+
+### Deprecations
+
+* Require Python 3.11 or newer for conda packages to match py-rattler's
+  conda-forge builds. (#123)
+
+### Docs
+
+* Document installation and opt-in use of the beta solver. (#74)
+* Document running and adding benchmarks, and link to Bencher results. (#144)
+* Switch to using the new on-demand release process. (#80)
+
+### Other
+
+* Require `py-rattler >=0.26.0,<0.27.0a0`. (#123)
+* Track solver and index benchmarks with Bencher. (#144)
+* Require `conda >=26.7.0` for the shards `iter_records_v3()` API. (#66)
+* Fix tests failing locally by using conda-pypi for editable installs. (#82)
+* Enable infrastructure-managed Dependabot configuration via conda/infrastructure templates. (#84)
+* Add solve-time benchmarks comparing rattler vs libmamba for small, medium, and large environments, including conflict and cold/warm cache cases. (#118)
+
+### Contributors
+
+* @agriyakhetarpal made their first contribution in https://github.com/conda/conda-rattler-solver/pull/152
+* @danyeaw
+* @dholth
+* @jezdez
+* @kenodegard made their first contribution in https://github.com/conda/conda-rattler-solver/pull/95
+* @ForgottenProgramme made their first contribution in https://github.com/conda/conda-rattler-solver/pull/117
+* @ryanskeith made their first contribution in https://github.com/conda/conda-rattler-solver/pull/137
+* @soapy1
+* @travishathaway made their first contribution in https://github.com/conda/conda-rattler-solver/pull/154
+* @conda-bot
+* @dependabot[bot] made their first contribution in https://github.com/conda/conda-rattler-solver/pull/86
+
+
+
 ## 0.1.1 (2026-06-11)
 
 ### Enhancements

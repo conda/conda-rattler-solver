@@ -58,11 +58,11 @@ jobs:
             }
 
   build:
-    # PR label build::review, push to *.x release branches, or successful test workflow on main/feature/*.
+    # Manual dispatch, PR label build::review, push to *.x, or successful tests on main/feature/*.
     if: >-
       !github.event.repository.fork
       && (
-        (
+        github.event_name == 'workflow_dispatch' || (
           github.event_name == 'pull_request'
           && github.event.label.name == 'build::review'
         ) || (
@@ -160,6 +160,8 @@ jobs:
 
   report-canary-failure:
     needs: [build]
+    permissions:
+      issues: write
     # Only main and release (*.x) branches: feature/* canaries can fail without opening issues.
     if: >-
       always()
@@ -178,7 +180,7 @@ jobs:
     steps:
       - name: Report canary failure
         env:
-          GH_TOKEN: ${{ secrets.AUTO_REPORT_TEST_FAILURE }}
+          GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
         run: |
           TITLE="${{ github.workflow }} failed \`${BRANCH}\`"
