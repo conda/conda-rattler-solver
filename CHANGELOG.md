@@ -8,6 +8,7 @@
 
 * Publish releases to PyPI with trusted publishing and artifact attestations. (#83 via #109)
 * Suggest updating conda with `conda self` if conda self plugin is installed. (#96)
+* Map conda's flexible channel priority to rattler's `Flexible` mode, instead of falling back to `Disabled`. Solves under the default priority setting now prefer higher-priority channels, matching classic and libmamba solver behaviour. (#125 via #152)
 
 ### Bug fixes
 
@@ -25,6 +26,7 @@
 * Retain installed packages that are unavailable from configured channels
   during updates. (#88 via #129)
 * Load v3 package records from sharded channels via `iter_records_v3()`, fixing installs from v3-native channels. (#92 via #66)
+* Fix `InvalidMatchSpec` errors being raised when parsing rattler solver diagnostics that reference requested extras. (#154)
 
 ### Deprecations
 
@@ -44,9 +46,11 @@
 * Require `conda >=26.7.0` for the shards `iter_records_v3()` API. (#66)
 * Fix tests failing locally by using conda-pypi for editable installs. (#82)
 * Enable infrastructure-managed Dependabot configuration via conda/infrastructure templates. (#84)
+* Add solve-time benchmarks comparing rattler vs libmamba for small, medium, and large environments, including conflict and cold/warm cache cases. (#118)
 
 ### Contributors
 
+* @agriyakhetarpal made their first contribution in https://github.com/conda/conda-rattler-solver/pull/152
 * @danyeaw
 * @dholth
 * @jezdez
@@ -54,6 +58,7 @@
 * @ForgottenProgramme made their first contribution in https://github.com/conda/conda-rattler-solver/pull/117
 * @ryanskeith made their first contribution in https://github.com/conda/conda-rattler-solver/pull/137
 * @soapy1
+* @travishathaway made their first contribution in https://github.com/conda/conda-rattler-solver/pull/154
 * @conda-bot
 * @dependabot[bot] made their first contribution in https://github.com/conda/conda-rattler-solver/pull/86
 
