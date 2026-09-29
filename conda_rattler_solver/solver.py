@@ -584,6 +584,21 @@ class RattlerSolver(Solver):
                 if installed := in_state.installed.get(name):
                     locked_packages.append(installed)
 
+        if in_state.is_updating:
+            for i, spec in enumerate(specs):
+                spec = MatchSpec(spec)
+                if spec.get_raw_value("url"):
+                    # Gateway treats URL specs as download requests. Keep URL matching
+                    # in constraints so queries use only conda's cached records.
+                    constraints.append(spec)
+                    specs[i] = MatchSpec(
+                        {
+                            field: value
+                            for field in MatchSpec.FIELD_NAMES
+                            if field != "url" and (value := spec.get_raw_value(field)) is not None
+                        }
+                    )
+
         return {
             "specs": [conda_match_spec_to_rattler_match_spec(spec) for spec in specs],
             "constraints": [conda_match_spec_to_rattler_match_spec(spec) for spec in constraints],

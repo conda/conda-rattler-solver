@@ -63,6 +63,15 @@ class _ChannelRepoInfo:
     async def fetch_package_records(
         self, platform: rattler.Platform, name: rattler.PackageName
     ) -> list[rattler.RepoDataRecord]:
+        """Load conda's cached records with update build floors applied.
+
+        Lower builds of the installed version receive an unsatisfiable
+        self-dependency. Keeping these candidates visible preserves strict
+        channel priority while preventing the build downgrades in issue #126.
+        The changes affect only the returned records, not the cached repodata.
+
+        https://github.com/conda/conda-rattler-solver/issues/126
+        """
         if str(platform) != self.repo.subdir:
             return []
         records = self.repo.load_records(name, self.package_format)

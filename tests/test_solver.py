@@ -45,7 +45,12 @@ from .utils import conda_subprocess
 if TYPE_CHECKING:
     from os import PathLike
 
-    from conda.testing.fixtures import CondaCLIFixture, PipCLIFixture, TmpEnvFixture
+    from conda.testing.fixtures import (
+        CondaCLIFixture,
+        HttpTestServerFixture,
+        PipCLIFixture,
+        TmpEnvFixture,
+    )
     from pytest import MonkeyPatch
     from pytest_benchmark.fixture import BenchmarkFixture
 
@@ -379,6 +384,56 @@ def test_install_allows_explicit_build_downgrade(
         conda_cli("install", "foo=1.0=0", f"--prefix={prefix}", *args, "--yes")
         PrefixData._cache_.clear()
         assert PrefixData(prefix).get("foo").build_number == 0
+
+
+@pytest.mark.parametrize("extras", [(), ("feature",)])
+def test_update_resolves_url_specs_without_network_requests(
+    tmp_env: TmpEnvFixture,
+    http_test_server: HttpTestServerFixture,
+    monkeypatch: MonkeyPatch,
+    extras: tuple[str, ...],
+) -> None:
+    channel = http_test_server.directory
+    _make_noarch_package(channel, "foo", "0.5")
+    requests = []
+
+    class RecordingHandler(http_test_server.server.RequestHandlerClass):
+        def log_request(self, *args):
+            requests.append(self.path)
+            super().log_request(*args)
+
+    monkeypatch.setattr(http_test_server.server, "RequestHandlerClass", RecordingHandler)
+    with tmp_env("foo", "--override-channels", f"--channel={channel}") as prefix:
+        # A unique build prevents Rattler's archive cache from hiding a download.
+        _make_noarch_package(channel, "foo", "1.0", build=prefix.name)
+        _make_noarch_package(channel, "foo", "2.0")
+        _make_noarch_package(channel, "bar", "1.0")
+        filename = f"foo-1.0-{prefix.name}.tar.bz2"
+        repodata_path = channel / "noarch" / "repodata.json"
+        repodata = json.loads(repodata_path.read_text())
+        repodata["packages"][filename]["extra_depends"] = {"feature": ["bar"]}
+        repodata_path.write_text(json.dumps(repodata))
+        url = http_test_server.get_url(f"noarch/{filename}")
+        requested = (MatchSpec(name="foo", url=url, **({"extras": extras} if extras else {})),)
+        solver = Solver(
+            prefix=prefix,
+            channels=[Channel(http_test_server.url)],
+            subdirs=("noarch",),
+            specs_to_add=requested,
+            command="update",
+        )
+        in_state = SolverInputState(prefix, requested=requested, command="update")
+        out_state = SolverOutputState(solver_input_state=in_state)
+        index = RattlerIndexHelper(
+            channels=solver.channels, subdirs=("noarch",), in_state=in_state
+        )
+        requests.clear()
+        solution = solver._solve_attempt(in_state, out_state, index)
+        assert requests == []
+        assert isinstance(solution, list)
+        assert {record.name.source: str(record.version) for record in solution} == (
+            {"foo": "1.0", "bar": "1.0"} if extras else {"foo": "1.0"}
+        )
 
 
 def test_name_only_update_python_honors_named_package_lock(
