@@ -26,7 +26,7 @@ from rattler.exceptions import SolverError as RattlerSolverError
 
 from . import __version__
 from .exceptions import RattlerUnsatisfiableError
-from .index import RattlerIndexHelper
+from .index import RattlerIndexHelper, _UpdateRepoDataSource
 from .state import SolverInputState, SolverOutputState
 from .utils import (
     conda_match_spec_to_rattler_match_spec,
@@ -364,11 +364,23 @@ class RattlerSolver(Solver):
             ),
             "add_pip_as_python_dependency": context.add_pip_as_python_dependency,
         }
+        solve = rattler.solve_with_sparse_repodata
+        if in_state.is_updating:
+            # MatchSpec fields are combined with AND, so a build-number constraint
+            # would also reject newer versions whose build numbers start over at zero.
+            # Reject only lower builds of the installed version as records are loaded.
+            solve = rattler.solve
+            package_format = solve_kwargs.pop("package_format_selection")
+            solve_kwargs["sources"] = [
+                _UpdateRepoDataSource(repo, in_state.installed, package_format)
+                for repo in solve_kwargs.pop("sparse_repodata")
+            ]
+            solve_kwargs["platforms"] = index._subdirs
         if log.isEnabledFor(logging.DEBUG):
             dumped = json.dumps(solve_kwargs, indent=2, default=str, sort_keys=True)
             log.debug("Solver input for attempt %s:\n%s", attempt, dumped)
         try:
-            solution = asyncio.run(rattler.solve_with_sparse_repodata(**solve_kwargs))
+            solution = asyncio.run(solve(**solve_kwargs))
         except RattlerSolverError as exc:
             self._maybe_raise_for_problems(str(exc), in_state, out_state)
             return exc
@@ -667,7 +679,7 @@ class RattlerSolver(Solver):
         context for an error report. Two exceptions may be raised:
         - PackagesNotFoundError: One or more packages are missing in the channel
         - RattlerUnsatisfiableError: A solver conflict was found
-        
+
         When called from conda-build, the parsed specs are dispatched to
         `._maybe_raise_for_conda_build()`.
 
@@ -689,9 +701,17 @@ class RattlerSolver(Solver):
                     f"{words[0]} {words[1]}"
                 )
             elif "which cannot be installed because there are no viable options" in line:
-                unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(
-                    f"{words[0]} {words[1].strip(',')}"
-                )
+                spec = matchspec_from_solver_diagnostic(f"{words[0]} {words[1].strip(',')}")
+                unsatisfiable[spec.name] = spec
+                if (
+                    in_state.is_updating
+                    and (installed := in_state.installed.get(spec.name))
+                    and spec.get_raw_value("build_number") == f">={installed.build_number}"
+                    and spec.match(installed)
+                ):
+                    # Strict priority can exclude every candidate meeting the build
+                    # floor, while the installed record can still satisfy it.
+                    out_state.installed_without_candidates.add(spec.name)
             elif "cannot be installed because there are no viable options" in line:
                 unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(
                     f"{words[0]} {words[1]}"

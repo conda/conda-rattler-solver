@@ -29,7 +29,7 @@ except ImportError:
 from .utils import empty_repodata_dict, rattler_record_to_conda_record
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
     from typing import Self
 
     from conda.common.path import PathsType
@@ -52,6 +52,39 @@ class _ChannelRepoInfo:
     full_url: str
     noauth_url: str
     local_json: str | None
+
+
+@dataclass
+class _UpdateRepoDataSource:
+    """Keep lower builds of an installed version out of update solutions."""
+
+    repo: rattler.SparseRepoData
+    installed: Mapping[str, PackageRecord]
+    package_format: rattler.PackageFormatSelection
+
+    def package_names(self, platform: rattler.Platform) -> list[str]:
+        if str(platform) != self.repo.subdir:
+            return []
+        return self.repo.package_names(self.package_format)
+
+    async def fetch_package_records(
+        self, platform: rattler.Platform, name: rattler.PackageName
+    ) -> list[rattler.RepoDataRecord]:
+        if str(platform) != self.repo.subdir:
+            return []
+        records = self.repo.load_records(name, self.package_format)
+        installed = self.installed.get(name.normalized)
+        if installed and not installed.is_unmanageable:
+            version = rattler.Version(installed.version)
+            for record in records:
+                if record.version == version and record.build_number < installed.build_number:
+                    # Keep the candidate visible to strict channel priority, but make
+                    # its own build number incompatible with the installed build floor.
+                    record.depends = [
+                        *record.depends,
+                        f"{name.normalized}[build_number='>={installed.build_number}']",
+                    ]
+        return records
 
 
 def _is_sharded_repodata_enabled():

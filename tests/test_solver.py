@@ -59,6 +59,7 @@ def _make_noarch_package(
     version: str,
     build: str = "0",
     depends: tuple[str, ...] = (),
+    build_number: int = 0,
 ) -> None:
     """
     Write a minimal (content-free) noarch package tarball into ``channel_dir / "noarch"``,
@@ -70,7 +71,7 @@ def _make_noarch_package(
     index_json = {
         "arch": None,
         "build": build,
-        "build_number": 0,
+        "build_number": build_number,
         "depends": list(depends),
         "name": name,
         "noarch": "generic",
@@ -271,6 +272,116 @@ def test_update_from_latest_not_downgrade(
         )
         update_python = PrefixData(prefix).get("python")
         assert original_python.version == update_python.version
+
+
+@pytest.mark.parametrize("update_args", [("--all",), ("libxml2",)])
+def test_update_does_not_downgrade_installed_builds(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+    update_args: tuple[str, ...],
+) -> None:
+    """Updating libxml2 must not replace gettext with an older build (#126)."""
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "libxml2", "2.15.3")
+    _make_noarch_package(
+        channel,
+        "gettext",
+        "0.25.1",
+        build="2",
+        build_number=2,
+        depends=("libxml2 2.15.3.*",),
+    )
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("gettext", "libxml2", *args) as prefix:
+        _make_noarch_package(channel, "libxml2", "2.15.4")
+        _make_noarch_package(channel, "gettext", "0.25.1", build="0")
+        conda_cli("update", f"--prefix={prefix}", *update_args, *args, "--yes")
+        PrefixData._cache_.clear()
+        records = PrefixData(prefix)
+        assert records.get("gettext").build_number == 2
+        assert records.get("libxml2").version == "2.15.3"
+
+
+def test_update_build_protection_preserves_strict_channel_priority(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+) -> None:
+    high = tmp_path / "high"
+    low = tmp_path / "low"
+    _make_noarch_package(high, "foo", "1.0", build="0")
+    _make_noarch_package(low, "foo", "1.0", build="2", build_number=2)
+    args = ("--override-channels", "--solver=rattler", "--strict-channel-priority")
+    with tmp_env("foo", f"--channel={low}", *args) as prefix:
+        _make_noarch_package(low, "foo", "2.0")
+        conda_cli(
+            "update",
+            "--all",
+            f"--prefix={prefix}",
+            f"--channel={high}",
+            f"--channel={low}",
+            *args,
+            "--yes",
+        )
+        PrefixData._cache_.clear()
+        retained = PrefixData(prefix).get("foo")
+        assert (retained.version, retained.build_number) == ("1.0", 2)
+
+
+def test_update_keeps_unavailable_installed_build(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+) -> None:
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "foo", "1.0", build="2", build_number=2)
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("foo", *args) as prefix:
+        repodata_path = channel / "noarch" / "repodata.json"
+        repodata = json.loads(repodata_path.read_text())
+        repodata["packages"].clear()
+        repodata_path.write_text(json.dumps(repodata))
+        _make_noarch_package(channel, "foo", "1.0", build="0")
+        conda_cli("update", "--all", f"--prefix={prefix}", *args, "--yes")
+        PrefixData._cache_.clear()
+        assert PrefixData(prefix).get("foo").build_number == 2
+
+
+@pytest.mark.parametrize("version,build_number", [("1.0", 3), ("2.0", 0)])
+def test_update_all_allows_newer_versions_and_builds(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+    version: str,
+    build_number: int,
+) -> None:
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "foo", "1.0", build="2", build_number=2)
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("foo", *args) as prefix:
+        _make_noarch_package(
+            channel, "foo", version, build=str(build_number), build_number=build_number
+        )
+        conda_cli("update", "--all", f"--prefix={prefix}", *args, "--yes")
+        PrefixData._cache_.clear()
+        updated = PrefixData(prefix).get("foo")
+        assert (updated.version, updated.build_number) == (version, build_number)
+
+
+def test_install_allows_explicit_build_downgrade(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+) -> None:
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "foo", "1.0", build="2", build_number=2)
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("foo", *args) as prefix:
+        _make_noarch_package(channel, "foo", "1.0", build="0")
+        conda_cli("install", "foo=1.0=0", f"--prefix={prefix}", *args, "--yes")
+        PrefixData._cache_.clear()
+        assert PrefixData(prefix).get("foo").build_number == 0
 
 
 def test_name_only_update_python_honors_named_package_lock(
