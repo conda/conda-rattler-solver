@@ -338,10 +338,7 @@ def test_update_keeps_unavailable_installed_build(
     _make_noarch_package(channel, "foo", "1.0", build="2", build_number=2)
     args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
     with tmp_env("foo", *args) as prefix:
-        repodata_path = channel / "noarch" / "repodata.json"
-        repodata = json.loads(repodata_path.read_text())
-        repodata["packages"].clear()
-        repodata_path.write_text(json.dumps(repodata))
+        (channel / "noarch" / "repodata.json").unlink()
         _make_noarch_package(channel, "foo", "1.0", build="0")
         conda_cli("update", "--all", f"--prefix={prefix}", *args, "--yes")
         PrefixData._cache_.clear()

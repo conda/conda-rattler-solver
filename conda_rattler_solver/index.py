@@ -45,20 +45,13 @@ log = logging.getLogger(f"conda.{__name__}")
 
 @dataclass
 class _ChannelRepoInfo:
-    "A dataclass mapping conda Channels, rattler.SparseRepoData, URLs and JSON paths"
+    """Channel metadata and a record source for update solves."""
 
     channel: Channel | None
     repo: rattler.SparseRepoData
     full_url: str
     noauth_url: str
     local_json: str | None
-
-
-@dataclass
-class _UpdateRepoDataSource:
-    """Keep lower builds of an installed version out of update solutions."""
-
-    repo: rattler.SparseRepoData
     installed: Mapping[str, PackageRecord]
     package_format: rattler.PackageFormatSelection
 
@@ -214,6 +207,8 @@ class RattlerIndexHelper:
             full_url=url,
             noauth_url=noauth_url,
             local_json=json_path,
+            installed=self.in_state.installed if self.in_state else {},
+            package_format=self._package_format,
         )
 
     def _urls_from_channels(self, channels: Iterable[Channel | str] | None = None) -> tuple[str]:
@@ -403,6 +398,8 @@ class RattlerIndexHelper:
                         full_url=path_as_url,
                         noauth_url=path_as_url,
                         local_json=f.name,
+                        installed=self.in_state.installed if self.in_state else {},
+                        package_format=self._package_format,
                     )
                 )
                 self._unlink_on_del.append(Path(f.name))

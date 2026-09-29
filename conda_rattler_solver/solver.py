@@ -26,7 +26,7 @@ from rattler.exceptions import SolverError as RattlerSolverError
 
 from . import __version__
 from .exceptions import RattlerUnsatisfiableError
-from .index import RattlerIndexHelper, _UpdateRepoDataSource
+from .index import RattlerIndexHelper
 from .state import SolverInputState, SolverOutputState
 from .utils import (
     conda_match_spec_to_rattler_match_spec,
@@ -353,29 +353,23 @@ class RattlerSolver(Solver):
         """
         solve_kwargs = {
             **self._collect_specs(in_state, out_state),
-            "sparse_repodata": [info.repo for info in index._index.values()],
             "virtual_packages": self._rattler_virtual_packages(in_state),
             "channel_priority": CHANNEL_PRIORITY_MAP[context.channel_priority],
             "strategy": "highest",
-            "package_format_selection": (
-                rattler.PackageFormatSelection.ONLY_TAR_BZ2
-                if context.use_only_tar_bz2
-                else rattler.PackageFormatSelection.PREFER_CONDA_WITH_WHL
-            ),
             "add_pip_as_python_dependency": context.add_pip_as_python_dependency,
         }
-        solve = rattler.solve_with_sparse_repodata
         if in_state.is_updating:
             # MatchSpec fields are combined with AND, so a build-number constraint
             # would also reject newer versions whose build numbers start over at zero.
             # Reject only lower builds of the installed version as records are loaded.
             solve = rattler.solve
-            package_format = solve_kwargs.pop("package_format_selection")
-            solve_kwargs["sources"] = [
-                _UpdateRepoDataSource(repo, in_state.installed, package_format)
-                for repo in solve_kwargs.pop("sparse_repodata")
-            ]
-            solve_kwargs["platforms"] = index._subdirs
+            solve_kwargs.update(sources=list(index._index.values()), platforms=index._subdirs)
+        else:
+            solve = rattler.solve_with_sparse_repodata
+            solve_kwargs.update(
+                sparse_repodata=[info.repo for info in index._index.values()],
+                package_format_selection=index._package_format,
+            )
         if log.isEnabledFor(logging.DEBUG):
             dumped = json.dumps(solve_kwargs, indent=2, default=str, sort_keys=True)
             log.debug("Solver input for attempt %s:\n%s", attempt, dumped)
