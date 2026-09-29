@@ -1,0 +1,11 @@
+### Enhancements
+
+### Bug fixes
+
+* Prevent updates from selecting lower build numbers at the installed version while still allowing newer versions whose build numbers start over at zero. (#126)
+
+### Deprecations
+
+### Docs
+
+### Other

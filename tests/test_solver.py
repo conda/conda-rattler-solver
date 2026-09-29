@@ -45,7 +45,12 @@ from .utils import conda_subprocess
 if TYPE_CHECKING:
     from os import PathLike
 
-    from conda.testing.fixtures import CondaCLIFixture, PipCLIFixture, TmpEnvFixture
+    from conda.testing.fixtures import (
+        CondaCLIFixture,
+        HttpTestServerFixture,
+        PipCLIFixture,
+        TmpEnvFixture,
+    )
     from pytest import MonkeyPatch
     from pytest_benchmark.fixture import BenchmarkFixture
 
@@ -59,6 +64,7 @@ def _make_noarch_package(
     version: str,
     build: str = "0",
     depends: tuple[str, ...] = (),
+    build_number: int = 0,
 ) -> None:
     """
     Write a minimal (content-free) noarch package tarball into ``channel_dir / "noarch"``,
@@ -70,7 +76,7 @@ def _make_noarch_package(
     index_json = {
         "arch": None,
         "build": build,
-        "build_number": 0,
+        "build_number": build_number,
         "depends": list(depends),
         "name": name,
         "noarch": "generic",
@@ -271,6 +277,163 @@ def test_update_from_latest_not_downgrade(
         )
         update_python = PrefixData(prefix).get("python")
         assert original_python.version == update_python.version
+
+
+@pytest.mark.parametrize("update_args", [("--all",), ("libxml2",)])
+def test_update_does_not_downgrade_installed_builds(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+    update_args: tuple[str, ...],
+) -> None:
+    """Updating libxml2 must not replace gettext with an older build (#126)."""
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "libxml2", "2.15.3")
+    _make_noarch_package(
+        channel,
+        "gettext",
+        "0.25.1",
+        build="2",
+        build_number=2,
+        depends=("libxml2 2.15.3.*",),
+    )
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("gettext", "libxml2", *args) as prefix:
+        _make_noarch_package(channel, "libxml2", "2.15.4")
+        _make_noarch_package(channel, "gettext", "0.25.1", build="0")
+        conda_cli("update", f"--prefix={prefix}", *update_args, *args, "--yes")
+        PrefixData._cache_.clear()
+        records = PrefixData(prefix)
+        assert records.get("gettext").build_number == 2
+        assert records.get("libxml2").version == "2.15.3"
+
+
+def test_update_build_protection_preserves_strict_channel_priority(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+) -> None:
+    high = tmp_path / "high"
+    low = tmp_path / "low"
+    _make_noarch_package(high, "foo", "1.0", build="0")
+    _make_noarch_package(low, "foo", "1.0", build="2", build_number=2)
+    args = ("--override-channels", "--solver=rattler", "--strict-channel-priority")
+    with tmp_env("foo", f"--channel={low}", *args) as prefix:
+        _make_noarch_package(low, "foo", "2.0")
+        conda_cli(
+            "update",
+            "--all",
+            f"--prefix={prefix}",
+            f"--channel={high}",
+            f"--channel={low}",
+            *args,
+            "--yes",
+        )
+        PrefixData._cache_.clear()
+        retained = PrefixData(prefix).get("foo")
+        assert (retained.version, retained.build_number) == ("1.0", 2)
+
+
+def test_update_keeps_unavailable_installed_build(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+) -> None:
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "foo", "1.0", build="2", build_number=2)
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("foo", *args) as prefix:
+        (channel / "noarch" / "repodata.json").unlink()
+        _make_noarch_package(channel, "foo", "1.0", build="0")
+        conda_cli("update", "--all", f"--prefix={prefix}", *args, "--yes")
+        PrefixData._cache_.clear()
+        assert PrefixData(prefix).get("foo").build_number == 2
+
+
+@pytest.mark.parametrize("version,build_number", [("1.0", 3), ("2.0", 0)])
+def test_update_all_allows_newer_versions_and_builds(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+    version: str,
+    build_number: int,
+) -> None:
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "foo", "1.0", build="2", build_number=2)
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("foo", *args) as prefix:
+        _make_noarch_package(
+            channel, "foo", version, build=str(build_number), build_number=build_number
+        )
+        conda_cli("update", "--all", f"--prefix={prefix}", *args, "--yes")
+        PrefixData._cache_.clear()
+        updated = PrefixData(prefix).get("foo")
+        assert (updated.version, updated.build_number) == (version, build_number)
+
+
+def test_install_allows_explicit_build_downgrade(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+) -> None:
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "foo", "1.0", build="2", build_number=2)
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("foo", *args) as prefix:
+        _make_noarch_package(channel, "foo", "1.0", build="0")
+        conda_cli("install", "foo=1.0=0", f"--prefix={prefix}", *args, "--yes")
+        PrefixData._cache_.clear()
+        assert PrefixData(prefix).get("foo").build_number == 0
+
+
+@pytest.mark.parametrize("extras", [(), ("feature",)])
+def test_update_resolves_url_specs_without_network_requests(
+    tmp_env: TmpEnvFixture,
+    http_test_server: HttpTestServerFixture,
+    monkeypatch: MonkeyPatch,
+    extras: tuple[str, ...],
+) -> None:
+    channel = http_test_server.directory
+    _make_noarch_package(channel, "foo", "0.5")
+    requests = []
+
+    class RecordingHandler(http_test_server.server.RequestHandlerClass):
+        def log_request(self, *args):
+            requests.append(self.path)
+            super().log_request(*args)
+
+    monkeypatch.setattr(http_test_server.server, "RequestHandlerClass", RecordingHandler)
+    with tmp_env("foo", "--override-channels", f"--channel={channel}") as prefix:
+        # A unique build prevents Rattler's archive cache from hiding a download.
+        _make_noarch_package(channel, "foo", "1.0", build=prefix.name)
+        _make_noarch_package(channel, "foo", "2.0")
+        _make_noarch_package(channel, "bar", "1.0")
+        filename = f"foo-1.0-{prefix.name}.tar.bz2"
+        repodata_path = channel / "noarch" / "repodata.json"
+        repodata = json.loads(repodata_path.read_text())
+        repodata["packages"][filename]["extra_depends"] = {"feature": ["bar"]}
+        repodata_path.write_text(json.dumps(repodata))
+        url = http_test_server.get_url(f"noarch/{filename}")
+        requested = (MatchSpec(name="foo", url=url, **({"extras": extras} if extras else {})),)
+        solver = Solver(
+            prefix=prefix,
+            channels=[Channel(http_test_server.url)],
+            subdirs=("noarch",),
+            specs_to_add=requested,
+            command="update",
+        )
+        in_state = SolverInputState(prefix, requested=requested, command="update")
+        out_state = SolverOutputState(solver_input_state=in_state)
+        index = RattlerIndexHelper(
+            channels=solver.channels, subdirs=("noarch",), in_state=in_state
+        )
+        requests.clear()
+        solution = solver._solve_attempt(in_state, out_state, index)
+        assert requests == []
+        assert isinstance(solution, list)
+        assert {record.name.source: str(record.version) for record in solution} == (
+            {"foo": "1.0", "bar": "1.0"} if extras else {"foo": "1.0"}
+        )
 
 
 def test_name_only_update_python_honors_named_package_lock(
