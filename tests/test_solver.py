@@ -2003,14 +2003,6 @@ def test_channel_priority_updates_installed_dependency_two(
         assert packages["bar"] == "3.0"
 
 
-@pytest.mark.xfail(
-    reason=(
-        "known issue: c-r-s update semantics strictly require '>=' for each package that "
-        "exists in the prefix. This causes Unsatisfiable errors when modifying channels. "
-        "xref: https://github.com/conda/conda-rattler-solver/issues/135"
-    ),
-    strict=True,
-)
 @pytest.mark.usefixtures("solver_rattler")
 def test_can_update_env_with_python(
     tmp_env: TmpEnvFixture,
@@ -2029,29 +2021,6 @@ def test_can_update_env_with_python(
             "--dry-run",
             "--json",
             "--all",
-            raises=DryRunExit,
-        )
-        data = json.loads(out)
-        assert data["success"] is True, err
-
-def test_can_update_env_with_python(
-    tmp_env: TmpEnvFixture,
-    conda_cli: CondaCLIFixture,
-) -> None:
-    """
-    Ensure that we can run an update when python is in the environment
-    """
-
-    with tmp_env("--override-channels", "--channel=defaults", "python", "--solver=rattler") as prefix:
-        out, err, exc = conda_cli(
-            "update",
-            f"--prefix={prefix}",
-            "--override-channels",
-            "--channel=conda-forge",
-            "--dry-run",
-            "--json",
-            "--all",
-            "--solver=rattler",
             raises=DryRunExit,
         )
         data = json.loads(out)
