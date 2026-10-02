@@ -58,6 +58,7 @@ def _make_noarch_package(
     name: str,
     version: str,
     build: str = "0",
+    build_number: int = 0,
     depends: tuple[str, ...] = (),
 ) -> None:
     """
@@ -70,7 +71,7 @@ def _make_noarch_package(
     index_json = {
         "arch": None,
         "build": build,
-        "build_number": 0,
+        "build_number": build_number,
         "depends": list(depends),
         "name": name,
         "noarch": "generic",
@@ -2003,33 +2004,56 @@ def test_channel_priority_updates_installed_dependency_two(
         assert packages["bar"] == "3.0"
 
 
-@pytest.mark.xfail(
-    reason=(
-        "known issue: c-r-s update semantics strictly require '>=' for each package that "
-        "exists in the prefix. This causes Unsatisfiable errors when modifying channels. "
-        "xref: https://github.com/conda/conda-rattler-solver/issues/135"
-    ),
-    strict=True,
-)
 @pytest.mark.usefixtures("solver_rattler")
 def test_can_update_env_with_python(
+    tmp_path: Path,
     tmp_env: TmpEnvFixture,
     conda_cli: CondaCLIFixture,
 ) -> None:
     """
-    Ensure that we can run an update when python is in the environment
-    """
+    Ensure that we can run an update when python is in the environment and the
+    channel changes, even if the new channel does not publish versions that are at
+    least as new as the installed ones (e.g. moving from defaults to conda-forge).
 
-    with tmp_env("--override-channels", "--channel=defaults", "python") as prefix:
+    xref: https://github.com/conda/conda-rattler-solver/issues/135
+    """
+    # Original environment, standing in for "defaults": python -> openssl=3.5, zlib.
+    # pip is needed because conda adds it as a python dependency by default.
+    channel_b = tmp_path / "channel-b"
+    _make_noarch_package(channel_b, "pip", "25.0", depends=("python",))
+    _make_noarch_package(channel_b, "openssl", "3.5.0")
+    _make_noarch_package(channel_b, "zlib", "1.3.2")
+    _make_noarch_package(channel_b, "python", "3.13.1", depends=("openssl >=3", "zlib"))
+
+    # The new channel, standing in for "conda-forge", has the same python and zlib
+    # versions (zlib with a higher build number), but only an older openssl than
+    # the one installed.
+    chan_a = tmp_path / "chan-a"
+    _make_noarch_package(chan_a, "pip", "25.0", depends=("python",))
+    _make_noarch_package(chan_a, "openssl", "3.4.0")
+    _make_noarch_package(chan_a, "zlib", "1.3.2", build="1", build_number=1)
+    _make_noarch_package(chan_a, "python", "3.13.1", depends=("openssl >=3", "zlib"))
+
+    with tmp_env("--override-channels", f"--channel={channel_b}", "python") as prefix:
         out, err, exc = conda_cli(
             "update",
             f"--prefix={prefix}",
             "--override-channels",
-            "--channel=conda-forge",
+            f"--channel={chan_a}",
+            "--all",
             "--dry-run",
             "--json",
-            "--all",
             raises=DryRunExit,
         )
         data = json.loads(out)
         assert data["success"] is True, err
+
+        linked = {pkg["name"]: pkg for pkg in data["actions"].get("LINK", ())}
+
+        # zlib keeps its version but moves to the new channel's build
+        assert linked["zlib"]["version"] == "1.3.2"
+        assert linked["zlib"]["build_number"] == 1
+        assert linked["zlib"]["channel"].endswith("chan-a")
+
+        # python keeps its installed version
+        assert linked.get("python", {"version": "3.13.1"})["version"] == "3.13.1"
