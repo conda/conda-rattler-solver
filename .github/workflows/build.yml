@@ -1,4 +1,5 @@
-# edit this in https://github.com/conda/infrastructure
+# This workflow is maintained locally (not synced from conda/infrastructure)
+# because it builds canaries with rattler-build rather than conda-build.
 
 name: Canary Builds
 
@@ -85,10 +86,8 @@ jobs:
     strategy:
       matrix:
         include:
-          # template-files-if
           - runs-on: ubuntu-latest
             subdir: noarch
-          # template-files-else
     runs-on: ${{ matrix.runs-on }}
     steps:
       # Clean checkout of specific git ref needed for package metadata version
@@ -100,7 +99,7 @@ jobs:
           clean: true
           fetch-depth: 0
 
-      # Use Python 3.14 on Windows ARM64 and Python 3.11 elsewhere.
+      # Python is needed for the label detection step and anaconda-client.
       - name: Setup Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -144,21 +143,84 @@ jobs:
 
           Path(environ["GITHUB_ENV"]).write_text("\n".join(f"{name}={value}" for name, value in envs.items()))
 
-      - name: Create & Upload
-        uses: conda/actions/canary-release@ade1a3a5e5b7d3d124a03bf5d8c841645fb92a37 # v26.9.4
-        env:
-          _CONDA_BUILD_ISOLATED_ACTIVATION: 1
+      # conda/actions/canary-release only supports conda-build, so the canary is
+      # built with rattler-build (recipe/recipe.yaml) and uploaded with anaconda-client.
+      - name: Comment build started
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
-          package-name: ${{ github.event.repository.name }}
-          subdir: ${{ matrix.subdir }}
-          base-architecture: ${{ matrix.subdir == 'win-arm64' && 'x64' || '' }}
-          # template-files-if
-          anaconda-org-channel: conda-canary
-          anaconda-org-label: ${{ env.ANACONDA_ORG_LABEL }}
-          anaconda-org-token: ${{ secrets.ANACONDA_ORG_CONDA_CANARY_TOKEN }}
-          # Only comment on PRs
-          comment-headline: Review build status
-          comment-token: ${{ github.event_name == 'pull_request' && secrets.CANARY_ACTION_TOKEN || '' }}
+          message: |
+            # Review build status
+            > The workflow for building and uploading a canary release for ${{ github.event.repository.name }} with the label `${{ env.ANACONDA_ORG_LABEL }}` in channel `conda-canary` [was started](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) by @${{ github.actor }}!
+
+            Once it's done, use this command to try it out in a new conda environment:
+
+            ```
+            conda install -c conda-canary/label/${{ env.ANACONDA_ORG_LABEL }} ${{ github.event.repository.name }}
+            ```
+          GITHUB_TOKEN: ${{ secrets.CANARY_ACTION_TOKEN }}
+
+      - name: Install rattler-build
+        uses: prefix-dev/rattler-build-action@1ca5f45832f419a46d1326ccc5861d7e14d67c44 # v0.2.39
+        with:
+          rattler-build-version: v0.76.1
+          setup-only: true
+
+      - name: Build package
+        id: build
+        shell: bash
+        run: |
+          # the recipe uses git.* jinja functions, which are experimental
+          rattler-build build \
+            --experimental \
+            --recipe recipe/recipe.yaml \
+            --channel conda-forge \
+            --output-dir ./pkgs
+
+      - name: Find packages
+        id: packages
+        shell: bash
+        run: |
+          shopt -s nullglob
+          PACKAGES=(./pkgs/${{ matrix.subdir }}/${{ github.event.repository.name }}-*.conda)
+          if [[ ${#PACKAGES[@]} -eq 0 ]]; then
+            echo "::error::No ${{ github.event.repository.name }} packages found in ./pkgs/${{ matrix.subdir }}"
+            exit 1
+          fi
+          printf '%s\n' "${PACKAGES[@]}"
+          echo "paths=${PACKAGES[*]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to anaconda.org
+        shell: bash
+        env:
+          BINSTAR_API_TOKEN: ${{ secrets.ANACONDA_ORG_CONDA_CANARY_TOKEN }}
+        run: |
+          python -m pip install --quiet anaconda-client
+          anaconda upload \
+            --force \
+            --register \
+            --no-progress \
+            --user conda-canary \
+            --label "${ANACONDA_ORG_LABEL}" \
+            ${{ steps.packages.outputs.paths }}
+
+      - name: Comment build succeeded
+        if: github.event_name == 'pull_request' && success()
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          append: true
+          message: |
+            - build [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) succeeded on ${{ runner.os }} (${{ runner.arch }})
+          GITHUB_TOKEN: ${{ secrets.CANARY_ACTION_TOKEN }}
+
+      - name: Comment build failed
+        if: github.event_name == 'pull_request' && failure()
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+        with:
+          append: true
+          message: |
+            - build [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) failed on ${{ runner.os }} (${{ runner.arch }})
+          GITHUB_TOKEN: ${{ secrets.CANARY_ACTION_TOKEN }}
 
   report-canary-failure:
     needs: [build]
