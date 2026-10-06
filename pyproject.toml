@@ -60,9 +60,9 @@ hatchling = ">=1.12.2"
 hatch-vcs = ">=0.2.0"
 
 [tool.pixi.feature.build]
-dependencies = { conda-build = "*" }
+dependencies = { rattler-build = "*" }
 [tool.pixi.feature.build.tasks]
-build = { cmd = "conda build recipe", env = {CONDA_SOLVER = "libmamba"} }
+build = "rattler-build build --experimental --recipe recipe/recipe.yaml --channel conda-forge"
 
 [tool.pixi.feature.lint.dependencies]
 python = "3.12.*"
