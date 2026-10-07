@@ -22,13 +22,6 @@ requirements:
     - pip
     - hatchling
     - hatch-vcs
-  # NOTE: when bumping the py-rattler pin past what the conda-forge conda-rattler-solver
-  # allows, `conda build` fails before building anything: it pre-solves the test env
-  # (run + test/requires) WITHOUT the package under build, and conda -> conda-rattler-solver
-  # -> old py-rattler is unsatisfiable. This is solver-independent (libmamba fails the same).
-  # Workaround: `conda build recipe --no-test`, then
-  # `conda build --test <output>/noarch/conda-rattler-solver-*.conda`
-  # (the test phase does include the local build, so it solves fine).
   run:
     - python >=3.11
     - conda >=26.7.0
