@@ -8,6 +8,8 @@ source:
   # captures committed code, so pay attention.
   git_url: ../
   folder: src/
+  patches:
+    - version-bump.patch
 
 build:
   noarch: python
@@ -20,10 +22,17 @@ requirements:
     - pip
     - hatchling
     - hatch-vcs
+  # NOTE: when bumping the py-rattler pin past what the conda-forge conda-rattler-solver
+  # allows, `conda build` fails before building anything: it pre-solves the test env
+  # (run + test/requires) WITHOUT the package under build, and conda -> conda-rattler-solver
+  # -> old py-rattler is unsatisfiable. This is solver-independent (libmamba fails the same).
+  # Workaround: `conda build recipe --no-test`, then
+  # `conda build --test <output>/noarch/conda-rattler-solver-*.conda`
+  # (the test phase does include the local build, so it solves fine).
   run:
     - python >=3.11
     - conda >=26.7.0
-    - py-rattler >=0.26.0,<0.27.0a0
+    - py-rattler >=0.27.0,<0.28.0a0
 
 test:
   requires:
