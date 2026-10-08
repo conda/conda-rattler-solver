@@ -59,6 +59,7 @@ def _make_noarch_package(
     version: str,
     build: str = "0",
     depends: tuple[str, ...] = (),
+    build_number: int = 0,
 ) -> None:
     """
     Write a minimal (content-free) noarch package tarball into ``channel_dir / "noarch"``,
@@ -70,7 +71,7 @@ def _make_noarch_package(
     index_json = {
         "arch": None,
         "build": build,
-        "build_number": 0,
+        "build_number": build_number,
         "depends": list(depends),
         "name": name,
         "noarch": "generic",
