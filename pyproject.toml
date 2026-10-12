@@ -105,6 +105,10 @@ default-environment = "test-py313"
 CONDA_TEST_SOLVERS = "rattler"
 CONDA_TEST_DATA_DIR = "$PIXI_PROJECT_ROOT/../conda/tests/data"
 CONDA_CHANNELS = "conda-forge"
+# Set (but empty) so conda's autouse `PYTHONPATH` fixture doesn't point it at the
+# pixi env's site-packages, which leaks into post-link scripts of test envs that
+# use a different Python version.
+PYTHONPATH = ""
 
 [tool.pixi.feature.test.tasks.benchmark]
 cmd = "python -m pytest -m benchmark --benchmark-only"
@@ -114,6 +118,8 @@ default-environment = "test-py313"
 CONDA_TEST_SOLVERS = "rattler"
 CONDA_TEST_DATA_DIR = "$PIXI_PROJECT_ROOT/../conda/tests/data"
 CONDA_CHANNELS = "conda-forge"
+# See the note on the `test` task above.
+PYTHONPATH = ""
 
 [tool.pixi.feature.test.dependencies]
 anaconda-client = "*"
