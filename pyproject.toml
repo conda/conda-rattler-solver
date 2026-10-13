@@ -106,8 +106,7 @@ CONDA_TEST_SOLVERS = "rattler"
 CONDA_TEST_DATA_DIR = "$PIXI_PROJECT_ROOT/../conda/tests/data"
 CONDA_CHANNELS = "conda-forge"
 # Set (but empty) so conda's autouse `PYTHONPATH` fixture doesn't point it at the
-# pixi env's site-packages, which leaks into post-link scripts of test envs that
-# use a different Python version.
+# pixi env's site-packages.
 PYTHONPATH = ""
 
 [tool.pixi.feature.test.tasks.benchmark]
