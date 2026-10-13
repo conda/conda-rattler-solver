@@ -48,7 +48,7 @@ Placeholder for `conda-rattler-solver MAJOR.MINOR.PATCH` release.
 - [ ] Create release PR (see [release process][process])
 - [ ] Create Zulip thread on [#releases][zulip]
     - [ ] Announce `MAJOR.MINOR.PATCH` in-progress
-- [ ] [Publish release][releases]
+- [ ] Push the `MAJOR.MINOR.PATCH` tag and complete the release workflow
 - [ ] Bump/update feedstocks
     - [ ] [Anaconda, Inc.'s feedstock][main]
     - [ ] [conda-forge feedstock][conda-forge]
@@ -69,15 +69,15 @@ Install [`rever`][rever docs] using whatever your project defines (e.g., a conda
 1. Clone and `cd` into the repository if you haven't done so already:
 
     ```bash
-    $ git clone git@github.com:/conda-rattler-solver.git
+    $ git clone git@github.com:conda/conda-rattler-solver.git
     $ cd conda-rattler-solver
     ```
 
 2. Fetch the latest changes and create a versioned branch off `main` for the release PR:
 
     ```bash
-    $ git fetch upstream
-    $ git switch -c changelog-MAJOR.MINOR.PATCH --no-track upstream/main
+    $ git fetch origin
+    $ git switch -c changelog-MAJOR.MINOR.PATCH --no-track origin/main
     ```
 
 3. Run `rever --activities authors --force MAJOR.MINOR.PATCH`:
@@ -138,7 +138,7 @@ Install [`rever`][rever docs] using whatever your project defines (e.g., a conda
 8. Push the versioned branch:
 
     ```bash
-    $ git push -u upstream
+    $ git push -u origin HEAD
     ```
 
 9. Open the Release PR targeting `main`:
@@ -159,15 +159,30 @@ Install [`rever`][rever docs] using whatever your project defines (e.g., a conda
     | Target | `main` |
     | Body | copy/paste from `CHANGELOG.md` |
 
-    > **Note:** Only publish the release after the release PR is merged.
+    > **Note:** Leave this release as a draft. The publishing workflow publishes it after its package publication steps succeed.
 
 </details>
 
 ## 3. Wait for review and approval of the release PR.
 
-## 4. Merge the release PR and publish the release.
+## 4. Merge the release PR and push the version tag.
 
-Go to the [releases page][new release], add the release notes from `CHANGELOG.md` to the draft, and publish.
+Follow the [repository-specific publishing instructions](RELEASE_PUBLISHING.md) to complete any required setup before pushing the tag.
+
+After the release PR is reviewed and merged, fetch `main`:
+
+```bash
+git fetch origin main
+```
+
+Confirm that `origin/main` is the intended release commit and that its required checks have passed. Then create and push a signed version tag:
+
+```bash
+git tag -s MAJOR.MINOR.PATCH origin/main -m "Release MAJOR.MINOR.PATCH"
+git push origin MAJOR.MINOR.PATCH
+```
+
+Follow the publishing workflow and complete any required approvals. The workflow publishes the draft release after its package publication steps succeed. Verify the published assets before updating feedstocks.
 
 ## 5. Bump [Anaconda Recipes][Anaconda Recipes] and [conda-forge][conda-forge] feedstocks to use `MAJOR.MINOR.PATCH`.
 

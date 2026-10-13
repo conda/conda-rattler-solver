@@ -204,3 +204,30 @@ def test_conda_match_spec_to_rattler_match_spec(
 )
 def test_normalize_name_equals_bracket(raw: str, expected: str) -> None:
     assert utils_module._NAME_EQUALS_BRACKET.sub(r"\1[", raw, count=1) == expected
+
+
+@pytest.mark.parametrize(
+    "diagnostic_text,expected_str",
+    (
+        pytest.param("httpx[cli] ==0.28.0", "httpx==0.28.0", id="extra-and-version"),
+        pytest.param("httpx[cli]", "httpx", id="extra-only"),
+        pytest.param(
+            "httpx[cli,http2] >=0.20,<1.0",
+            "httpx[version='>=0.20,<1.0']",
+            id="multiple-extras-and-version",
+        ),
+        pytest.param("httpx [extras=[cli],", "httpx", id="truncated-md5-diagnostic"),
+        # Legitimate conda extras syntax must be preserved untouched.
+        pytest.param(
+            "httpx==0.28.0[extras=['cli']]",
+            "httpx==0.28.0[extras=['cli']]",
+            id="legitimate-conda-extras-untouched",
+        ),
+    ),
+)
+def test_matchspec_from_solver_diagnostic(
+    monkeypatch: pytest.MonkeyPatch, diagnostic_text: str, expected_str: str
+) -> None:
+    monkeypatch.setenv("CONDA_SOLVER", "rattler")
+    reset_context()
+    assert str(utils_module.matchspec_from_solver_diagnostic(diagnostic_text)) == expected_str
