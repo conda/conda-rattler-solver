@@ -141,6 +141,7 @@ def test_notify_conda_outdated_message(
     assert re.search(expected_snippet, stderr)
 
 
+@pytest.mark.usefixtures("solver_rattler")
 @pytest.mark.parametrize(
     "spec,expected_name,expected_extras",
     [
@@ -177,19 +178,55 @@ def test_notify_conda_outdated_message(
     ],
 )
 def test_conda_match_spec_to_rattler_match_spec(
-    monkeypatch: pytest.MonkeyPatch,
     spec: str,
     expected_name: str,
     expected_extras: set[str] | None,
 ) -> None:
-    monkeypatch.setenv("CONDA_SOLVER", "rattler")
-    reset_context()
     result = utils_module.conda_match_spec_to_rattler_match_spec(spec)
     assert result.name.normalized == expected_name
     if expected_extras is None:
         assert result.extras in (None, [])
     else:
         assert set(result.extras) == expected_extras
+
+
+@pytest.mark.parametrize(
+    "spec,expected",
+    [
+        pytest.param(
+            'httpx[version="0.28.1",extras="cli"]',
+            {"extras": {"cli"}, "version": "==0.28.1"},
+            id="version-in-bracket",
+        ),
+        pytest.param(
+            "httpx=0.28.1=py_0[extras=cli]",
+            {"extras": {"cli"}, "version": "==0.28.1", "build": "py_0"},
+            id="version-build-extras",
+        ),
+        pytest.param(
+            'httpx>=0.28,<1[extras="cli,http2"]',
+            {"extras": {"cli", "http2"}, "version": ">=0.28,<1"},
+            id="version-range-multiple-extras",
+        ),
+        pytest.param(
+            "httpx==0.28.1[extras=cli,when='python>=3.9']",
+            {"extras": {"cli"}, "version": "==0.28.1", "condition": "python>=3.9"},
+            id="version-extras-condition",
+        ),
+    ],
+)
+def test_conda_match_spec_to_rattler_match_spec_extras_keep_version_build_condition(
+    spec: str,
+    expected: dict,
+) -> None:
+    """Extras combined with a version/build/condition must keep all of them (#149)."""
+    result = utils_module.conda_match_spec_to_rattler_match_spec(spec)
+    actual = {"extras": set(result.extras), "version": result.version}
+    if result.build:
+        actual["build"] = result.build
+    if result.condition:
+        actual["condition"] = result.condition
+    assert actual == expected
 
 
 @pytest.mark.parametrize(
