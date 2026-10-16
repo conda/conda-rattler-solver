@@ -4,7 +4,7 @@
 
 ### Bug fixes
 
-* Fix `TypeError: Object of type bytes is not JSON serializable` when solving against sharded channels whose shards store hashes (`sha256`, `md5`, `attestations_sha256`, ...) as raw bytes instead of hex strings, such as the `emscripten-forge` channel on prefix.dev. (#XXX)
+* Fix `TypeError: Object of type bytes is not JSON serializable` when solving against sharded channels whose shards store hashes (`sha256`, `md5`, `attestations_sha256`, ...) as raw bytes instead of hex strings, such as the `emscripten-forge` channel on prefix.dev. (#176)
 
 ### Deprecations
 
@@ -16,4 +16,4 @@
 
 ### Other
 
-* Fix `test_pytorch_gpu` by installing the `nvidia-virtual-packages` conda plugin and setting `CONDA_OVERRIDE_CUDA_ARCH`, since recent conda-forge CUDA builds require the `__cuda_arch` virtual package. (#XXX)
+* Fix `test_pytorch_gpu` by installing the `nvidia-virtual-packages` conda plugin and setting `CONDA_OVERRIDE_CUDA_ARCH`, since recent conda-forge CUDA builds require the `__cuda_arch` virtual package. (#176)
