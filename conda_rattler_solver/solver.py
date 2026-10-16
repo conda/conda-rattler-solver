@@ -479,7 +479,14 @@ class RattlerSolver(Solver):
                 pyver = ".".join(installed.version.split(".")[:2])
                 constraints.append(f"python {pyver}.*")
 
-            if in_state.is_updating and installed and not installed.is_unmanageable:
+            # Prevent downgrades during updates, unless a previous attempt reported this
+            # package as conflicting (e.g. switching channels may require an older version)
+            if (
+                in_state.is_updating
+                and installed
+                and not installed.is_unmanageable
+                and not conflicting
+            ):
                 constraints.append(MatchSpec(name=name, version=f">={installed.version}"))
 
             # Block B: main logic for user requests and installed packages
