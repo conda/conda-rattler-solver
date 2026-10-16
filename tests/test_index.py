@@ -7,7 +7,6 @@ import json
 import shutil
 import time
 from pathlib import Path
-from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -181,53 +180,6 @@ def test_load_channel_repo_info_shards(
                 f"Shard index ({shard_package_count} packages) should be a strict subset of "
                 f"full repodata ({full_package_count} packages)"
             )
-
-
-def test_load_repo_info_from_shards_with_bytes_hashes(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
-    """
-    Shards written by rattler (e.g. channels hosted on prefix.dev) can store hashes as raw
-    bytes instead of hex strings. These must not break dumping the repodata for py-rattler.
-    """
-    monkeypatch.setenv("CONDA_PKGS_DIRS", str(tmp_path))
-    reset_context()
-
-    class FakeShards:
-        def iter_records_v3(self):
-            yield (
-                ("pkg-1.0-0.tar.bz2", "packages"),
-                {
-                    "name": "pkg",
-                    "version": "1.0",
-                    "build": "0",
-                    "build_number": 0,
-                    "depends": [],
-                    "subdir": "noarch",
-                    "noarch": "generic",
-                    "md5": bytes.fromhex("cd" * 16),
-                    "sha256": bytes.fromhex("ab" * 32),
-                    "attestations_sha256": bytes.fromhex("ef" * 32),
-                },
-            )
-
-    url = "https://example.invalid/channel/noarch"
-    helper = RattlerIndexHelper.__new__(RattlerIndexHelper)  # skip network-bound __init__
-    helper._index = {}
-    helper._unlink_on_del = []
-    helper._json_path_to_repo_info = lambda url, path: SimpleNamespace(noauth_url=url, path=path)
-    try:
-        index = helper._load_repo_info_from_shards({url: FakeShards()})
-        (info,) = index.values()
-        repodata = json.loads(Path(info.path).read_text())
-    finally:
-        for path in helper._unlink_on_del:
-            path.unlink(missing_ok=True)
-
-    record = repodata["packages"]["pkg-1.0-0.tar.bz2"]
-    assert record["sha256"] == "ab" * 32
-    assert record["md5"] == "cd" * 16
-    assert record["attestations_sha256"] == "ef" * 32
 
 
 def test_search_non_sharded_channels(tmp_path: Path):

@@ -26,7 +26,7 @@ try:
 except ImportError:
     from conda.common.serialize import json_dump
 
-from .utils import empty_repodata_dict, ensure_hex_hashes, rattler_record_to_conda_record
+from .utils import empty_repodata_dict, rattler_record_to_conda_record
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -263,8 +263,6 @@ class RattlerIndexHelper:
             subdir = Channel.from_url(url).subdir
             repodata = empty_repodata_dict(subdir, base_url=url)
             for (key, section), record in shards.iter_records_v3():
-                # Shards from some channels (e.g. rattler-index) have raw-bytes hashes
-                record = ensure_hex_hashes(record)
                 if section == "packages":
                     repodata["packages"][key] = record
                 elif section == "packages.conda":
