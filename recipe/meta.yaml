@@ -22,12 +22,14 @@ requirements:
     - hatch-vcs
   run:
     - python >=3.11
+    - py-rattler >=0.27.0,<0.28.0a0
+  run_constraints:
     - conda >=26.7.0
-    - py-rattler >=0.26.0,<0.27.0a0
 
 test:
   requires:
     - python 3.11.*
+    - conda
   imports:
     - conda_rattler_solver
   commands:
