@@ -40,6 +40,28 @@ def _hash_to_str(bytes_or_str: bytes | str | None) -> None | str:
     return bytes_or_str.lower()
 
 
+# Record fields holding a hash digest. Shards written by rattler (e.g. by `rattler-index`
+# for prefix.dev channels) can encode these as raw bytes (msgpack `bin`) or as arrays of
+# ints, instead of the hex strings that repodata.json uses.
+_HASH_FIELDS = ("sha256", "md5", "legacy_bz2_md5", "attestations_sha256")
+
+
+def ensure_hex_hashes(record: dict[str, Any]) -> dict[str, Any]:
+    """
+    Convert any non-string hash digests in a package record to hex strings (in place).
+
+    `conda._private.shards.misc.ensure_hex_hash` does this too, but it only covers
+    `sha256` and `md5`, and it is only applied while walking dependencies, so records
+    obtained through `Shards.iter_records_v3()` can still contain raw bytes. Those are
+    not JSON serializable and would make dumping the repodata for py-rattler fail.
+    """
+    for field in _HASH_FIELDS:
+        value = record.get(field)
+        if value and not isinstance(value, str):
+            record[field] = bytes(value).hex()
+    return record
+
+
 def rattler_record_to_conda_record(
     record: rattler.PackageRecord,
     *,

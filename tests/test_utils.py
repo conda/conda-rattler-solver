@@ -231,3 +231,46 @@ def test_matchspec_from_solver_diagnostic(
     monkeypatch.setenv("CONDA_SOLVER", "rattler")
     reset_context()
     assert str(utils_module.matchspec_from_solver_diagnostic(diagnostic_text)) == expected_str
+
+
+@pytest.mark.parametrize(
+    "record,expected",
+    (
+        pytest.param(
+            {"sha256": bytes.fromhex("ab" * 32), "md5": bytes.fromhex("cd" * 16)},
+            {"sha256": "ab" * 32, "md5": "cd" * 16},
+            id="bytes",
+        ),
+        pytest.param(
+            {"sha256": list(bytes.fromhex("ab" * 32)), "md5": list(bytes.fromhex("cd" * 16))},
+            {"sha256": "ab" * 32, "md5": "cd" * 16},
+            id="int-arrays",
+        ),
+        pytest.param(
+            {"attestations_sha256": bytes.fromhex("ef" * 32)},
+            {"attestations_sha256": "ef" * 32},
+            id="attestations_sha256",
+        ),
+        pytest.param(
+            {"legacy_bz2_md5": bytes.fromhex("01" * 16)},
+            {"legacy_bz2_md5": "01" * 16},
+            id="legacy_bz2_md5",
+        ),
+        pytest.param(
+            {"sha256": "ab" * 32, "md5": "cd" * 16, "attestations_sha256": "ef" * 32},
+            {"sha256": "ab" * 32, "md5": "cd" * 16, "attestations_sha256": "ef" * 32},
+            id="hex-strings-untouched",
+        ),
+        pytest.param(
+            {"name": "foo", "sha256": None, "md5": ""},
+            {"name": "foo", "sha256": None, "md5": ""},
+            id="missing-or-empty-untouched",
+        ),
+        pytest.param({"name": "foo"}, {"name": "foo"}, id="no-hashes"),
+    ),
+)
+def test_ensure_hex_hashes(record: dict, expected: dict) -> None:
+    result = utils_module.ensure_hex_hashes(record)
+    assert result == expected
+    # Must be serializable as repodata.json, which is what broke with raw bytes.
+    assert json.loads(json.dumps(result)) == expected
