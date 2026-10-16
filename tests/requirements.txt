@@ -2,5 +2,6 @@ conda-build
 conda-forge::pytest-xprocess
 conda-index
 conda-lock
+nvidia-virtual-packages
 conda-forge::pre-commit
 pytest
