@@ -8,6 +8,8 @@ source:
   # captures committed code, so pay attention.
   git_url: ../
   folder: src/
+  patches:
+    - version-bump.patch
 
 build:
   noarch: python
@@ -23,7 +25,7 @@ requirements:
   run:
     - python >=3.11
     - conda >=26.7.0
-    - py-rattler >=0.26.0,<0.27.0a0
+    - py-rattler >=0.27.0,<0.28.0a0
 
 test:
   requires:

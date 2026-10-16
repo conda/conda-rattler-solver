@@ -1,0 +1,13 @@
+diff --git a/pyproject.toml b/pyproject.toml
+index 80b7d17..e2f08ad 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -27,7 +27,7 @@ classifiers = [
+ requires-python = ">=3.10"
+ dependencies = [
+   # "conda >=26.7.0",
+-  "py-rattler >=0.26.0,<0.27.0a0",
++  "py-rattler >=0.27.0,<0.28.0a0",
+ ]
+ dynamic = ["version"]
+ 
