@@ -1377,6 +1377,62 @@ def test_maybe_raise_for_problems_preserves_extras_conflict(
     assert exc_info.value.allow_retry is False
 
 
+@pytest.mark.usefixtures("solver_rattler")
+@pytest.mark.parametrize(
+    "spec",
+    (
+        pytest.param('httpx[extras="cli"]==0.28.1', id="extras-then-version"),
+        pytest.param('httpx==0.28.1[extras="cli"]', id="version-then-extras"),
+        pytest.param('httpx[version="0.28.1",extras="cli"]', id="version-in-bracket"),
+    ),
+)
+def test_solve_version_with_extras(tmp_path: Path, spec: str) -> None:
+    """
+    Specs combining a version with extras (conda/conda-rattler-solver#149) must
+    survive conversion in a real solve and pull in the extra's dependencies.
+    """
+    # Sparse repodata loading follows `depends` but not `extra_depends`, so the
+    # unselected httpx 0.28.0 depends on click to make it loadable. click can then
+    # only be installed via the 0.28.1 `cli` extra.
+    packages = {
+        ("httpx", "0.28.0"): {"depends": ["click"]},
+        ("httpx", "0.28.1"): {"extra_depends": {"cli": ["click"]}},
+        ("click", "8.0"): {},
+    }
+    repodata = {
+        "info": {"subdir": "noarch"},
+        "packages": {
+            f"{name}-{version}-0.tar.bz2": {
+                "name": name,
+                "version": version,
+                "build": "0",
+                "build_number": 0,
+                "depends": [],
+                **extra,
+            }
+            for (name, version), extra in packages.items()
+        },
+        "packages.conda": {},
+        "repodata_version": 1,
+    }
+    prefix = tmp_path / "env"
+    solver = Solver(
+        prefix=prefix,
+        channels=(),
+        subdirs=("noarch",),
+        specs_to_add=(spec,),
+    )
+    in_state = SolverInputState(prefix, requested=(spec,))
+    out_state = SolverOutputState(solver_input_state=in_state)
+    index = _add_pip_index(tmp_path, in_state, repodata, repodata_use_shards=False)
+
+    solution = solver._solve_attempt(in_state, out_state, index)
+
+    assert isinstance(solution, list), solution
+    versions = {record.name.source: str(record.version) for record in solution}
+    assert versions == {"httpx": "0.28.1", "click": "8.0"}
+
+
 @pytest.mark.parametrize(
     "python_depends,expected_names",
     (
