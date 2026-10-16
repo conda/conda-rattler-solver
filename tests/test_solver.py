@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import bz2
+import importlib.util
 import io
 import json
 import os
@@ -1031,8 +1032,18 @@ def test_pytorch_gpu(specs, tmp_path):
     from other tests. There must be some global state in the libmamba Database / Pool
     objects. When run in isolation, it always passed.
     """
+    assert importlib.util.find_spec("nvidia_virtual_packages"), (
+        "The `nvidia-virtual-packages` conda plugin is required to provide `__cuda_arch`; "
+        "install it (see tests/requirements.txt)."
+    )
+
     env = os.environ.copy()
     env["CONDA_OVERRIDE_CUDA"] = "12.6"
+    # Recent conda-forge CUDA builds (e.g. torchvision -> libcudnn -> cuda-arch) require the
+    # `__cuda_arch` virtual package, which is provided by the `nvidia-virtual-packages` conda
+    # plugin. Without it, only CPU builds are installable.
+    # https://github.com/conda-forge/cudnn-feedstock/issues/157
+    env["CONDA_OVERRIDE_CUDA_ARCH"] = "8.0"
     env["CONDA_OVERRIDE_GLIBC"] = "2.30"
     env["CONDA_OVERRIDE_LINUX"] = "5.15.167.4"
     env["CONDA_OVERRIDE_ARCHSPEC"] = "skylake"
