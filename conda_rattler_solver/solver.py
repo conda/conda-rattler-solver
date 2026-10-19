@@ -65,6 +65,9 @@ CHANNEL_PRIORITY_MAP = {
 class RattlerSolver(Solver):
     MAX_SOLVER_ATTEMPTS_CAP = 10
     _uses_ssc = False
+    supports_exclude_newer_global = True
+    supports_exclude_newer_channel = True
+    supports_exclude_newer_package = True
 
     @staticmethod
     @cache
@@ -266,6 +269,7 @@ class RattlerSolver(Solver):
             pkgs_dirs=context.pkgs_dirs if context.offline else (),
             in_state=in_state,
             build_repodata_subset=self._build_repodata_subset,
+            exclude_newer_policy=self.exclude_newer_policy,
         )
         for channel in conda_build_channels:
             index.reload_channel(channel)
@@ -342,7 +346,7 @@ class RattlerSolver(Solver):
                 raise exc
 
         # We didn't fail? Nice, let's return the calculated state
-        self._export_solved_records(solution, out_state)
+        self._export_solved_records(solution, out_state, index)
 
         # Run post-solve tasks
         out_state.post_solve(solver=self)
@@ -863,12 +867,15 @@ class RattlerSolver(Solver):
         )
         raise exc
 
-    def _export_solved_records(self, records, out_state):
+    def _export_solved_records(self, records, out_state, index):
         out_state.records.clear()
         for rattler_record in records:
             # Repository candidates are patched by py-rattler before solving. Do not
             # patch here because locked records must preserve their installed metadata.
-            conda_record = rattler_record_to_conda_record(rattler_record)
+            conda_record = rattler_record_to_conda_record(
+                rattler_record,
+                indexed_timestamp=index.indexed_timestamp_for(rattler_record),
+            )
             out_state.records[conda_record.name] = conda_record
 
     # endregion
