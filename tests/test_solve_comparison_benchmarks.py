@@ -5,6 +5,7 @@ See https://github.com/conda/conda-rattler-solver/issues/118.
 from __future__ import annotations
 
 import shutil
+from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -54,9 +55,17 @@ def silverback_prefix_and_channels(
     if context.subdir != "linux-64":
         pytest.skip("large lockfile is linux-64 only")
 
-    with session_tmp_env("--file", lockfile) as prefix:
-        channels = _get_channels_from_lockfile(lockfile)
-        yield prefix, channels
+    # Clear the PYTHONPATH env var. When running tests from a pixi task
+    # the PYTHONPATH will be set, making the PYTHONPATH test conda fixture
+    # (https://github.com/conda/conda/blob/26.9.3/conda/testing/fixtures.py#L751)
+    # be ignored. In this case, we are effectively shelling out to conda to create
+    # an environment. So, we need that fixture to set the correct path.
+    # Without this change, the base environment's python will be used. So post
+    # link scripts depending on python will be executed in the wrong context.
+    with pytest.MonkeyPatch.context() as mp:
+        mp.delenv("PYTHONPATH", raising=False)
+        with session_tmp_env("--file", lockfile) as prefix:
+            yield prefix, _get_channels_from_lockfile(lockfile)
 
 
 @pytest.mark.benchmark

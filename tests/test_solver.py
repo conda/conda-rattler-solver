@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import bz2
+import importlib.util
 import io
 import json
 import os
@@ -63,6 +64,7 @@ def _make_noarch_package(
     name: str,
     version: str,
     build: str = "0",
+    build_number: int = 0,
     depends: tuple[str, ...] = (),
     build_number: int = 0,
 ) -> None:
@@ -1194,8 +1196,18 @@ def test_pytorch_gpu(specs, tmp_path):
     from other tests. There must be some global state in the libmamba Database / Pool
     objects. When run in isolation, it always passed.
     """
+    assert importlib.util.find_spec("nvidia_virtual_packages"), (
+        "The `nvidia-virtual-packages` conda plugin is required to provide `__cuda_arch`; "
+        "install it (see tests/requirements.txt)."
+    )
+
     env = os.environ.copy()
     env["CONDA_OVERRIDE_CUDA"] = "12.6"
+    # Recent conda-forge CUDA builds (e.g. torchvision -> libcudnn -> cuda-arch) require the
+    # `__cuda_arch` virtual package, which is provided by the `nvidia-virtual-packages` conda
+    # plugin. Without it, only CPU builds are installable.
+    # https://github.com/conda-forge/cudnn-feedstock/issues/157
+    env["CONDA_OVERRIDE_CUDA_ARCH"] = "8.0"
     env["CONDA_OVERRIDE_GLIBC"] = "2.30"
     env["CONDA_OVERRIDE_LINUX"] = "5.15.167.4"
     env["CONDA_OVERRIDE_ARCHSPEC"] = "skylake"
@@ -1527,6 +1539,62 @@ def test_maybe_raise_for_problems_preserves_extras_conflict(
 
     assert str(exc_info.value) == problems
     assert exc_info.value.allow_retry is False
+
+
+@pytest.mark.usefixtures("solver_rattler")
+@pytest.mark.parametrize(
+    "spec",
+    (
+        pytest.param('httpx[extras="cli"]==0.28.1', id="extras-then-version"),
+        pytest.param('httpx==0.28.1[extras="cli"]', id="version-then-extras"),
+        pytest.param('httpx[version="0.28.1",extras="cli"]', id="version-in-bracket"),
+    ),
+)
+def test_solve_version_with_extras(tmp_path: Path, spec: str) -> None:
+    """
+    Specs combining a version with extras (conda/conda-rattler-solver#149) must
+    survive conversion in a real solve and pull in the extra's dependencies.
+    """
+    # Sparse repodata loading follows `depends` but not `extra_depends`, so the
+    # unselected httpx 0.28.0 depends on click to make it loadable. click can then
+    # only be installed via the 0.28.1 `cli` extra.
+    packages = {
+        ("httpx", "0.28.0"): {"depends": ["click"]},
+        ("httpx", "0.28.1"): {"extra_depends": {"cli": ["click"]}},
+        ("click", "8.0"): {},
+    }
+    repodata = {
+        "info": {"subdir": "noarch"},
+        "packages": {
+            f"{name}-{version}-0.tar.bz2": {
+                "name": name,
+                "version": version,
+                "build": "0",
+                "build_number": 0,
+                "depends": [],
+                **extra,
+            }
+            for (name, version), extra in packages.items()
+        },
+        "packages.conda": {},
+        "repodata_version": 1,
+    }
+    prefix = tmp_path / "env"
+    solver = Solver(
+        prefix=prefix,
+        channels=(),
+        subdirs=("noarch",),
+        specs_to_add=(spec,),
+    )
+    in_state = SolverInputState(prefix, requested=(spec,))
+    out_state = SolverOutputState(solver_input_state=in_state)
+    index = _add_pip_index(tmp_path, in_state, repodata, repodata_use_shards=False)
+
+    solution = solver._solve_attempt(in_state, out_state, index)
+
+    assert isinstance(solution, list), solution
+    versions = {record.name.source: str(record.version) for record in solution}
+    assert versions == {"httpx": "0.28.1", "click": "8.0"}
 
 
 @pytest.mark.parametrize(
@@ -2166,33 +2234,56 @@ def test_channel_priority_updates_installed_dependency_two(
         assert packages["bar"] == "3.0"
 
 
-@pytest.mark.xfail(
-    reason=(
-        "known issue: c-r-s update semantics strictly require '>=' for each package that "
-        "exists in the prefix. This causes Unsatisfiable errors when modifying channels. "
-        "xref: https://github.com/conda/conda-rattler-solver/issues/135"
-    ),
-    strict=True,
-)
 @pytest.mark.usefixtures("solver_rattler")
 def test_can_update_env_with_python(
+    tmp_path: Path,
     tmp_env: TmpEnvFixture,
     conda_cli: CondaCLIFixture,
 ) -> None:
     """
-    Ensure that we can run an update when python is in the environment
-    """
+    Ensure that we can run an update when python is in the environment and the
+    channel changes, even if the new channel does not publish versions that are at
+    least as new as the installed ones (e.g. moving from defaults to conda-forge).
 
-    with tmp_env("--override-channels", "--channel=defaults", "python") as prefix:
+    xref: https://github.com/conda/conda-rattler-solver/issues/135
+    """
+    # Original environment, standing in for "defaults": python -> openssl=3.5, zlib.
+    # pip is needed because conda adds it as a python dependency by default.
+    channel_b = tmp_path / "channel-b"
+    _make_noarch_package(channel_b, "pip", "25.0", depends=("python",))
+    _make_noarch_package(channel_b, "openssl", "3.5.0")
+    _make_noarch_package(channel_b, "zlib", "1.3.2")
+    _make_noarch_package(channel_b, "python", "3.13.1", depends=("openssl >=3", "zlib"))
+
+    # The new channel, standing in for "conda-forge", has the same python and zlib
+    # versions (zlib with a higher build number), but only an older openssl than
+    # the one installed.
+    chan_a = tmp_path / "chan-a"
+    _make_noarch_package(chan_a, "pip", "25.0", depends=("python",))
+    _make_noarch_package(chan_a, "openssl", "3.4.0")
+    _make_noarch_package(chan_a, "zlib", "1.3.2", build="1", build_number=1)
+    _make_noarch_package(chan_a, "python", "3.13.1", depends=("openssl >=3", "zlib"))
+
+    with tmp_env("--override-channels", f"--channel={channel_b}", "python") as prefix:
         out, err, exc = conda_cli(
             "update",
             f"--prefix={prefix}",
             "--override-channels",
-            "--channel=conda-forge",
+            f"--channel={chan_a}",
+            "--all",
             "--dry-run",
             "--json",
-            "--all",
             raises=DryRunExit,
         )
         data = json.loads(out)
         assert data["success"] is True, err
+
+        linked = {pkg["name"]: pkg for pkg in data["actions"].get("LINK", ())}
+
+        # zlib keeps its version but moves to the new channel's build
+        assert linked["zlib"]["version"] == "1.3.2"
+        assert linked["zlib"]["build_number"] == 1
+        assert linked["zlib"]["channel"].endswith("chan-a")
+
+        # python keeps its installed version
+        assert linked.get("python", {"version": "3.13.1"})["version"] == "3.13.1"
