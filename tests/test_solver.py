@@ -66,7 +66,6 @@ def _make_noarch_package(
     build: str = "0",
     build_number: int = 0,
     depends: tuple[str, ...] = (),
-    build_number: int = 0,
 ) -> None:
     """
     Write a minimal (content-free) noarch package tarball into ``channel_dir / "noarch"``,
@@ -2235,10 +2234,12 @@ def test_channel_priority_updates_installed_dependency_two(
 
 
 @pytest.mark.usefixtures("solver_rattler")
+@pytest.mark.parametrize("openssl_build_number", (0, 2))
 def test_can_update_env_with_python(
     tmp_path: Path,
     tmp_env: TmpEnvFixture,
     conda_cli: CondaCLIFixture,
+    openssl_build_number: int,
 ) -> None:
     """
     Ensure that we can run an update when python is in the environment and the
@@ -2251,7 +2252,13 @@ def test_can_update_env_with_python(
     # pip is needed because conda adds it as a python dependency by default.
     channel_b = tmp_path / "channel-b"
     _make_noarch_package(channel_b, "pip", "25.0", depends=("python",))
-    _make_noarch_package(channel_b, "openssl", "3.5.0")
+    _make_noarch_package(
+        channel_b,
+        "openssl",
+        "3.5.0",
+        build=str(openssl_build_number),
+        build_number=openssl_build_number,
+    )
     _make_noarch_package(channel_b, "zlib", "1.3.2")
     _make_noarch_package(channel_b, "python", "3.13.1", depends=("openssl >=3", "zlib"))
 
@@ -2284,6 +2291,11 @@ def test_can_update_env_with_python(
         assert linked["zlib"]["version"] == "1.3.2"
         assert linked["zlib"]["build_number"] == 1
         assert linked["zlib"]["channel"].endswith("chan-a")
+
+        # Version downgrades may also lower the build number when changing channels.
+        assert linked["openssl"]["version"] == "3.4.0"
+        assert linked["openssl"]["build_number"] == 0
+        assert linked["openssl"]["channel"].endswith("chan-a")
 
         # python keeps its installed version
         assert linked.get("python", {"version": "3.13.1"})["version"] == "3.13.1"
