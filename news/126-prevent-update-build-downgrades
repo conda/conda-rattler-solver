@@ -1,0 +1,11 @@
+### Enhancements
+
+### Bug fixes
+
+* Avoid unnecessary build downgrades during updates while allowing dependency downgrades required to satisfy pins or package requirements. Newer versions can still reset their build numbers to zero. (#126)
+
+### Deprecations
+
+### Docs
+
+### Other

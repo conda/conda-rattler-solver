@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 from collections import defaultdict
+from dataclasses import replace
 from functools import cache
 from inspect import stack
 from itertools import chain
@@ -157,7 +158,19 @@ class RattlerSolver(Solver):
         with get_spinner(self._solving_loop_spinner_message()):
             # This function will copy and mutate `out_state`
             # Make sure we get the latest copy to return the correct solution below
-            out_state = self._solving_loop(in_state, out_state, index)
+            try:
+                out_state = self._solving_loop(in_state, out_state, index)
+            except RattlerUnsatisfiableError:
+                if not in_state.is_updating:
+                    raise
+                # Keep build floors throughout the normal conflict retries. Only
+                # an otherwise unsatisfiable update may lower dependency builds.
+                out_state = self._solving_loop(
+                    in_state,
+                    SolverOutputState(solver_input_state=in_state),
+                    index,
+                    allow_build_downgrades=True,
+                )
             self.neutered_specs = tuple(out_state.neutered.values())
             solution = out_state.current_solution
 
@@ -278,6 +291,8 @@ class RattlerSolver(Solver):
         in_state: SolverInputState,
         out_state: SolverOutputState,
         index: RattlerIndexHelper,
+        *,
+        allow_build_downgrades: bool = False,
     ) -> SolverOutputState:
         solution = None
         out_state.check_for_pin_conflicts(index)
@@ -287,7 +302,13 @@ class RattlerSolver(Solver):
             max_attempts = 1
         for attempt in range(1, max_attempts + 1):
             log.debug("Starting solver attempt %s", attempt)
-            solution = self._solve_attempt(in_state, out_state, index, attempt=attempt)
+            solution = self._solve_attempt(
+                in_state,
+                out_state,
+                index,
+                attempt=attempt,
+                allow_build_downgrades=allow_build_downgrades,
+            )
             if not isinstance(solution, Exception):  # Found a solution, stop trying
                 break
             out_state = SolverOutputState(
@@ -313,6 +334,7 @@ class RattlerSolver(Solver):
                 out_state,
                 index,
                 attempt=attempt + 1000,  # last attempt
+                allow_build_downgrades=allow_build_downgrades,
             )
             if isinstance(solution, Exception) or solution is None:
                 exc = RattlerUnsatisfiableError(solution or "Could not find solution")
@@ -333,6 +355,8 @@ class RattlerSolver(Solver):
         out_state: SolverOutputState,
         index: RattlerIndexHelper,
         attempt: int = 0,
+        *,
+        allow_build_downgrades: bool = False,
     ) -> RattlerSolverError | list[rattler.RepoDataRecord]:
         """
         The solver in rattler is declarative: you pass the things you want
@@ -353,22 +377,31 @@ class RattlerSolver(Solver):
         """
         solve_kwargs = {
             **self._collect_specs(in_state, out_state),
-            "sparse_repodata": [info.repo for info in index._index.values()],
             "virtual_packages": self._rattler_virtual_packages(in_state),
             "channel_priority": CHANNEL_PRIORITY_MAP[context.channel_priority],
             "strategy": "highest",
-            "package_format_selection": (
-                rattler.PackageFormatSelection.ONLY_TAR_BZ2
-                if context.use_only_tar_bz2
-                else rattler.PackageFormatSelection.PREFER_CONDA_WITH_WHL
-            ),
             "add_pip_as_python_dependency": context.add_pip_as_python_dependency,
         }
+        if in_state.is_updating:
+            # MatchSpec fields are combined with AND, so a build-number constraint
+            # would also reject newer versions whose build numbers start over at zero.
+            # Reject only lower builds of the installed version as records are loaded.
+            solve = rattler.solve
+            sources = list(index._index.values())
+            if allow_build_downgrades:
+                sources = [replace(info, installed={}) for info in sources]
+            solve_kwargs.update(sources=sources, platforms=index._subdirs)
+        else:
+            solve = rattler.solve_with_sparse_repodata
+            solve_kwargs.update(
+                sparse_repodata=[info.repo for info in index._index.values()],
+                package_format_selection=index._package_format,
+            )
         if log.isEnabledFor(logging.DEBUG):
             dumped = json.dumps(solve_kwargs, indent=2, default=str, sort_keys=True)
             log.debug("Solver input for attempt %s:\n%s", attempt, dumped)
         try:
-            solution = asyncio.run(rattler.solve_with_sparse_repodata(**solve_kwargs))
+            solution = asyncio.run(solve(**solve_kwargs))
         except RattlerSolverError as exc:
             self._maybe_raise_for_problems(str(exc), in_state, out_state)
             return exc
@@ -585,6 +618,21 @@ class RattlerSolver(Solver):
                 if installed := in_state.installed.get(name):
                     locked_packages.append(installed)
 
+        if in_state.is_updating:
+            for i, spec in enumerate(specs):
+                spec = MatchSpec(spec)
+                if spec.get_raw_value("url"):
+                    # Gateway treats URL specs as download requests. Keep URL matching
+                    # in constraints so queries use only conda's cached records.
+                    constraints.append(spec)
+                    specs[i] = MatchSpec(
+                        {
+                            field: value
+                            for field in MatchSpec.FIELD_NAMES
+                            if field != "url" and (value := spec.get_raw_value(field)) is not None
+                        }
+                    )
+
         return {
             "specs": [conda_match_spec_to_rattler_match_spec(spec) for spec in specs],
             "constraints": [conda_match_spec_to_rattler_match_spec(spec) for spec in constraints],
@@ -674,7 +722,7 @@ class RattlerSolver(Solver):
         context for an error report. Two exceptions may be raised:
         - PackagesNotFoundError: One or more packages are missing in the channel
         - RattlerUnsatisfiableError: A solver conflict was found
-        
+
         When called from conda-build, the parsed specs are dispatched to
         `._maybe_raise_for_conda_build()`.
 
@@ -696,9 +744,17 @@ class RattlerSolver(Solver):
                     f"{words[0]} {words[1]}"
                 )
             elif "which cannot be installed because there are no viable options" in line:
-                unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(
-                    f"{words[0]} {words[1].strip(',')}"
-                )
+                spec = matchspec_from_solver_diagnostic(f"{words[0]} {words[1].strip(',')}")
+                unsatisfiable[spec.name] = spec
+                if (
+                    in_state.is_updating
+                    and (installed := in_state.installed.get(spec.name))
+                    and spec.get_raw_value("build_number") == f">={installed.build_number}"
+                    and spec.match(installed)
+                ):
+                    # Strict priority can exclude every candidate meeting the build
+                    # floor, while the installed record can still satisfy it.
+                    out_state.installed_without_candidates.add(spec.name)
             elif "cannot be installed because there are no viable options" in line:
                 unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(
                     f"{words[0]} {words[1]}"
