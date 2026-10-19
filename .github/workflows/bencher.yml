@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - name: Download benchmark results
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: benchmark-results
           path: ${{ runner.temp }}/benchmark-results
@@ -41,7 +41,7 @@ jobs:
 
       - name: Download PR event
         if: github.event.workflow_run.event == 'pull_request'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: benchmark-event
           path: ${{ runner.temp }}/benchmark-event
@@ -64,7 +64,7 @@ jobs:
             core.exportVariable("PR_NUMBER", prEvent.number)
 
       - name: Install Bencher CLI
-        uses: bencherdev/bencher@8d75325c3bc59403a2186a056b472c4f49d42838 # v0.6.12
+        uses: bencherdev/bencher@f80847436d7157936b40525db4c2a1064124f04a # v0.6.13
         with:
           version: '0.6.12'
 

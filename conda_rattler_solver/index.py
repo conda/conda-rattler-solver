@@ -29,7 +29,7 @@ except ImportError:
 from .utils import empty_repodata_dict, rattler_record_to_conda_record
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
     from typing import Self
 
     from conda.common.path import PathsType
@@ -45,13 +45,48 @@ log = logging.getLogger(f"conda.{__name__}")
 
 @dataclass
 class _ChannelRepoInfo:
-    "A dataclass mapping conda Channels, rattler.SparseRepoData, URLs and JSON paths"
+    """Channel metadata and a record source for update solves."""
 
     channel: Channel | None
     repo: rattler.SparseRepoData
     full_url: str
     noauth_url: str
     local_json: str | None
+    installed: Mapping[str, PackageRecord]
+    package_format: rattler.PackageFormatSelection
+
+    def package_names(self, platform: rattler.Platform) -> list[str]:
+        if str(platform) != self.repo.subdir:
+            return []
+        return self.repo.package_names(self.package_format)
+
+    async def fetch_package_records(
+        self, platform: rattler.Platform, name: rattler.PackageName
+    ) -> list[rattler.RepoDataRecord]:
+        """Load conda's cached records with update build floors applied.
+
+        Lower builds of the installed version receive an unsatisfiable
+        self-dependency. Keeping these candidates visible preserves strict
+        channel priority while preventing the build downgrades in issue #126.
+        The changes affect only the returned records, not the cached repodata.
+
+        https://github.com/conda/conda-rattler-solver/issues/126
+        """
+        if str(platform) != self.repo.subdir:
+            return []
+        records = self.repo.load_records(name, self.package_format)
+        installed = self.installed.get(name.normalized)
+        if installed and not installed.is_unmanageable:
+            version = rattler.Version(installed.version)
+            for record in records:
+                if record.version == version and record.build_number < installed.build_number:
+                    # Keep the candidate visible to strict channel priority, but make
+                    # its own build number incompatible with the installed build floor.
+                    record.depends = [
+                        *record.depends,
+                        f"{name.normalized}[build_number='>={installed.build_number}']",
+                    ]
+        return records
 
 
 def _is_sharded_repodata_enabled():
@@ -181,6 +216,8 @@ class RattlerIndexHelper:
             full_url=url,
             noauth_url=noauth_url,
             local_json=json_path,
+            installed=self.in_state.installed if self.in_state else {},
+            package_format=self._package_format,
         )
 
     def _urls_from_channels(self, channels: Iterable[Channel | str] | None = None) -> tuple[str]:
@@ -370,6 +407,8 @@ class RattlerIndexHelper:
                         full_url=path_as_url,
                         noauth_url=path_as_url,
                         local_json=f.name,
+                        installed=self.in_state.installed if self.in_state else {},
+                        package_format=self._package_format,
                     )
                 )
                 self._unlink_on_del.append(Path(f.name))
