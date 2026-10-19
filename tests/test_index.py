@@ -187,7 +187,24 @@ def test_inactive_policy_preserves_indexed_timestamp(tmp_path: Path):
     assert next(index.search("foo")).get("indexed_timestamp") == NOW - 2 * DAY
 
 
-def test_exclude_newer_record_filter_honors_package_and_channel_overrides():
+@pytest.mark.parametrize(
+    ("name", "channel_url", "timestamp", "expected"),
+    [
+        ("openssl", "https://example.test/conda/linux-64", NOW - 60, True),
+        ("numpy", "https://example.test/conda/linux-64", NOW - 2 * DAY, True),
+        ("scipy", "https://example.test/conda/linux-64", NOW - 2 * DAY, False),
+        ("scipy", "https://other.example.test/conda/linux-64", NOW - 2 * DAY, True),
+        ("scipy", "https://unrestricted.example.test/conda/linux-64", NOW - 60, True),
+    ],
+)
+def test_exclude_newer_record_filter_honors_package_and_channel_overrides(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    channel_url: str,
+    timestamp: float,
+    expected: bool,
+):
     policy = ExcludeNewerPolicy.from_values(
         "1d",
         {"openssl": "false", "numpy": "1d"},
@@ -197,23 +214,34 @@ def test_exclude_newer_record_filter_honors_package_and_channel_overrides():
         ),
         now=NOW,
     )
-    index = RattlerIndexHelper(channels=(), exclude_newer_policy=policy)
-
-    def allowed(name: str, channel_url: str, timestamp: float) -> bool:
-        filename = f"{name}-1.0-0.tar.bz2"
-        package_url = f"{channel_url}/{filename}"
-        return index._record_allowed(
-            {"name": name, "timestamp": timestamp},
-            filename,
-            channel_url,
-            package_url,
+    filename = f"{name}-1.0-0.tar.bz2"
+    json_path = tmp_path / "repodata.json"
+    json_path.write_text(
+        json.dumps(
+            {
+                "info": {"subdir": "linux-64"},
+                "packages": {
+                    filename: {
+                        "name": name,
+                        "version": "1.0",
+                        "build": "0",
+                        "build_number": 0,
+                        "depends": [],
+                        "timestamp": int(timestamp * 1000),
+                    }
+                },
+                "packages.conda": {},
+            }
         )
+    )
+    monkeypatch.setattr(RattlerIndexHelper, "_fetch_channel", lambda self, url: (url, json_path))
+    index = RattlerIndexHelper(
+        channels=(channel_url.rsplit("/", 1)[0],),
+        subdirs=("linux-64",),
+        exclude_newer_policy=policy,
+    )
 
-    assert allowed("openssl", "https://example.test/conda/linux-64", NOW - 60)
-    assert allowed("numpy", "https://example.test/conda/linux-64", NOW - 2 * DAY)
-    assert not allowed("scipy", "https://example.test/conda/linux-64", NOW - 2 * DAY)
-    assert allowed("scipy", "https://other.example.test/conda/linux-64", NOW - 2 * DAY)
-    assert allowed("scipy", "https://unrestricted.example.test/conda/linux-64", NOW - 60)
+    assert bool(list(index.search(name))) is expected
 
 
 @pytest.mark.parametrize(
@@ -227,7 +255,10 @@ def test_exclude_newer_record_filter_honors_package_and_channel_overrides():
     ],
 )
 def test_exclude_newer_filters_all_repodata_groups(
-    tmp_path: Path, package_group: str, extension: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    package_group: str,
+    extension: str,
 ):
     policy = ExcludeNewerPolicy.from_values(
         "",
@@ -235,8 +266,9 @@ def test_exclude_newer_filters_all_repodata_groups(
         channel_settings=({"channel": "https://example.test/conda", "exclude_newer": "1d"},),
         now=NOW,
     )
-    index = RattlerIndexHelper(channels=(), exclude_newer_policy=policy)
+    channel_url = "https://example.test/conda/linux-64"
     repodata = {
+        "info": {"subdir": "linux-64"},
         "packages": {},
         "packages.conda": {},
         "v3": {"tar.bz2": {}, "conda": {}, "whl": {}},
@@ -248,19 +280,36 @@ def test_exclude_newer_filters_all_repodata_groups(
     )
     for name, timestamp in (("old", NOW - 2 * DAY), ("new", NOW - 60)):
         key = f"{name}-1.0-0" if package_group.startswith("v3.") else f"{name}-1.0-0.{extension}"
-        group[key] = {"name": name, "fn": f"{name}-1.0-0.{extension}", "timestamp": timestamp}
+        group[key] = {
+            "name": name,
+            "version": "1.0",
+            "build": "0",
+            "build_number": 0,
+            "depends": [],
+            "fn": f"{name}-1.0-0.{extension}",
+            "timestamp": int(timestamp * 1000),
+        }
     unknown_key = (
         "unknown-1.0-0" if package_group.startswith("v3.") else f"unknown-1.0-0.{extension}"
     )
-    group[unknown_key] = {"name": "unknown", "fn": f"unknown-1.0-0.{extension}"}
+    group[unknown_key] = {
+        "name": "unknown",
+        "version": "1.0",
+        "build": "0",
+        "build_number": 0,
+        "depends": [],
+        "fn": f"unknown-1.0-0.{extension}",
+    }
 
     json_path = tmp_path / "repodata.json"
     json_path.write_text(json.dumps(repodata))
-    filtered_path, _ = index._filtered_json_path(
-        "https://example.test/conda/linux-64",
-        json_path,
+    monkeypatch.setattr(RattlerIndexHelper, "_fetch_channel", lambda self, url: (url, json_path))
+    index = RattlerIndexHelper(
+        channels=("https://example.test/conda",),
+        subdirs=("linux-64",),
+        exclude_newer_policy=policy,
     )
-    filtered = json.loads(filtered_path.read_text())
+    filtered = json.loads(Path(index.get_info(channel_url).local_json).read_text())
     filtered_group = (
         filtered["v3"][package_group[3:]]
         if package_group.startswith("v3.")

@@ -121,7 +121,6 @@ class RattlerIndexHelper:
         self.exclude_newer_policy = (
             ExcludeNewerPolicy() if exclude_newer_policy is None else exclude_newer_policy
         )
-        self._use_python_exclude_newer_filter = self.exclude_newer_policy.active
         self._index: dict[str, _ChannelRepoInfo] = {}
         self._index.update(self._load_channels())
         if pkgs_dirs:
@@ -217,7 +216,38 @@ class RattlerIndexHelper:
             shutil.copy(json_path, path_copy)
             json_path = path_copy
             self._unlink_on_del.append(path_copy)
-        json_path, indexed_timestamps = self._filtered_json_path(url, json_path)
+        repodata = json.loads(json_path.read_text())
+        indexed_timestamps = {}
+        filter_repodata = self.exclude_newer_policy.active
+        base_url = url.rstrip("/")
+        groups = [(repodata, "packages", None), (repodata, "packages.conda", None)]
+        if v3 := repodata.get("v3"):
+            groups.extend((v3, extension, extension) for extension in v3)
+
+        for parent, group_name, extension in groups:
+            records = parent.get(group_name, {})
+            kept_records = {}
+            for key, record in records.items():
+                filename = record.get("fn") or key
+                if filter_repodata:
+                    package_url = record.get("url") or f"{base_url}/{filename}"
+                    if not self.exclude_newer_policy.should_include(
+                        {**record, "channel": url, "fn": filename, "url": package_url}
+                    ):
+                        continue
+                    kept_records[key] = record
+                if indexed_timestamp := record.get("indexed_timestamp"):
+                    # Rattler 0.26 derives v3 filenames from the map key.
+                    rattler_filename = f"{key}.{extension}" if extension else key
+                    indexed_timestamps[rattler_filename] = indexed_timestamp
+            if filter_repodata:
+                parent[group_name] = kept_records
+
+        if filter_repodata:
+            with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+                f.write(json_dump(repodata))
+            json_path = Path(f.name)
+            self._unlink_on_del.append(json_path)
         # TODO: Support multichannel https://github.com/conda/rattler/issues/1327
         rattler_channel = rattler.Channel(noauth_url_sans_subdir)
         repo = rattler.SparseRepoData(rattler_channel, channel.subdir, json_path)
@@ -313,12 +343,6 @@ class RattlerIndexHelper:
             subdir = Channel.from_url(url).subdir
             repodata = empty_repodata_dict(subdir, base_url=url)
             for (key, section), record in shards.iter_records_v3():
-                filename = record.get("fn", key)
-                package_url = record.get("url") or f"{url.rstrip('/')}/{filename}"
-                if self._use_python_exclude_newer_filter and not self._record_allowed(
-                    record, filename, url, package_url
-                ):
-                    continue
                 if section == "packages":
                     repodata["packages"][key] = record
                 elif section == "packages.conda":
@@ -349,55 +373,6 @@ class RattlerIndexHelper:
             index[info.noauth_url] = info
         return index
 
-    def _filtered_json_path(
-        self, url: str, json_path: Path
-    ) -> tuple[Path, dict[str, int | float]]:
-        repodata = json.loads(json_path.read_text())
-        if not self._use_python_exclude_newer_filter:
-            return json_path, self._indexed_timestamp_map(repodata)
-
-        filtered = {**repodata}
-
-        def filter_group(records: dict) -> dict:
-            return {
-                key: record
-                for key, record in records.items()
-                if self._record_allowed(
-                    record,
-                    record.get("fn") or key,
-                    url,
-                    record.get("url") or f"{url.rstrip('/')}/{record.get('fn') or key}",
-                )
-            }
-
-        for package_group in ("packages", "packages.conda"):
-            filtered[package_group] = filter_group(repodata.get(package_group, {}))
-
-        if v3 := repodata.get("v3"):
-            filtered["v3"] = {group: filter_group(records) for group, records in v3.items()}
-
-        indexed_timestamps = self._indexed_timestamp_map(filtered)
-
-        with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
-            f.write(json_dump(filtered))
-        filtered_path = Path(f.name)
-        self._unlink_on_del.append(filtered_path)
-        return filtered_path, indexed_timestamps
-
-    @staticmethod
-    def _indexed_timestamp_map(repodata: dict) -> dict[str, int | float]:
-        indexed_timestamps = {}
-        groups = [(None, repodata.get("packages", {})), (None, repodata.get("packages.conda", {}))]
-        groups.extend(repodata.get("v3", {}).items())
-        for extension, group in groups:
-            for key, record in group.items():
-                if indexed_timestamp := record.get("indexed_timestamp"):
-                    # Rattler 0.26 derives v3 filenames from the map key, even
-                    # when the record contains a different fn value.
-                    filename = f"{key}.{extension}" if extension else key
-                    indexed_timestamps[filename] = indexed_timestamp
-        return indexed_timestamps
-
     def indexed_timestamp_for(self, record: rattler.RepoDataRecord) -> int | float | None:
         source = (record.channel or "").rstrip("/")
         for info in self._index.values():
@@ -414,22 +389,6 @@ class RattlerIndexHelper:
             ):
                 return installed.get("indexed_timestamp") or None
         return None
-
-    def _record_allowed(
-        self,
-        record: dict,
-        filename: str,
-        channel_url: str,
-        package_url: str,
-    ) -> bool:
-        return self.exclude_newer_policy.should_include(
-            {
-                **record,
-                "channel": channel_url,
-                "fn": record.get("fn") or filename,
-                "url": package_url,
-            }
-        )
 
     def _load_channels(self, urls: Iterable[str] | None = None) -> dict[str, _ChannelRepoInfo]:
         if urls is None:
@@ -475,7 +434,7 @@ class RattlerIndexHelper:
                 if record.subdir not in (subdir, "noarch"):
                     continue
                 if (
-                    self._use_python_exclude_newer_filter
+                    self.exclude_newer_policy.active
                     and not self.exclude_newer_policy.should_include(record)
                 ):
                     continue
