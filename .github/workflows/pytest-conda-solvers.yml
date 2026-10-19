@@ -58,8 +58,7 @@ jobs:
       - name: Checkout pytest-conda-solvers
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: dholth/pytest-conda-solvers
-          ref: 110-filename-for-all
+          repository: conda-incubator/pytest-conda-solvers
           fetch-depth: 0
           path: pytest-conda-solvers
           persist-credentials: false
