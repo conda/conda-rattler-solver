@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import bz2
-import datetime
 import importlib.util
 import io
 import json
@@ -141,33 +140,67 @@ def test_solver_declares_exclude_newer_support() -> None:
     assert Solver.supports_exclude_newer_package is True
 
 
-def test_exclude_newer_datetime_unset() -> None:
-    solver = object.__new__(Solver)
-    solver.exclude_newer_policy = ExcludeNewerPolicy.disabled()
-
-    assert solver._exclude_newer_datetime() is None
-
-
-def test_exclude_newer_datetime_uses_resolved_global_cutoff() -> None:
-    solver = object.__new__(Solver)
-    solver.exclude_newer_policy = ExcludeNewerPolicy(global_cutoff=1234.56)
-
-    assert solver._exclude_newer_datetime() == datetime.datetime.fromtimestamp(
-        1234.56,
-        tz=datetime.timezone.utc,
+def test_global_exclude_newer_uses_indexed_time_and_keeps_unknown_time(tmp_path: Path) -> None:
+    now = 1_700_000_000
+    day = 86_400
+    channel_dir = tmp_path / "channel" / "noarch"
+    channel_dir.mkdir(parents=True)
+    records = {}
+    for version, indexed_timestamp in (("1.0", now - 2 * day), ("2.0", now), ("3.0", None)):
+        record = {
+            "name": "policy-test",
+            "version": version,
+            "build": "0",
+            "build_number": 0,
+            "depends": [],
+            "subdir": "noarch",
+            "noarch": "generic",
+        }
+        if indexed_timestamp is not None:
+            record["timestamp"] = (now - 2 * day) * 1000
+            record["indexed_timestamp"] = indexed_timestamp * 1000
+        records[f"policy-test-{version}-0.tar.bz2"] = record
+    (channel_dir / "repodata.json").write_text(
+        json.dumps({"info": {"subdir": "noarch"}, "packages": records, "packages.conda": {}})
     )
 
-
-def test_exclude_newer_datetime_disabled_for_policy_overrides() -> None:
-    solver = object.__new__(Solver)
-    solver.exclude_newer_policy = ExcludeNewerPolicy.from_values(
-        "1d",
-        {"openssl": False},
-        channel_settings=({"channel": "https://example.test/conda", "exclude_newer": "3d"},),
-        now=1_700_000_000.0,
+    policy = ExcludeNewerPolicy(global_cutoff=now - day)
+    prefix = tmp_path / "env"
+    solver = Solver(
+        prefix=prefix,
+        channels=(Channel(str(channel_dir.parent)),),
+        subdirs=("noarch",),
+        specs_to_add=("policy-test",),
+    )
+    solver.exclude_newer_policy = policy
+    in_state = SolverInputState(prefix, requested=("policy-test",))
+    out_state = SolverOutputState(solver_input_state=in_state)
+    index = RattlerIndexHelper(
+        channels=(Channel(str(channel_dir.parent)),),
+        subdirs=("noarch",),
+        exclude_newer_policy=policy,
     )
 
-    assert solver._exclude_newer_datetime() is None
+    solution = solver._solve_attempt(in_state, out_state, index)
+
+    assert isinstance(solution, list)
+    assert [(record.name.source, str(record.version)) for record in solution] == [
+        ("policy-test", "3.0")
+    ]
+    old_record = next(index.search("policy-test=1.0"))
+    assert old_record.get("indexed_timestamp") == now - 2 * day
+
+    old_solver = Solver(
+        prefix=prefix,
+        channels=(Channel(str(channel_dir.parent)),),
+        subdirs=("noarch",),
+        specs_to_add=("policy-test=1.0",),
+    )
+    old_solver.exclude_newer_policy = policy
+    old_in_state = SolverInputState(prefix, requested=("policy-test=1.0",))
+    old_out_state = SolverOutputState(solver_input_state=old_in_state)
+    old_out_state = old_solver._solving_loop(old_in_state, old_out_state, index)
+    assert old_out_state.records["policy-test"].get("indexed_timestamp") == now - 2 * day
 
 
 def test_python_downgrade_reinstalls_noarch_packages(
@@ -1438,7 +1471,7 @@ def test_add_pip_as_python_dependency(
 
         assert isinstance(solution, list)
         assert ("pip" in {record.name.source for record in solution}) is add_pip
-        solver._export_solved_records(solution, out_state)
+        solver._export_solved_records(solution, out_state, index)
         assert ("pip" in out_state.records["python"].depends) is add_pip
 
 

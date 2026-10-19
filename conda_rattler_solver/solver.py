@@ -40,7 +40,6 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    import datetime
     from collections.abc import Iterable, Mapping
     from typing import Literal
 
@@ -347,7 +346,7 @@ class RattlerSolver(Solver):
                 raise exc
 
         # We didn't fail? Nice, let's return the calculated state
-        self._export_solved_records(solution, out_state)
+        self._export_solved_records(solution, out_state, index)
 
         # Run post-solve tasks
         out_state.post_solve(solver=self)
@@ -402,9 +401,6 @@ class RattlerSolver(Solver):
                 sparse_repodata=[info.repo for info in index._index.values()],
                 package_format_selection=index._package_format,
             )
-        exclude_newer = self._exclude_newer_datetime()
-        if exclude_newer is not None:
-            solve_kwargs["exclude_newer"] = exclude_newer
         if log.isEnabledFor(logging.DEBUG):
             dumped = json.dumps(solve_kwargs, indent=2, default=str, sort_keys=True)
             log.debug("Solver input for attempt %s:\n%s", attempt, dumped)
@@ -871,12 +867,15 @@ class RattlerSolver(Solver):
         )
         raise exc
 
-    def _export_solved_records(self, records, out_state):
+    def _export_solved_records(self, records, out_state, index):
         out_state.records.clear()
         for rattler_record in records:
             # Repository candidates are patched by py-rattler before solving. Do not
             # patch here because locked records must preserve their installed metadata.
-            conda_record = rattler_record_to_conda_record(rattler_record)
+            conda_record = rattler_record_to_conda_record(
+                rattler_record,
+                indexed_timestamp=index.indexed_timestamp_for(rattler_record),
+            )
             out_state.records[conda_record.name] = conda_record
 
     # endregion
@@ -893,22 +892,6 @@ class RattlerSolver(Solver):
             )
             for pkg in in_state.virtual.values()
         ]
-
-    def _exclude_newer_datetime(self) -> datetime.datetime | None:
-        """Return the resolved global cutoff as a UTC datetime for py-rattler."""
-        if (
-            self.exclude_newer_policy.global_cutoff is None
-            or self.exclude_newer_policy.has_channel_overrides
-            or self.exclude_newer_policy.has_package_overrides
-        ):
-            return None
-
-        import datetime
-
-        return datetime.datetime.fromtimestamp(
-            self.exclude_newer_policy.global_cutoff,
-            tz=datetime.timezone.utc,
-        )
 
     def _called_from_conda_build(self) -> bool:
         """

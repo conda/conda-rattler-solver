@@ -44,11 +44,16 @@ def rattler_record_to_conda_record(
     record: rattler.PackageRecord,
     *,
     add_pip_as_python_dependency: bool = False,
+    indexed_timestamp: int | float | None = None,
 ) -> PackageRecord:
     if timestamp := record.timestamp:
         timestamp = int(timestamp.timestamp() * 1000)
     else:
         timestamp = 0
+    if indexed_timestamp is None:
+        indexed_timestamp = getattr(record, "indexed_timestamp", None)
+    if indexed_timestamp is not None and hasattr(indexed_timestamp, "timestamp"):
+        indexed_timestamp = int(indexed_timestamp.timestamp() * 1000)
 
     if record.noarch.none:
         noarch = None
@@ -102,6 +107,7 @@ def rattler_record_to_conda_record(
         license_family=record.license_family,
         # package_type=record.package_type,
         timestamp=timestamp,
+        indexed_timestamp=indexed_timestamp,
         # date=record.date,
         size=record.size or 0,
         python_site_packages_path=record.python_site_packages_path,
