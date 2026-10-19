@@ -1,0 +1,3 @@
+### Enhancements
+
+* Support py-rattler 0.27 alongside 0.26 in Python and conda packages. (#180)
