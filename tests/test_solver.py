@@ -281,11 +281,13 @@ def test_update_from_latest_not_downgrade(
 
 
 @pytest.mark.parametrize("update_args", [("--all",), ("libxml2",)])
+@pytest.mark.parametrize("pin_unrelated", [False, True])
 def test_update_does_not_downgrade_installed_builds(
     tmp_env: TmpEnvFixture,
     conda_cli: CondaCLIFixture,
     tmp_path: Path,
     update_args: tuple[str, ...],
+    pin_unrelated: bool,
 ) -> None:
     """Updating libxml2 must not replace gettext with an older build (#126)."""
     channel = tmp_path / "channel"
@@ -299,14 +301,48 @@ def test_update_does_not_downgrade_installed_builds(
         depends=("libxml2 2.15.3.*",),
     )
     args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
-    with tmp_env("gettext", "libxml2", *args) as prefix:
+    specs = ["gettext", "libxml2"]
+    if pin_unrelated:
+        _make_noarch_package(channel, "unrelated", "2.0")
+        specs.append("unrelated")
+    with tmp_env(*specs, *args) as prefix:
         _make_noarch_package(channel, "libxml2", "2.15.4")
         _make_noarch_package(channel, "gettext", "0.25.1", build="0")
+        if pin_unrelated:
+            _make_noarch_package(channel, "unrelated", "1.0")
+            (prefix / "conda-meta" / "pinned").write_text("unrelated <2\n")
         conda_cli("update", f"--prefix={prefix}", *update_args, *args, "--yes")
         PrefixData._cache_.clear()
         records = PrefixData(prefix)
         assert records.get("gettext").build_number == 2
         assert records.get("libxml2").version == "2.15.3"
+        if pin_unrelated:
+            assert records.get("unrelated").version == "1.0"
+
+
+@pytest.mark.parametrize("update_args", [("app",), ("--all",)])
+def test_update_allows_build_downgrade_required_by_pin(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+    update_args: tuple[str, ...],
+) -> None:
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "dep", "1.0", build="2", build_number=2)
+    _make_noarch_package(channel, "app", "1.0", depends=("dep 1.0 2",))
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("app", "dep", *args) as prefix:
+        _make_noarch_package(channel, "dep", "1.0", build="0")
+        _make_noarch_package(channel, "app", "2.0", depends=("dep 1.0 0",))
+        (prefix / "conda-meta" / "pinned").write_text("app >=2\n")
+
+        conda_cli("update", f"--prefix={prefix}", *update_args, *args, "--yes")
+
+        PrefixData._cache_.clear()
+        records = PrefixData(prefix)
+        assert records.get("app").version == "2.0"
+        assert records.get("dep").version == "1.0"
+        assert records.get("dep").build_number == 0
 
 
 def test_update_build_protection_preserves_strict_channel_priority(

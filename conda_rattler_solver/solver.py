@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 from collections import defaultdict
+from dataclasses import replace
 from functools import cache
 from inspect import stack
 from itertools import chain
@@ -157,7 +158,19 @@ class RattlerSolver(Solver):
         with get_spinner(self._solving_loop_spinner_message()):
             # This function will copy and mutate `out_state`
             # Make sure we get the latest copy to return the correct solution below
-            out_state = self._solving_loop(in_state, out_state, index)
+            try:
+                out_state = self._solving_loop(in_state, out_state, index)
+            except RattlerUnsatisfiableError:
+                if not in_state.is_updating:
+                    raise
+                # Keep build floors throughout the normal conflict retries. Only
+                # an otherwise unsatisfiable update may lower dependency builds.
+                out_state = self._solving_loop(
+                    in_state,
+                    SolverOutputState(solver_input_state=in_state),
+                    index,
+                    allow_build_downgrades=True,
+                )
             self.neutered_specs = tuple(out_state.neutered.values())
             solution = out_state.current_solution
 
@@ -278,6 +291,8 @@ class RattlerSolver(Solver):
         in_state: SolverInputState,
         out_state: SolverOutputState,
         index: RattlerIndexHelper,
+        *,
+        allow_build_downgrades: bool = False,
     ) -> SolverOutputState:
         solution = None
         out_state.check_for_pin_conflicts(index)
@@ -287,7 +302,13 @@ class RattlerSolver(Solver):
             max_attempts = 1
         for attempt in range(1, max_attempts + 1):
             log.debug("Starting solver attempt %s", attempt)
-            solution = self._solve_attempt(in_state, out_state, index, attempt=attempt)
+            solution = self._solve_attempt(
+                in_state,
+                out_state,
+                index,
+                attempt=attempt,
+                allow_build_downgrades=allow_build_downgrades,
+            )
             if not isinstance(solution, Exception):  # Found a solution, stop trying
                 break
             out_state = SolverOutputState(
@@ -313,6 +334,7 @@ class RattlerSolver(Solver):
                 out_state,
                 index,
                 attempt=attempt + 1000,  # last attempt
+                allow_build_downgrades=allow_build_downgrades,
             )
             if isinstance(solution, Exception) or solution is None:
                 exc = RattlerUnsatisfiableError(solution or "Could not find solution")
@@ -333,6 +355,8 @@ class RattlerSolver(Solver):
         out_state: SolverOutputState,
         index: RattlerIndexHelper,
         attempt: int = 0,
+        *,
+        allow_build_downgrades: bool = False,
     ) -> RattlerSolverError | list[rattler.RepoDataRecord]:
         """
         The solver in rattler is declarative: you pass the things you want
@@ -363,7 +387,10 @@ class RattlerSolver(Solver):
             # would also reject newer versions whose build numbers start over at zero.
             # Reject only lower builds of the installed version as records are loaded.
             solve = rattler.solve
-            solve_kwargs.update(sources=list(index._index.values()), platforms=index._subdirs)
+            sources = list(index._index.values())
+            if allow_build_downgrades:
+                sources = [replace(info, installed={}) for info in sources]
+            solve_kwargs.update(sources=sources, platforms=index._subdirs)
         else:
             solve = rattler.solve_with_sparse_repodata
             solve_kwargs.update(
