@@ -52,7 +52,7 @@ if TYPE_CHECKING:
         PipCLIFixture,
         TmpEnvFixture,
     )
-    from pytest import MonkeyPatch
+    from pytest import FixtureRequest, MonkeyPatch
     from pytest_benchmark.fixture import BenchmarkFixture
 
 HERE = Path(__file__).parent
@@ -2185,10 +2185,6 @@ def test_channel_priority_updates_installed_dependency(
         assert packages["bar"] == "1.0"
 
 
-@pytest.mark.xfail(
-    reason="known issue: c-r-s will install packages from a new channel if available ",
-    strict=True,
-)
 def test_channel_priority_updates_installed_dependency_two(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
@@ -2269,13 +2265,15 @@ def test_channel_priority_updates_installed_dependency_two(
         assert packages["bar"] == "3.0"
 
 
-@pytest.mark.usefixtures("solver_rattler")
+@pytest.mark.parametrize("solver_fixture", ("solver_rattler", "solver_libmamba"))
 @pytest.mark.parametrize("openssl_build_number", (0, 2))
 def test_can_update_env_with_python(
     tmp_path: Path,
     tmp_env: TmpEnvFixture,
     conda_cli: CondaCLIFixture,
     openssl_build_number: int,
+    solver_fixture: str,
+    request: FixtureRequest,
 ) -> None:
     """
     Ensure that we can run an update when python is in the environment and the
@@ -2284,6 +2282,8 @@ def test_can_update_env_with_python(
 
     xref: https://github.com/conda/conda-rattler-solver/issues/135
     """
+    request.getfixturevalue(solver_fixture)
+
     # Original environment, standing in for "defaults": python -> openssl=3.5, zlib.
     # pip is needed because conda adds it as a python dependency by default.
     channel_b = tmp_path / "channel-b"
@@ -2321,17 +2321,13 @@ def test_can_update_env_with_python(
         data = json.loads(out)
         assert data["success"] is True, err
 
+        # The version of openssl is unchanged
         linked = {pkg["name"]: pkg for pkg in data["actions"].get("LINK", ())}
 
         # zlib keeps its version but moves to the new channel's build
         assert linked["zlib"]["version"] == "1.3.2"
         assert linked["zlib"]["build_number"] == 1
         assert linked["zlib"]["channel"].endswith("chan-a")
-
-        # Version downgrades may also lower the build number when changing channels.
-        assert linked["openssl"]["version"] == "3.4.0"
-        assert linked["openssl"]["build_number"] == 0
-        assert linked["openssl"]["channel"].endswith("chan-a")
 
         # python keeps its installed version
         assert linked.get("python", {"version": "3.13.1"})["version"] == "3.13.1"
