@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import logging
 import os
 import random
@@ -20,6 +21,7 @@ from conda.common.url import path_to_url, remove_auth, split_anaconda_token
 from conda.core.package_cache_data import PackageCacheData
 from conda.core.subdir_data import SubdirData
 from conda.models.channel import Channel
+from conda.models.match_spec import MatchSpec
 
 try:
     from conda.common.serialize.json import dumps as json_dump
@@ -35,12 +37,64 @@ if TYPE_CHECKING:
     from conda.common.path import PathsType
     from conda.gateways.shards import BuildRepodataSubset
     from conda.gateways.shards.typing import Shards
-    from conda.models.match_spec import MatchSpec
     from conda.models.records import PackageCacheRecord, PackageRecord
 
     from .state import SolverInputState
 
 log = logging.getLogger(f"conda.{__name__}")
+
+
+def _root_extras(in_state: SolverInputState) -> dict[str, list[str]]:
+    """
+    Build the ``root_extras`` mapping for ``build_repodata_subset``.
+
+    This only decides which shards to *fetch*; it never alters the specs sent to the
+    solver. Extras are collected for root packages only, and conda does not recurse
+    into the extras of dependencies.
+
+    Sources, merged as a union per package name:
+
+    - ``in_state.requested``: extras on the specs given in this command.
+    - ``in_state.history``: extras recorded for installed packages, so their
+      ``extra_depends`` shards stay available on later solves. Ignored when pruning,
+      because pruning acts as if there were no history (only requested specs anchor
+      packages).
+    """
+    sources = [in_state.requested]
+    if not in_state.prune:
+        sources.append(in_state.history)
+    merged: dict[str, set[str]] = {}
+    for source in sources:
+        for name, spec in source.items():
+            # `get_raw_value` works on every conda version; the `.extras` property is
+            # newer and could replace it once conda>=26.10 is required.
+            if extras := spec.get_raw_value("extras"):
+                merged.setdefault(name, set()).update(extras)
+    return {name: sorted(extras) for name, extras in merged.items()}
+
+
+# NOTE: This is a runtime compatibility check for conda versions older than 26.10, whose
+# `build_repodata_subset` has no `root_extras` option. It can be deleted, passing
+# `root_extras=` directly to `build_repodata_subset`, once this package requires
+# `conda >=26.10.0`.
+def _root_extras_kwargs(
+    build_repodata_subset: BuildRepodataSubset, root_extras: dict[str, list[str]] | None
+) -> dict[str, dict[str, list[str]]]:
+    """
+    Keyword arguments to forward ``root_extras`` to ``build_repodata_subset``.
+
+    Returns an empty dict when there are no extras to fetch, or when the callable provided
+    by conda has no ``root_extras`` parameter (conda < 26.10). Passing the keyword to an
+    older conda would raise ``TypeError``, so extras are simply not fetched there.
+    """
+    if not root_extras:
+        return {}
+    try:
+        if "root_extras" in inspect.signature(build_repodata_subset).parameters:
+            return {"root_extras": root_extras}
+    except (TypeError, ValueError):  # signature cannot be inspected
+        pass
+    return {}
 
 
 @dataclass
@@ -244,7 +298,9 @@ class RattlerIndexHelper:
         return tuple(dict.fromkeys(urls))  # de-duplicate
 
     def _get_root_package_from_shard(
-        self, package_names: list[str]
+        self,
+        package_names: list[str],
+        root_extras: dict[str, list[str]] | None = None,
     ) -> dict[str, _ChannelRepoInfo]:
         """
         Builds the repodata subset for a set of packages. Only applicable to sharded channels.
@@ -254,7 +310,10 @@ class RattlerIndexHelper:
         if self.build_repodata_subset and _is_sharded_repodata_enabled():
             urls_to_channel = {url: Channel.from_url(url) for url in urls}
             channel_data = self.build_repodata_subset(
-                package_names, urls_to_channel, repodata_version=3
+                package_names,
+                urls_to_channel,
+                repodata_version=3,
+                **_root_extras_kwargs(self.build_repodata_subset, root_extras),
             )
             log.debug(
                 "build_repodata_subset returned channels: %s",
@@ -275,8 +334,13 @@ class RattlerIndexHelper:
         """
         root_packages = (*self.in_state.installed.keys(), *self.in_state.requested)
         log.debug("build_repodata_subset root_packages: %s", root_packages)
+        root_extras = _root_extras(self.in_state)
+        log.debug("build_repodata_subset root_extras: %s", root_extras)
         channel_data = self.build_repodata_subset(
-            root_packages, urls_to_channel, repodata_version=3
+            root_packages,
+            urls_to_channel,
+            repodata_version=3,
+            **_root_extras_kwargs(self.build_repodata_subset, root_extras),
         )
         log.debug(
             "build_repodata_subset returned channels: %s",
@@ -437,6 +501,7 @@ class RattlerIndexHelper:
         the requested spec may not be in the loaded index. So, this function will additionally
         build the repodata subset for the requested spec. This will not update the loaded index.
         """
+        conda_spec = MatchSpec(spec)
         spec = rattler.MatchSpec(str(spec))
         search_result = list(self._search(spec, self._index))
         if search_result:
@@ -448,7 +513,11 @@ class RattlerIndexHelper:
         if search_expanded_index:
             # The packages loaded with `_get_root_package_from_shard` will have the most
             # up-to-date packages for the requested spec in sharded channels.
-            extra_index = self._get_root_package_from_shard([spec.name.normalized])
+            extras = conda_spec.get_raw_value("extras")
+            extra_index = self._get_root_package_from_shard(
+                [spec.name.normalized],
+                {conda_spec.name: list(extras)} if extras else None,
+            )
             yield from self._search(spec, self._index | extra_index)
 
     @property
