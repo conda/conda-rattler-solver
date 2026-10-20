@@ -372,6 +372,8 @@ class RattlerSolver(Solver):
           the installed packages, history or lockfiles).
         - pinned_packages: Records that MUST be present if needed. It will not allow any other
           variant.
+        - additional_packages: Records that should be included in the solve, but should not be
+          preferred. Can be useful to represent packages that are already installed in the prefix.
         - virtual_packages: Details of the system.
         """
         solve_kwargs = {
@@ -632,6 +634,9 @@ class RattlerSolver(Solver):
             "pinned_packages": [
                 conda_prefix_record_to_rattler_prefix_record(record) for record in pinned_packages
             ],
+            "additional_packages": [
+                conda_prefix_record_to_rattler_prefix_record(record) for record in in_state.installed.values()
+            ]
         }
 
     def _collect_specs_for_remove(
