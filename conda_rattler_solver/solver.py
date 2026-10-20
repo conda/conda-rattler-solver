@@ -881,7 +881,7 @@ class RattlerSolver(Solver):
             rattler.GenericVirtualPackage(
                 rattler.PackageName(pkg.name),
                 rattler.Version(pkg.version),
-                pkg.build,
+                rattler.BuildString(pkg.build),
             )
             for pkg in in_state.virtual.values()
         ]

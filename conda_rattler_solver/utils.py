@@ -80,7 +80,7 @@ def rattler_record_to_conda_record(
     return PackageRecord(
         name=record.name.source,
         version=str(record.version),
-        build=record.build,
+        build=str(record.build),
         build_number=record.build_number,
         channel=channel_url,
         subdir=record.subdir,
@@ -127,7 +127,7 @@ def conda_prefix_record_to_rattler_prefix_record(
     package_record = rattler.PackageRecord(
         name=record.name,
         version=record.version,
-        build=record.build,
+        build=rattler.BuildString(record.build),
         build_number=record.build_number,
         subdir=record.subdir,
         arch=record.get("arch"),
