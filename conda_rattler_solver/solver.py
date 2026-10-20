@@ -318,7 +318,6 @@ class RattlerSolver(Solver):
                 neutered=dict(out_state.neutered),
                 conflicts=dict(out_state.conflicts),
                 pins=dict(out_state.pins),
-                installed_without_candidates=set(out_state.installed_without_candidates),
             )
         else:
             # Didn't find a solution after all attempts, let's unfreeze everything
@@ -609,15 +608,6 @@ class RattlerSolver(Solver):
                 elif action == "lock":
                     locked_packages.append(installed)
 
-        # Add packages marked as missing to the set of locked packages
-        if out_state.installed_without_candidates:
-            already_locked = {record.name for record in locked_packages}
-            for name in out_state.installed_without_candidates:
-                if name in already_locked:
-                    continue
-                if installed := in_state.installed.get(name):
-                    locked_packages.append(installed)
-
         if in_state.is_updating:
             for i, spec in enumerate(specs):
                 spec = MatchSpec(spec)
@@ -743,18 +733,6 @@ class RattlerSolver(Solver):
                 unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(
                     f"{words[0]} {words[1]}"
                 )
-            elif "which cannot be installed because there are no viable options" in line:
-                spec = matchspec_from_solver_diagnostic(f"{words[0]} {words[1].strip(',')}")
-                unsatisfiable[spec.name] = spec
-                if (
-                    in_state.is_updating
-                    and (installed := in_state.installed.get(spec.name))
-                    and spec.get_raw_value("build_number") == f">={installed.build_number}"
-                    and spec.match(installed)
-                ):
-                    # Strict priority can exclude every candidate meeting the build
-                    # floor, while the installed record can still satisfy it.
-                    out_state.installed_without_candidates.add(spec.name)
             elif "cannot be installed because there are no viable options" in line:
                 unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(
                     f"{words[0]} {words[1]}"
@@ -777,20 +755,6 @@ class RattlerSolver(Solver):
                 # list. e.g. `conda create main::psutil` + `conda install -c conda-forge python`
                 if any(spec.match(record) for record in in_state.installed.values()):
                     unsatisfiable[spec.name] = spec
-                    out_state.installed_without_candidates.add(spec.name)
-                else:
-                    not_found[spec.name] = spec
-            elif "for which no candidates were found" in line:
-                # Same situation as "No candidates were found for" above, but reported as a
-                # nested reason under some other unsatisfiable package instead of as a
-                # standalone line, e.g. "foo >=2, for which no candidates were found." This
-                # happens when the name does have candidates in the index, just not any that
-                # satisfy the requested version (as opposed to being fully absent from it).
-                spec = line.split(", for which no candidates were found", 1)[0].strip()
-                spec = matchspec_from_solver_diagnostic(spec)
-                if any(spec.match(record) for record in in_state.installed.values()):
-                    unsatisfiable[spec.name] = spec
-                    out_state.installed_without_candidates.add(spec.name)
                 else:
                     not_found[spec.name] = spec
 
