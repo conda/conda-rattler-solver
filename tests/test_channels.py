@@ -20,6 +20,8 @@ from conda.exceptions import DryRunExit
 from conda.models.channel import Channel
 from conda.testing.integration import package_is_installed
 
+from conda_rattler_solver.index import _MultiSource
+
 from .channel_testing.helpers import (
     http_server_auth_basic,  # noqa: F401
     http_server_auth_basic_email,  # noqa: F401
@@ -221,10 +223,9 @@ def test_http_server_auth_token(
     )
 
 
-@pytest.mark.xfail(
-    reason="multichannels not fully implemented yet: "
-    "https://github.com/conda/rattler/issues/1327",
-    strict=True,
+@pytest.mark.skipif(
+    _MultiSource is None,
+    reason="multichannels need py-rattler >=0.27.1",
 )
 def test_http_server_auth_token_in_defaults(
     http_server_auth_token,  # noqa: F811
@@ -254,10 +255,9 @@ def test_http_server_auth_token_in_defaults(
             condarc.unlink()
 
 
-@pytest.mark.xfail(
-    reason="multichannels not fully implemented yet: "
-    "https://github.com/conda/rattler/issues/1327",
-    strict=True,
+@pytest.mark.skipif(
+    _MultiSource is None,
+    reason="multichannels need py-rattler >=0.27.1",
 )
 def test_local_spec() -> None:
     """https://github.com/conda/conda-libmamba-solver/issues/398"""
@@ -281,6 +281,60 @@ def test_local_spec() -> None:
         env=env,
     )
     assert process.returncode == 0
+
+
+@pytest.mark.skipif(
+    _MultiSource is None,
+    reason="multichannels need py-rattler >=0.27.1",
+)
+def test_custom_multichannels(tmp_path: Path) -> None:
+    """
+    condarc 'custom_multichannels' groups several channels under one name.
+    Group-named specs (e.g. 'mygroup::test-package') must match any member, and
+    members must share a priority tier: with (strict) channel priority, the
+    newer build in the second member must not be hidden by the first one.
+    https://github.com/conda/conda-rattler-solver/issues/8
+    """
+    repo_a = tmp_path / "repo_a"
+    repo_b = tmp_path / "repo_b"
+    for repo in (repo_a, repo_b):
+        shutil.copytree(DATA / "mamba_repo", repo)
+    # Add a newer build of test-package to repo_b
+    repodata = repo_b / "noarch" / "repodata.json"
+    repodata_contents = json.loads(repodata.read_text())
+    newer = dict(repodata_contents["packages"]["test-package-0.1-0.tar.bz2"], build_number=1)
+    repodata_contents["packages"]["test-package-0.1-1.tar.bz2"] = newer
+    repodata.write_text(json.dumps(repodata_contents))
+    shutil.copy(
+        repo_a / "noarch" / "test-package-0.1-0.tar.bz2",
+        repo_b / "noarch" / "test-package-0.1-1.tar.bz2",
+    )
+
+    env = os.environ.copy()
+    env["HOME"] = str(tmp_path)
+    env["CONDA_PKGS_DIRS"] = str(tmp_path / "pkgs")
+    write_env_config(
+        tmp_path,
+        force=True,
+        channels=["mygroup"],
+        custom_multichannels={"mygroup": [f"file://{repo_a}", f"file://{repo_b}"]},
+    )
+
+    for spec in ("test-package", "mygroup::test-package"):
+        process = conda_subprocess(
+            "create",
+            "--dry-run",
+            "--json",
+            "--solver=rattler",
+            f"--prefix={tmp_path / 'env'}",
+            spec,
+            env=env,
+        )
+        result = json.loads(process.stdout)
+        assert result["success"] is True
+        (record,) = (pkg for pkg in result["actions"]["LINK"] if pkg["name"] == "test-package")
+        # the newer build in the later member is not hidden by the earlier member
+        assert record["build_number"] == 1
 
 
 def test_nameless_channel(

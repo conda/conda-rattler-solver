@@ -5,7 +5,7 @@ import os
 import random
 import shutil
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
 from string import hexdigits
@@ -19,7 +19,7 @@ from conda.common.io import DummyExecutor, ThreadLimitedThreadPoolExecutor
 from conda.common.url import path_to_url, remove_auth, split_anaconda_token
 from conda.core.package_cache_data import PackageCacheData
 from conda.core.subdir_data import SubdirData
-from conda.models.channel import Channel
+from conda.models.channel import Channel, MultiChannel
 
 try:
     from conda.common.serialize.json import dumps as json_dump
@@ -41,6 +41,10 @@ if TYPE_CHECKING:
     from .state import SolverInputState
 
 log = logging.getLogger(f"conda.{__name__}")
+
+# py-rattler 0.27.1 groups multichannels via rattler.MultiSource; older
+# versions are still supported but leave multichannels ungrouped.
+_MultiSource = getattr(rattler, "MultiSource", None)
 
 
 @dataclass
@@ -115,7 +119,9 @@ class RattlerIndexHelper:
         self.build_repodata_subset = build_repodata_subset
 
         self._index: dict[str, _ChannelRepoInfo] = {}
-        self._index.update(self._load_channels())
+        self._multichannel_urls: dict[str, str | None] = {}
+        urls, self._multichannel_urls = self._collect_channel_urls()
+        self._index.update(self._load_channels(urls))
         if pkgs_dirs:
             self._index.update(
                 {info.noauth_url: info for info in self._load_pkgs_cache(pkgs_dirs)}
@@ -147,6 +153,75 @@ class RattlerIndexHelper:
                     repo_info.repo.close()
                     repo_info.repo = new_repo_info.repo
                     break
+
+    def _grouped_sources(self) -> list[tuple[str | None, list[_ChannelRepoInfo]]]:
+        """
+        Group the loaded repos as (multichannel name, member infos) pairs.
+        Standalone channels and URLs not contributed by a channel (e.g. the
+        local package cache) are (None, [info]). Groups hold every member URL
+        loaded for that multichannel, in channel order; the position of each
+        group or standalone source in the returned list matches channel order,
+        which the solver uses to assign priority.
+
+        Returns a flat list of standalone pairs when 'rattler.MultiSource' is
+        not available (py-rattler <0.27.1).
+        """
+        if _MultiSource is None:
+            return [(None, [info]) for info in self._index.values()]
+        groups: dict[str, list[_ChannelRepoInfo]] = {}
+        for url, group_name in self._multichannel_urls.items():
+            if group_name is not None and url in self._index:
+                groups.setdefault(group_name, []).append(self._index[url])
+        sources: list[tuple[str | None, list[_ChannelRepoInfo]]] = []
+        emitted: set[str] = set()
+        for noauth_url, info in self._index.items():
+            group_name = self._multichannel_urls.get(noauth_url)
+            if group_name is None:
+                sources.append((None, [info]))
+            elif group_name not in emitted:
+                sources.append((group_name, groups[group_name]))
+                emitted.add(group_name)
+        return sources
+
+    def solve_sources(
+        self, *, allow_build_downgrades: bool = False
+    ) -> list[_ChannelRepoInfo | rattler.MultiSource]:
+        """
+        Sources for 'rattler.solve'. URLs grouped under a multichannel (e.g.
+        conda's 'defaults', conda-build's 'local', or condarc's
+        'custom_multichannels') are wrapped in a 'rattler.MultiSource', so its
+        members share a channel priority tier and group-named specs (e.g.
+        'defaults::python') can match them. Standalone channels and URLs not
+        contributed by a channel (e.g. the local package cache) are passed
+        through as-is.
+
+        When 'allow_build_downgrades' is set, the installed-build floor is
+        removed from every source, so lower builds of the installed version can
+        be selected.
+        """
+        sources: list[_ChannelRepoInfo | rattler.MultiSource] = []
+        for name, infos in self._grouped_sources():
+            if allow_build_downgrades:
+                infos = [replace(info, installed={}) for info in infos]
+            if _MultiSource is None or name is None:
+                sources.append(infos[0])
+            else:
+                sources.append(_MultiSource(name, infos))
+        return sources
+
+    def solve_sparse_repodata(self) -> list[rattler.SparseRepoData | rattler.MultiSource]:
+        """
+        Sources for 'rattler.solve_with_sparse_repodata', which only accepts
+        'rattler.MultiSource' groups made of 'rattler.SparseRepoData'.
+        """
+        return [
+            (
+                infos[0].repo
+                if _MultiSource is None or name is None
+                else _MultiSource(name, [info.repo for info in infos])
+            )
+            for name, infos in self._grouped_sources()
+        ]
 
     def n_packages(
         self,
@@ -207,7 +282,6 @@ class RattlerIndexHelper:
             shutil.copy(json_path, path_copy)
             json_path = path_copy
             self._unlink_on_del.append(path_copy)
-        # TODO: Support multichannel https://github.com/conda/rattler/issues/1327
         rattler_channel = rattler.Channel(noauth_url_sans_subdir)
         repo = rattler.SparseRepoData(rattler_channel, channel.subdir, json_path)
         return _ChannelRepoInfo(
@@ -220,28 +294,59 @@ class RattlerIndexHelper:
             package_format=self._package_format,
         )
 
-    def _urls_from_channels(self, channels: Iterable[Channel | str] | None = None) -> tuple[str]:
-        # 1. Obtain and deduplicate URLs from channels
-        urls = []
-        seen_noauth = set()
-        for _c in channels or self._channels:
-            c = Channel(_c)
-            noauth_urls = c.urls(with_credentials=False, subdirs=self._subdirs)
-            if seen_noauth.issuperset(noauth_urls):
-                continue
-            if c.auth or c.token:  # authed channel always takes precedence
-                urls += Channel(c).urls(with_credentials=True, subdirs=self._subdirs)
-                seen_noauth.update(noauth_urls)
-                continue
-            # at this point, we are handling an unauthed channel; in some edge cases,
-            # an auth'd variant of the same channel might already be present in `urls`.
-            # we only add them if we haven't seen them yet
-            for url in noauth_urls:
-                if url not in seen_noauth:
-                    urls.append(url)
-                    seen_noauth.add(url)
+    def _collect_channel_urls(
+        self, channels: Iterable[Channel | str] | None = None
+    ) -> tuple[tuple[str, ...], dict[str, str | None]]:
+        """
+        Expand channels to deduplicated per-subdir URLs, and map each URL to the
+        canonical name of the multichannel that contributed it (if any).
 
-        return tuple(dict.fromkeys(urls))  # de-duplicate
+        Multichannels (conda's 'defaults', conda-build's 'local', or condarc's
+        'custom_multichannels') are flattened using their member channels, whose
+        auth and tokens are preserved, and grouped under the multichannel's
+        canonical name so its members share a channel priority tier and
+        group-named specs (e.g. 'defaults::python') can match them. Standalone
+        channels stay ungrouped.
+
+        This mirrors how conda-libmamba-solver collects channels
+        ('LibMambaIndexHelper._channel_urls') and assigns priorities
+        ('_set_repo_priorities' keeps one priority tier per canonical name).
+        The first listing of a channel provides its URLs and credentials;
+        re-listings whose URLs have all been contributed already are skipped.
+        """
+        urls: list[str] = []
+        seen_noauth: set[str] = set()
+        url_groups: dict[str, str | None] = {}
+        for _c in self._channels if channels is None else channels:
+            channel = Channel(_c)
+            if isinstance(channel, MultiChannel):
+                members: tuple[Channel, ...] = channel.channels
+                group_name: str | None = channel.canonical_name
+            else:
+                members = (channel,)
+                group_name = None
+            for member in members:
+                noauth_urls = member.urls(with_credentials=False, subdirs=self._subdirs)
+                if seen_noauth.issuperset(noauth_urls):
+                    continue
+                if member.auth or member.token:  # authed member always takes precedence
+                    urls += member.urls(with_credentials=True, subdirs=self._subdirs)
+                    seen_noauth.update(noauth_urls)
+                    url_groups.update(dict.fromkeys(noauth_urls, group_name))
+                    continue
+                for noauth_url in noauth_urls:
+                    if noauth_url not in seen_noauth:
+                        urls.append(noauth_url)
+                        seen_noauth.add(noauth_url)
+                        url_groups[noauth_url] = group_name
+
+        return tuple(dict.fromkeys(urls)), url_groups  # de-duplicate
+
+    def _urls_from_channels(
+        self, channels: Iterable[Channel | str] | None = None
+    ) -> tuple[str, ...]:
+        urls, _ = self._collect_channel_urls(channels)
+        return urls
 
     def _get_root_package_from_shard(
         self, package_names: list[str]

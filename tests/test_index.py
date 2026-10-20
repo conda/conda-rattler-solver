@@ -10,19 +10,27 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+import rattler
 from conda.base.context import context, reset_context
 from conda.core.subdir_data import SubdirData
 from conda.gateways.logging import initialize_logging
 from conda.gateways.shards import build_repodata_subset
-from conda.models.channel import Channel
+from conda.models.channel import Channel, MultiChannel
 
-from conda_rattler_solver.index import RattlerIndexHelper, _is_sharded_repodata_enabled
+import conda_rattler_solver.index
+from conda_rattler_solver.index import (
+    RattlerIndexHelper,
+    _ChannelRepoInfo,
+    _is_sharded_repodata_enabled,
+    _MultiSource,
+)
 from conda_rattler_solver.state import SolverInputState
 
 if TYPE_CHECKING:
     from os import PathLike
 
     from conda.testing.fixtures import HttpTestServerFixture, TmpEnvFixture
+    from pytest_benchmark.fixture import BenchmarkFixture
 
 
 initialize_logging()
@@ -115,6 +123,123 @@ def test_reload_channels(tmp_path: Path):
     time.sleep(1)
     index.reload_channel(Channel(str(tmp_path)))
     assert index.n_packages() == initial_count + 1
+
+
+@pytest.mark.skipif(
+    _MultiSource is None,
+    reason="multichannels need py-rattler >=0.27.1",
+)
+def test_solve_sources_multichannel_grouping(tmp_path: Path):
+    """
+    Channels grouped in a multichannel (e.g. conda's 'defaults' or condarc's
+    'custom_multichannels') are wrapped in a 'rattler.MultiSource' so they share
+    a priority tier. Standalone channels are passed through as-is. Order is
+    preserved so the solver can assign priority.
+    """
+    repo_a, repo_b, standalone = tmp_path / "repo_a", tmp_path / "repo_b", tmp_path / "standalone"
+    for repo in (repo_a, repo_b, standalone):
+        shutil.copytree(DATA / "mamba_repo", repo)
+    multichannel = MultiChannel("mygroup", (Channel(str(repo_a)), Channel(str(repo_b))))
+
+    index = RattlerIndexHelper(
+        channels=(multichannel, Channel(str(standalone))), subdirs=("noarch",)
+    )
+
+    sources = index.solve_sources()
+    assert len(sources) == 2
+    group = sources[0]
+    assert isinstance(group, rattler.MultiSource)
+    assert group.name == "mygroup"
+    assert len(group.sources) == 2
+    assert all(isinstance(source, _ChannelRepoInfo) for source in group.sources)
+    assert isinstance(sources[1], _ChannelRepoInfo)
+
+    sparse = index.solve_sparse_repodata()
+    assert len(sparse) == 2
+    assert isinstance(sparse[0], rattler.MultiSource)
+    assert sparse[0].name == "mygroup"
+    assert len(sparse[0].sources) == 2
+    assert all(isinstance(source, rattler.SparseRepoData) for source in sparse[0].sources)
+    assert isinstance(sparse[1], rattler.SparseRepoData)
+
+
+@pytest.mark.skipif(
+    _MultiSource is None,
+    reason="multichannels need py-rattler >=0.27.1",
+)
+def test_solve_sources_without_multi_source_support(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    "Without 'rattler.MultiSource' (py-rattler <0.27.1), sources stay ungrouped."
+    monkeypatch.setattr(conda_rattler_solver.index, "_MultiSource", None)
+    repo_a, repo_b = tmp_path / "repo_a", tmp_path / "repo_b"
+    for repo in (repo_a, repo_b):
+        shutil.copytree(DATA / "mamba_repo", repo)
+    multichannel = MultiChannel("mygroup", (Channel(str(repo_a)), Channel(str(repo_b))))
+
+    index = RattlerIndexHelper(channels=(multichannel,), subdirs=("noarch",))
+
+    sources = index.solve_sources()
+    assert len(sources) == 2
+    assert all(isinstance(source, _ChannelRepoInfo) for source in sources)
+    assert index.solve_sparse_repodata() == [source.repo for source in sources]
+
+
+@pytest.mark.skipif(
+    _MultiSource is None,
+    reason="multichannels need py-rattler >=0.27.1",
+)
+def test_solve_sources_empty_multichannel(tmp_path: Path):
+    "Multichannels without members (e.g. 'local' without conda-build paths) are ignored."
+    standalone = tmp_path / "standalone"
+    shutil.copytree(DATA / "mamba_repo", standalone)
+
+    index = RattlerIndexHelper(
+        channels=(MultiChannel("empty-group", ()), Channel(str(standalone))), subdirs=("noarch",)
+    )
+
+    sources = index.solve_sources()
+    assert len(sources) == 1
+    assert isinstance(sources[0], _ChannelRepoInfo)
+    assert index.solve_sparse_repodata() == [sources[0].repo]
+
+
+def test_collect_channel_urls_first_listing_wins(tmp_path: Path):
+    "The first listing of a channel provides its URLs; later re-listings are skipped."
+    repo = tmp_path / "repo"
+    shutil.copytree(DATA / "mamba_repo", repo)
+    index = RattlerIndexHelper(channels=[str(repo)], subdirs=("noarch",))
+    urls, url_groups = index._collect_channel_urls(
+        channels=(
+            Channel("https://example.com/conda"),
+            Channel("conda-forge"),
+            Channel("https://example.com/t/some-token/conda"),
+            Channel("https://user:pass@example.com/conda"),
+        )
+    )
+    assert urls == (
+        "https://example.com/conda/noarch",
+        "https://conda.anaconda.org/conda-forge/noarch",
+    )
+    assert url_groups == {
+        "https://example.com/conda/noarch": None,
+        "https://conda.anaconda.org/conda-forge/noarch": None,
+    }
+
+
+def test_collect_channel_urls_authenticated_first(tmp_path: Path):
+    "The first listing provides the credentials when it has any; re-listings are skipped."
+    repo = tmp_path / "repo"
+    shutil.copytree(DATA / "mamba_repo", repo)
+    index = RattlerIndexHelper(channels=[str(repo)], subdirs=("noarch",))
+    urls, url_groups = index._collect_channel_urls(
+        channels=(
+            Channel("https://example.com/t/some-token/conda"),
+            Channel("https://example.com/conda"),
+        )
+    )
+    assert urls == ("https://example.com/conda/t/some-token/noarch",)
+    assert url_groups == {"https://example.com/conda/noarch": None}
 
 
 @pytest.mark.parametrize(
@@ -255,13 +380,13 @@ def test_search_sharded_channels_with_requested_packages(
     assert len(results) == 1
     assert results[0].name == "foo"
 
-    results =list(index.search("bar", search_expanded_index=False))
+    results = list(index.search("bar", search_expanded_index=False))
     assert len(results) == 1
     assert results[0].name == "bar"
 
     results = list(index.search("idontexist", search_expanded_index=False))
     assert len(results) == 0
-    
+
     results = list(index.search("idontexist", search_expanded_index=True))
     assert len(results) == 0
 
@@ -290,7 +415,7 @@ def test_search_combo_sharded_channels(tmp_path: Path, http_test_server: HttpTes
     assert len(results) == 1
     assert results[0].name == "foo"
 
-    results = list( index.search("foo", search_expanded_index=False))
+    results = list(index.search("foo", search_expanded_index=False))
     assert len(results) == 0
 
     results = list(index.search("bar", search_expanded_index=True))
@@ -357,8 +482,8 @@ def test_query_search_requested_packages_benchmark(
     Benchmark searching for packages with the context of a package already being requested.
 
     Should observe that searching the index for a package that has been requested as
-    part of the input state should be about the same speed for searching with the `search_expanded_index`
-    set to `True` or `False`.
+    part of the input state should be about the same speed for searching with the
+    `search_expanded_index` set to `True` or `False`.
     """
     url = http_test_server.url
     index = RattlerIndexHelper(
