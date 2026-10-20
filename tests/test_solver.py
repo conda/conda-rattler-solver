@@ -182,7 +182,9 @@ def test_defaults_specs_work(conda_cli: CondaCLIFixture) -> None:
 
     defaults is secretly (main, r and msys2), and repos are built using those
     actual channels. The channels are grouped in a 'rattler.MultiSource', so
-    'defaults::-style specs match any of its members.
+    'defaults::-style specs match any of its members. Member names work too:
+    conda canonicalizes them to the multichannel name ('pkgs/main::' becomes
+    'defaults::') before the specs reach the solver.
     """
     out, err, rc = conda_cli(
         "create",
@@ -203,6 +205,25 @@ def test_defaults_specs_work(conda_cli: CondaCLIFixture) -> None:
             break
     else:
         raise AssertionError("libarchive not found in LINK actions")
+
+    out, err, rc = conda_cli(
+        "create",
+        "--dry-run",
+        "--json",
+        "--solver=rattler",
+        "--override-channels",
+        "--channel=conda-forge",
+        "pkgs/main::python=3.9",
+        raises=DryRunExit,
+    )
+    data = json.loads(out)
+    assert data.get("success") is True
+    for link in data["actions"]["LINK"]:
+        if link["name"] == "python":
+            assert link["channel"] in ("defaults", "pkgs/main")
+            break
+    else:
+        raise AssertionError("python not found in LINK actions")
 
 
 def test_determinism(tmpdir):
