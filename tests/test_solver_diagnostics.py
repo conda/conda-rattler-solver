@@ -74,7 +74,6 @@ def test_missing_candidate_diagnostics_preserve_matching(
 
         assert set(out_state.conflicts) == {name}
         assert out_state.conflicts[name].match(in_state.installed["target"])
-        assert out_state.installed_without_candidates == {name}
 
         with pytest.raises(RattlerUnsatisfiableError) as exc_info:
             solver._maybe_raise_for_problems(problems, in_state, out_state)
@@ -85,7 +84,6 @@ def test_missing_candidate_diagnostics_preserve_matching(
         assert exc_info.value.allow_retry is False
         assert len(exc_info.value.packages) == 1
         assert out_state.conflicts == {}
-        assert out_state.installed_without_candidates == set()
 
 
 @pytest.mark.parametrize("diagnostic", DIAGNOSTICS)
@@ -109,7 +107,6 @@ def test_exact_name_diagnostics_avoid_unrelated_record_matches(
         assert compared == []
     else:
         solver._maybe_raise_for_problems(problems, in_state, out_state)
-        assert out_state.installed_without_candidates == {"target"}
         assert compared == ["target"]
 
 
@@ -129,7 +126,6 @@ def test_benchmark_missing_candidate_diagnostics(tmp_path, benchmark, installed_
 
     def setup():
         out_state.conflicts.clear()
-        out_state.installed_without_candidates.clear()
         return (problems, in_state, out_state), {}
 
     benchmark.pedantic(
@@ -141,4 +137,3 @@ def test_benchmark_missing_candidate_diagnostics(tmp_path, benchmark, installed_
     )
 
     assert set(out_state.conflicts) == set(names)
-    assert out_state.installed_without_candidates == set(names)
