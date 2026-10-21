@@ -15,6 +15,7 @@ from urllib.request import urlretrieve
 import pytest
 from conda.base.context import reset_context
 from conda.common.compat import on_linux, on_win
+from conda.common.url import path_to_url
 from conda.core.prefix_data import PrefixData
 from conda.exceptions import DryRunExit
 from conda.models.channel import Channel
@@ -312,12 +313,16 @@ def test_custom_multichannels(tmp_path: Path) -> None:
 
     env = os.environ.copy()
     env["HOME"] = str(tmp_path)
+    env["USERPROFILE"] = str(tmp_path)  # Windows config discovery
+    env["CONDARC"] = str(tmp_path / ".condarc")
     env["CONDA_PKGS_DIRS"] = str(tmp_path / "pkgs")
     write_env_config(
         tmp_path,
         force=True,
         channels=["mygroup"],
-        custom_multichannels={"mygroup": [f"file://{repo_a}", f"file://{repo_b}"]},
+        custom_multichannels={
+            "mygroup": [path_to_url(str(repo_a)), path_to_url(str(repo_b))],
+        },
     )
 
     for spec in ("test-package", "mygroup::test-package"):
