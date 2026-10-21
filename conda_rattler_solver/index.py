@@ -21,7 +21,6 @@ from conda.common.url import path_to_url, remove_auth, split_anaconda_token
 from conda.core.package_cache_data import PackageCacheData
 from conda.core.subdir_data import SubdirData
 from conda.models.channel import Channel
-from conda.models.match_spec import MatchSpec
 
 try:
     from conda.common.serialize.json import dumps as json_dump
@@ -37,6 +36,7 @@ if TYPE_CHECKING:
     from conda.common.path import PathsType
     from conda.gateways.shards import BuildRepodataSubset
     from conda.gateways.shards.typing import Shards
+    from conda.models.match_spec import MatchSpec
     from conda.models.records import PackageCacheRecord, PackageRecord
 
     from .state import SolverInputState
@@ -288,9 +288,7 @@ class RattlerIndexHelper:
         return tuple(dict.fromkeys(urls))  # de-duplicate
 
     def _get_root_package_from_shard(
-        self,
-        package_names: list[str],
-        root_extras: dict[str, list[str]] | None = None,
+        self, package_names: list[str]
     ) -> dict[str, _ChannelRepoInfo]:
         """
         Builds the repodata subset for a set of packages. Only applicable to sharded channels.
@@ -300,10 +298,7 @@ class RattlerIndexHelper:
         if self.build_repodata_subset and _is_sharded_repodata_enabled():
             urls_to_channel = {url: Channel.from_url(url) for url in urls}
             channel_data = self.build_repodata_subset(
-                package_names,
-                urls_to_channel,
-                repodata_version=3,
-                **_root_extras_kwargs(self.build_repodata_subset, root_extras),
+                package_names, urls_to_channel, repodata_version=3
             )
             log.debug(
                 "build_repodata_subset returned channels: %s",
@@ -491,7 +486,6 @@ class RattlerIndexHelper:
         the requested spec may not be in the loaded index. So, this function will additionally
         build the repodata subset for the requested spec. This will not update the loaded index.
         """
-        conda_spec = MatchSpec(spec)
         spec = rattler.MatchSpec(str(spec))
         search_result = list(self._search(spec, self._index))
         if search_result:
@@ -503,11 +497,7 @@ class RattlerIndexHelper:
         if search_expanded_index:
             # The packages loaded with `_get_root_package_from_shard` will have the most
             # up-to-date packages for the requested spec in sharded channels.
-            extras = conda_spec.get_raw_value("extras")
-            extra_index = self._get_root_package_from_shard(
-                [spec.name.normalized],
-                {conda_spec.name: list(extras)} if extras else None,
-            )
+            extra_index = self._get_root_package_from_shard([spec.name.normalized])
             yield from self._search(spec, self._index | extra_index)
 
     @property

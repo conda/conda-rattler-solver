@@ -379,16 +379,6 @@ def test_query_search_requested_packages_benchmark(
     benchmark(run)
 
 
-def _state(requested=(), history=(), prune=False) -> SimpleNamespace:
-    """Minimal stand-in for SolverInputState exposing what the index helper reads."""
-    return SimpleNamespace(
-        requested={s.name: s for s in map(MatchSpec, requested)},
-        history={s.name: s for s in map(MatchSpec, history)},
-        installed={},
-        prune=prune,
-    )
-
-
 @pytest.mark.parametrize(
     "requested,history,prune,expected",
     [
@@ -412,43 +402,10 @@ def _state(requested=(), history=(), prune=False) -> SimpleNamespace:
     ],
 )
 def test_root_extras(requested, history, prune, expected):
-    assert _root_extras(_state(requested, history, prune)) == expected
-
-
-def _index_helper(build_repodata_subset, **state) -> RattlerIndexHelper:
-    """
-    A helper with only what the sharded loading and search paths need. Skips the
-    constructor, which would otherwise fetch repodata from real channels.
-    """
-    helper = RattlerIndexHelper.__new__(RattlerIndexHelper)
-    helper._unlink_on_del = []
-    helper._index = {}
-    helper.build_repodata_subset = build_repodata_subset
-    helper.in_state = _state(**state)
-    helper._urls_from_channels = lambda: ["https://example.com/noarch"]
-    return helper
-
-
-def _recording_subset(calls: list):
-    """Fake `build_repodata_subset` that records the arguments it receives."""
-
-    def subset(root_packages, channels, repodata_version=1, root_extras=None):
-        calls.append((tuple(root_packages), repodata_version, root_extras))
-
-    return subset
-
-
-def test_load_channel_repo_info_shards_passes_root_extras():
-    calls = []
-    helper = _index_helper(_recording_subset(calls), requested=["httpx[extras=cli]"])
-    helper._load_channel_repo_info_shards({})
-    assert calls == [(("httpx",), 3, {"httpx": ["cli"]})]
-
-
-def test_search_expanded_index_passes_root_extras():
-    calls = []
-    helper = _index_helper(_recording_subset(calls))
-    helper._search = lambda *args, **kwargs: iter(())  # nothing in the loaded index
-
-    assert list(helper.search("httpx[extras=cli]", search_expanded_index=True)) == []
-    assert calls == [(("httpx",), 3, {"httpx": ["cli"]})]
+    # minimal stand-in for SolverInputState with only what `_root_extras` reads
+    state = SimpleNamespace(
+        requested={s.name: s for s in map(MatchSpec, requested)},
+        history={s.name: s for s in map(MatchSpec, history)},
+        prune=prune,
+    )
+    assert _root_extras(state) == expected
