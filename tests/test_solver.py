@@ -2362,9 +2362,7 @@ def _write_sharded_channel(directory: Path, packages: dict[str, dict]) -> None:
         digest = hashlib.sha256(compressed).hexdigest()
         (noarch / f"{digest}.msgpack.zst").write_bytes(compressed)
         index["shards"][name] = bytes.fromhex(digest)
-    (noarch / "repodata_shards.msgpack.zst").write_bytes(
-        compressor.compress(msgpack.packb(index))
-    )
+    (noarch / "repodata_shards.msgpack.zst").write_bytes(compressor.compress(msgpack.packb(index)))
 
 
 def _sharded_record(name: str, **extra) -> dict:
@@ -2404,9 +2402,7 @@ def _supports_root_extras() -> bool:
         pytest.param("pkg-a", {"pkg-a"}, {"pkg-b", "pkg-c", "pkg-d"}, id="no-extras"),
         # `cli` only brings in pkg-b. pkg-b has its own `more` extra (pkg-d), which
         # is not a root extra and must stay out of the solution.
-        pytest.param(
-            "pkg-a[extras=cli]", {"pkg-a", "pkg-b"}, {"pkg-c", "pkg-d"}, id="root-extra"
-        ),
+        pytest.param("pkg-a[extras=cli]", {"pkg-a", "pkg-b"}, {"pkg-c", "pkg-d"}, id="root-extra"),
         pytest.param(
             "pkg-a[extras=[cli,docs]]",
             {"pkg-a", "pkg-b", "pkg-c"},
