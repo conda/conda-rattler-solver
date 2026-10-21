@@ -2358,9 +2358,9 @@ def test_root_extras_reach_solution(
     https://github.com/conda/conda-rattler-solver/issues/155
     """
     import msgpack
-    import zstandard
+    from conda._private.zstd import compress  # same zstd backend conda uses
 
-    compress = zstandard.ZstdCompressor().compress
+    # Create tiny sharded test channel
     noarch = http_test_server.directory / "noarch"
     noarch.mkdir()
     index = {
@@ -2387,6 +2387,7 @@ def test_root_extras_reach_solution(
     (noarch / "repodata_shards.msgpack.zst").write_bytes(compress(msgpack.packb(index)))
     monkeypatch.setattr(context, "repodata_use_shards", True)
 
+    # Test that root extras are fetched from sharded repodata
     for spec, expected in (("pkg-a", {"pkg-a"}), ("pkg-a[extras=cli]", {"pkg-a", "pkg-b"})):
         solver = Solver(
             prefix=tmp_path / "env",
