@@ -41,7 +41,7 @@ def _hash_to_str(bytes_or_str: bytes | str | None) -> None | str:
 
 
 def rattler_record_to_conda_record(
-    record: rattler.PackageRecord,
+    record: rattler.RepoDataRecord,
     *,
     add_pip_as_python_dependency: bool = False,
 ) -> PackageRecord:
@@ -59,7 +59,13 @@ def rattler_record_to_conda_record(
     else:
         raise ValueError(f"Unknown noarch type: {record.noarch}")
 
-    if record.channel:
+    # rattler masks the token in the record's channel URL, but not in the
+    # record URL, which it builds from the channel the repo was loaded with
+    # (<channel>/<subdir>/<filename>). Derive the channel from it so channel
+    # credentials are preserved.
+    if record.url:
+        channel_url = str(record.url).rpartition("/")[0]
+    elif record.channel:
         if record.channel.endswith(("noarch", *KNOWN_SUBDIRS)):
             channel_url = record.channel
         elif record.subdir:

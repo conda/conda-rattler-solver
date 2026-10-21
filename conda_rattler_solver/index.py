@@ -269,7 +269,6 @@ class RattlerIndexHelper:
     def _json_path_to_repo_info(self, url: str, json_path: str) -> _ChannelRepoInfo:
         channel = Channel.from_url(url)
         noauth_url = channel.urls(with_credentials=False, subdirs=(channel.subdir,))[0]
-        noauth_url_sans_subdir = noauth_url.rsplit("/", 1)[0]
         json_path = Path(json_path)
         if (
             sys.platform == "win32"
@@ -282,7 +281,9 @@ class RattlerIndexHelper:
             shutil.copy(json_path, path_copy)
             json_path = path_copy
             self._unlink_on_del.append(path_copy)
-        rattler_channel = rattler.Channel(noauth_url_sans_subdir)
+        # Use the fetched URL (which may carry auth/token) so record URLs built
+        # from this repo can download packages from authenticated channels.
+        rattler_channel = rattler.Channel(url.rsplit("/", 1)[0])
         repo = rattler.SparseRepoData(rattler_channel, channel.subdir, json_path)
         return _ChannelRepoInfo(
             repo=repo,
