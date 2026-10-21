@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import bz2
-import hashlib
 import importlib.util
 import inspect
 import io
@@ -2357,6 +2356,7 @@ def test_root_extras_reach_solution(
 
     https://github.com/conda/conda-rattler-solver/issues/155
     """
+    import hashlib
     import msgpack
     from conda._private.zstd import compress  # same zstd backend conda uses
 
