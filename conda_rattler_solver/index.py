@@ -46,19 +46,10 @@ log = logging.getLogger(f"conda.{__name__}")
 
 def _root_extras(in_state: SolverInputState) -> dict[str, list[str]]:
     """
-    Build the ``root_extras`` mapping for ``build_repodata_subset``.
+    Build the ``root_extras`` mapping for ``build_repodata_subset`` (which shards to fetch).
 
-    This only decides which shards to *fetch*; it never alters the specs sent to the
-    solver. Extras are collected for root packages only, and conda does not recurse
-    into the extras of dependencies.
-
-    Sources, merged as a union per package name:
-
-    - ``in_state.requested``: extras on the specs given in this command.
-    - ``in_state.history``: extras recorded for installed packages, so their
-      ``extra_depends`` shards stay available on later solves. Ignored when pruning,
-      because pruning acts as if there were no history (only requested specs anchor
-      packages).
+    Extras come from the requested specs and, unless pruning, from history, so that extras
+    of installed packages stay available on later solves. Root packages only.
     """
     sources = [in_state.requested]
     if not in_state.prune:
@@ -66,8 +57,7 @@ def _root_extras(in_state: SolverInputState) -> dict[str, list[str]]:
     merged: dict[str, set[str]] = {}
     for source in sources:
         for name, spec in source.items():
-            # `get_raw_value` works on every conda version; the `.extras` property is
-            # newer and could replace it once conda>=26.10 is required.
+            # `.extras` only exists on newer conda; use it once conda>=26.10 is required
             if extras := spec.get_raw_value("extras"):
                 merged.setdefault(name, set()).update(extras)
     return {name: sorted(extras) for name, extras in merged.items()}
