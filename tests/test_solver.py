@@ -2335,3 +2335,134 @@ def test_can_update_env_with_python(
 
         # python keeps its installed version
         assert linked.get("python", {"version": "3.13.1"})["version"] == "3.13.1"
+
+
+def _write_sharded_channel(directory: Path, packages: dict[str, dict]) -> None:
+    """
+    Write a minimal v1 sharded `noarch` channel under ``directory``.
+
+    ``packages`` maps a package name to the records of its shard, using the same
+    ``{"packages.conda": {filename: record}}`` layout as ``tests/data/sharded_repo``.
+    """
+    import hashlib
+
+    import msgpack
+    import zstandard
+
+    noarch = directory / "noarch"
+    noarch.mkdir(parents=True, exist_ok=True)
+    compressor = zstandard.ZstdCompressor()
+    index: dict = {
+        "info": {"subdir": "noarch", "base_url": "", "shards_base_url": ""},
+        "version": 1,
+        "shards": {},
+    }
+    for name, shard in packages.items():
+        compressed = compressor.compress(msgpack.packb(shard))
+        digest = hashlib.sha256(compressed).hexdigest()
+        (noarch / f"{digest}.msgpack.zst").write_bytes(compressed)
+        index["shards"][name] = bytes.fromhex(digest)
+    (noarch / "repodata_shards.msgpack.zst").write_bytes(
+        compressor.compress(msgpack.packb(index))
+    )
+
+
+def _sharded_record(name: str, **extra) -> dict:
+    return {
+        "name": name,
+        "version": "1.0",
+        "build": "0",
+        "build_number": 0,
+        "subdir": "noarch",
+        "noarch": "generic",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        **extra,
+    }
+
+
+def _supports_root_extras() -> bool:
+    """`root_extras` needs conda >=26.10 (shards API) and py-rattler >=0.27 (solver)."""
+    import inspect
+
+    import rattler
+    from conda.gateways.shards import build_repodata_subset
+    from packaging.version import Version
+
+    return "root_extras" in inspect.signature(build_repodata_subset).parameters and Version(
+        rattler.__version__
+    ) >= Version("0.27.0")
+
+
+@pytest.mark.skipif(
+    not _supports_root_extras(),
+    reason="root_extras requires conda>=26.10 and py-rattler>=0.27",
+)
+@pytest.mark.usefixtures("solver_rattler")
+@pytest.mark.parametrize(
+    "spec,expected,unexpected",
+    [
+        pytest.param("pkg-a", {"pkg-a"}, {"pkg-b", "pkg-c", "pkg-d"}, id="no-extras"),
+        # `cli` only brings in pkg-b. pkg-b has its own `more` extra (pkg-d), which
+        # is not a root extra and must stay out of the solution.
+        pytest.param(
+            "pkg-a[extras=cli]", {"pkg-a", "pkg-b"}, {"pkg-c", "pkg-d"}, id="root-extra"
+        ),
+        pytest.param(
+            "pkg-a[extras=[cli,docs]]",
+            {"pkg-a", "pkg-b", "pkg-c"},
+            {"pkg-d"},
+            id="multiple-root-extras",
+        ),
+    ],
+)
+def test_root_extras_fetched_for_requested_extras(
+    http_test_server: HttpTestServerFixture,
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    spec: str,
+    expected: set[str],
+    unexpected: set[str],
+) -> None:
+    """
+    End-to-end check that extras on a requested spec reach the solution through the
+    sharded repodata path, and that extras are only honored for root packages.
+
+    https://github.com/conda/conda-rattler-solver/issues/155
+    """
+    from conda.gateways.shards import build_repodata_subset
+
+    _write_sharded_channel(
+        http_test_server.directory,
+        {
+            "pkg-a": {
+                "packages.conda": {
+                    "pkg-a-1.0-0.conda": _sharded_record(
+                        "pkg-a",
+                        extra_depends={"cli": ["pkg-b"], "docs": ["pkg-c"]},
+                    )
+                }
+            },
+            "pkg-b": {
+                "packages.conda": {
+                    "pkg-b-1.0-0.conda": _sharded_record(
+                        "pkg-b", extra_depends={"more": ["pkg-d"]}
+                    )
+                }
+            },
+            "pkg-c": {"packages.conda": {"pkg-c-1.0-0.conda": _sharded_record("pkg-c")}},
+            "pkg-d": {"packages.conda": {"pkg-d-1.0-0.conda": _sharded_record("pkg-d")}},
+        },
+    )
+    monkeypatch.setattr(context, "repodata_use_shards", True)
+
+    solver = Solver(
+        prefix=tmp_path / "env",
+        channels=[Channel(http_test_server.url)],
+        subdirs=("noarch",),
+        specs_to_add=[spec],
+        build_repodata_subset=build_repodata_subset,
+    )
+    names = {record.name for record in solver.solve_final_state()}
+
+    assert expected <= names
+    assert not (unexpected & names)

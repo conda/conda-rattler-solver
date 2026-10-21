@@ -7,6 +7,7 @@ import json
 import shutil
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -15,8 +16,13 @@ from conda.core.subdir_data import SubdirData
 from conda.gateways.logging import initialize_logging
 from conda.gateways.shards import build_repodata_subset
 from conda.models.channel import Channel
+from conda.models.match_spec import MatchSpec
 
-from conda_rattler_solver.index import RattlerIndexHelper, _is_sharded_repodata_enabled
+from conda_rattler_solver.index import (
+    RattlerIndexHelper,
+    _is_sharded_repodata_enabled,
+    _root_extras,
+)
 from conda_rattler_solver.state import SolverInputState
 
 if TYPE_CHECKING:
@@ -371,3 +377,78 @@ def test_query_search_requested_packages_benchmark(
         list(index.search(query, search_expanded_index=expand_search))
 
     benchmark(run)
+
+
+def _state(requested=(), history=(), prune=False) -> SimpleNamespace:
+    """Minimal stand-in for SolverInputState exposing what the index helper reads."""
+    return SimpleNamespace(
+        requested={s.name: s for s in map(MatchSpec, requested)},
+        history={s.name: s for s in map(MatchSpec, history)},
+        installed={},
+        prune=prune,
+    )
+
+
+@pytest.mark.parametrize(
+    "requested,history,prune,expected",
+    [
+        pytest.param(["httpx", "numpy"], [], False, {}, id="no-extras"),
+        pytest.param(["httpx[extras=cli]", "numpy"], [], False, {"httpx": ["cli"]}, id="requested"),
+        pytest.param([], ["httpx[extras=cli]"], False, {"httpx": ["cli"]}, id="history-only"),
+        pytest.param(
+            ["httpx[extras=http2]"],
+            ["httpx[extras=cli]"],
+            False,
+            {"httpx": ["cli", "http2"]},
+            id="requested-and-history-are-merged",
+        ),
+        pytest.param(
+            ["httpx[extras=http2]"],
+            ["httpx[extras=cli]", "requests[extras=socks]"],
+            True,
+            {"httpx": ["http2"]},
+            id="prune-ignores-history",
+        ),
+    ],
+)
+def test_root_extras(requested, history, prune, expected):
+    assert _root_extras(_state(requested, history, prune)) == expected
+
+
+def _index_helper(build_repodata_subset, **state) -> RattlerIndexHelper:
+    """
+    A helper with only what the sharded loading and search paths need. Skips the
+    constructor, which would otherwise fetch repodata from real channels.
+    """
+    helper = RattlerIndexHelper.__new__(RattlerIndexHelper)
+    helper._unlink_on_del = []
+    helper._index = {}
+    helper.build_repodata_subset = build_repodata_subset
+    helper.in_state = _state(**state)
+    helper._urls_from_channels = lambda: ["https://example.com/noarch"]
+    return helper
+
+
+def _recording_subset(calls: list):
+    """Fake `build_repodata_subset` that records the arguments it receives."""
+
+    def subset(root_packages, channels, repodata_version=1, root_extras=None):
+        calls.append((tuple(root_packages), repodata_version, root_extras))
+
+    return subset
+
+
+def test_load_channel_repo_info_shards_passes_root_extras():
+    calls = []
+    helper = _index_helper(_recording_subset(calls), requested=["httpx[extras=cli]"])
+    helper._load_channel_repo_info_shards({})
+    assert calls == [(("httpx",), 3, {"httpx": ["cli"]})]
+
+
+def test_search_expanded_index_passes_root_extras():
+    calls = []
+    helper = _index_helper(_recording_subset(calls))
+    helper._search = lambda *args, **kwargs: iter(())  # nothing in the loaded index
+
+    assert list(helper.search("httpx[extras=cli]", search_expanded_index=True)) == []
+    assert calls == [(("httpx",), 3, {"httpx": ["cli"]})]
