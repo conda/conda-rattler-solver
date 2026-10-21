@@ -292,8 +292,8 @@ def test_custom_multichannels(tmp_path: Path) -> None:
     """
     condarc 'custom_multichannels' groups several channels under one name.
     Group-named specs (e.g. 'mygroup::test-package') must match any member, and
-    members must share a priority tier: with (strict) channel priority, the
-    newer build in the second member must not be hidden by the first one.
+    members must share a priority tier: with strict channel priority, the newer
+    build in the second member must not be hidden by the first one.
     https://github.com/conda/conda-rattler-solver/issues/8
     """
     repo_a = tmp_path / "repo_a"
@@ -320,6 +320,7 @@ def test_custom_multichannels(tmp_path: Path) -> None:
         tmp_path,
         force=True,
         channels=["mygroup"],
+        channel_priority="strict",
         custom_multichannels={
             "mygroup": [path_to_url(str(repo_a)), path_to_url(str(repo_b))],
         },
