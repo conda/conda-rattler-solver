@@ -286,7 +286,36 @@ def test_update_from_latest_not_downgrade(
         assert original_python.version == update_python.version
 
 
-@pytest.mark.parametrize("update_args", [("--all",), ("libxml2",)])
+@pytest.mark.parametrize(
+    "command,spec,expected_version",
+    [("update", "app", "3.0"), ("install", "app=1.0", "1.0")],
+)
+def test_update_deps_does_not_downgrade_unless_requested(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+    command: str,
+    spec: str,
+    expected_version: str,
+) -> None:
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "runtime", "1.0")
+    _make_noarch_package(channel, "plugin", "2.0", depends=("runtime >=1,<2",))
+    _make_noarch_package(channel, "app", "2.0", depends=("plugin >=2",))
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("app", *args) as prefix:
+        _make_noarch_package(channel, "runtime", "2.0")
+        _make_noarch_package(channel, "plugin", "1.0", depends=("runtime >=1",))
+        _make_noarch_package(channel, "app", "1.0", depends=("plugin >=1",))
+        _make_noarch_package(channel, "app", "3.0", depends=("plugin >=2",))
+
+        conda_cli(command, spec, "--update-deps", f"--prefix={prefix}", *args, "--yes")
+
+        PrefixData._cache_.clear()
+        assert PrefixData(prefix).get("app").version == expected_version
+
+
+@pytest.mark.parametrize("update_args", [("--all",), ("libxml2",), ("libxml2", "--update-deps")])
 @pytest.mark.parametrize("pin_unrelated", [False, True])
 def test_update_does_not_downgrade_installed_builds(
     tmp_env: TmpEnvFixture,
@@ -326,7 +355,7 @@ def test_update_does_not_downgrade_installed_builds(
             assert records.get("unrelated").version == "1.0"
 
 
-@pytest.mark.parametrize("update_args", [("app",), ("--all",)])
+@pytest.mark.parametrize("update_args", [("app",), ("--all",), ("app", "--update-deps")])
 def test_update_allows_build_downgrade_required_by_pin(
     tmp_env: TmpEnvFixture,
     conda_cli: CondaCLIFixture,
