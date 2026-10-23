@@ -51,7 +51,10 @@ def _root_extras(in_state: SolverInputState) -> dict[str, list[str]]:
     """
     return {
         name: list(extras)
-        for name, spec in in_state.requested.items()
+        for name, spec in {
+            **({} if in_state.prune else in_state.history),
+            **in_state.requested,
+        }.items()
         # `.extras` only exists on newer conda; use it once conda>=26.10 is required
         if (extras := spec.get_raw_value("extras"))
     }
