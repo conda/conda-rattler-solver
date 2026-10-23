@@ -815,6 +815,7 @@ def test_install_keeps_unrequested_history_packages(
     _make_noarch_package(low, "ca-certificates", "2.0")
     _make_noarch_package(low, "app", "1.0", build="low", depends=("ca-certificates >=2",))
     _make_noarch_package(high, "ca-certificates", available_version)
+    _make_noarch_package(high, "ca-certificates", "4.0", depends=("__unavailable",))
     _make_noarch_package(high, "app", "1.0", build="high", depends=("ca-certificates >=1",))
     monkeypatch.setenv("CONDA_AGGRESSIVE_UPDATE_PACKAGES", "")
     args = ("--override-channels", f"--solver={solver}")

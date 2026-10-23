@@ -751,22 +751,12 @@ class RattlerSolver(Solver):
                 unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(
                     f"{words[0]} {words[1]}"
                 )
-            elif "which cannot be installed because there are no viable options" in line:
-                spec = matchspec_from_solver_diagnostic(f"{words[0]} {words[1].strip(',')}")
-                unsatisfiable[spec.name] = spec
-                if (
-                    in_state.is_updating
-                    and (installed := in_state.installed.get(spec.name))
-                    and spec.get_raw_value("build_number") == f">={installed.build_number}"
-                    and spec.match(installed)
-                ):
-                    # Strict priority can exclude every candidate meeting the build
-                    # floor, while the installed record can still satisfy it.
-                    out_state.installed_without_candidates.add(spec.name)
             elif "cannot be installed because there are no viable options" in line:
-                unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(
-                    f"{words[0]} {words[1]}"
-                )
+                spec = matchspec_from_solver_diagnostic(f"{words[0]} {words[1].rstrip(',')}")
+                unsatisfiable[spec.name] = spec
+                if (installed := in_state.installed.get(spec.name)) and spec.match(installed):
+                    # Repository candidates may all have unavailable dependencies.
+                    out_state.installed_without_candidates.add(spec.name)
             elif "the constraint" in line and "cannot be fulfilled" in line:
                 unsatisfiable[words[2]] = matchspec_from_solver_diagnostic(" ".join(words[2:-3]))
             elif (
