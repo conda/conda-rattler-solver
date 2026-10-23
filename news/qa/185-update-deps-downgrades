@@ -1,0 +1,56 @@
+### Title
+
+Update dependencies without downgrading the requested package
+
+### Why
+
+Updating conda with `--update-deps` should upgrade compatible dependencies without downgrading conda. Explicitly installing an older version must still work.
+
+### Platforms
+
+- [ ] Windows
+- [ ] macOS
+- [ ] Linux
+
+### Prerequisites
+
+An active test environment containing conda and the conda-rattler-solver build under test, with access to the defaults channel. Keep it active throughout. The commands use `python -m conda` to run that environment's conda and solver. Start in a directory where `qa-update-deps` does not already exist.
+
+### Steps
+
+1. Create a disposable environment with older conda and urllib3 versions. The classic solver is only used for setup.
+
+```sh
+python -m conda create --prefix ./qa-update-deps --override-channels -c defaults --solver classic --no-default-packages -y python=3.14 conda=26.9.3 urllib3=2.5.0
+```
+
+2. Update conda and its dependencies, then inspect the installed versions.
+
+```sh
+python -m conda update --prefix ./qa-update-deps --override-channels -c defaults --solver rattler --update-deps -y conda
+python -m conda list --prefix ./qa-update-deps "^(conda|conda-rattler-solver|py-rattler|urllib3)$"
+```
+
+3. Request an explicit downgrade, then check conda's version.
+
+```sh
+python -m conda install --prefix ./qa-update-deps --override-channels -c defaults --solver rattler --update-deps -y conda=26.9.3
+python -m conda list --prefix ./qa-update-deps "^conda$"
+```
+
+4. Remove the disposable environment.
+
+```sh
+python -m conda env remove --prefix ./qa-update-deps -y
+```
+
+### Pass criteria
+
+- Step 2 upgrades conda from 26.9.3 and urllib3 from 2.5.0. With the defaults metadata available on 2026-10-23, the result is conda 26.9.4 and urllib3 2.8.0, with conda-rattler-solver 0.2.0 and py-rattler 0.26.0 retained.
+- Step 3 succeeds and installs conda 26.9.3.
+
+### Out of scope / notes
+
+The unfixed solver selects conda 26.5.0 in step 2. Skipping the recursive solve leaves urllib3 at 2.5.0. Both fail the pass criteria.
+
+Later channel updates may change the available upgrade versions. The automated tests in `tests/test_solver.py` use fixed package metadata and also cover build-number downgrade protection and pin-required downgrades.
