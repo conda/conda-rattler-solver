@@ -380,18 +380,52 @@ def test_query_search_requested_packages_benchmark(
 
 
 @pytest.mark.parametrize(
-    "requested,expected",
+    "requested,history,prune,expected",
     [
-        pytest.param(["httpx", "numpy"], {}, id="no-extras"),
-        pytest.param(["httpx[extras=cli]", "numpy"], {"httpx": ["cli"]}, id="one-extra"),
+        pytest.param(["httpx", "numpy"], [], False, {}, id="no-extras"),
+        pytest.param(
+            ["httpx[extras=cli]", "numpy"], [], False, {"httpx": ["cli"]}, id="requested"
+        ),
         pytest.param(
             ['httpx[extras="cli,http2"]', "requests[extras=socks]"],
+            [],
+            False,
             {"httpx": ["cli", "http2"], "requests": ["socks"]},
             id="several-packages-and-extras",
         ),
+        pytest.param([], ["httpx[extras=cli]"], False, {"httpx": ["cli"]}, id="history-only"),
+        # the solver uses the requested spec instead of the history one, so it wins
+        pytest.param(
+            ["httpx[extras=http2]"],
+            ["httpx[extras=cli]"],
+            False,
+            {"httpx": ["http2"]},
+            id="requested-overrides-history",
+        ),
+        pytest.param(["httpx"], ["httpx[extras=cli]"], False, {}, id="requested-without-extras"),
+        pytest.param(
+            ["numpy"],
+            ["httpx[extras=cli]"],
+            False,
+            {"httpx": ["cli"]},
+            id="history-kept-for-other-packages",
+        ),
+        # pruning acts as if there were no history
+        pytest.param(["numpy"], ["httpx[extras=cli]"], True, {}, id="prune-ignores-history"),
+        pytest.param(
+            ["httpx[extras=http2]"],
+            ["httpx[extras=cli]", "requests[extras=socks]"],
+            True,
+            {"httpx": ["http2"]},
+            id="prune-keeps-requested",
+        ),
     ],
 )
-def test_root_extras(requested, expected):
+def test_root_extras(requested, history, prune, expected):
     # minimal stand-in for SolverInputState with only what `_root_extras` reads
-    state = SimpleNamespace(requested={s.name: s for s in map(MatchSpec, requested)})
+    state = SimpleNamespace(
+        requested={s.name: s for s in map(MatchSpec, requested)},
+        history={s.name: s for s in map(MatchSpec, history)},
+        prune=prune,
+    )
     assert _root_extras(state) == expected
