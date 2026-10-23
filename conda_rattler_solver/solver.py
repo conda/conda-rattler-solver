@@ -567,7 +567,14 @@ class RattlerSolver(Solver):
                     specs.append(spec_str)
                 else:
                     specs.append(history)
-                    locked_packages.append(installed)
+                    if (
+                        in_state.update_modifier.FREEZE_INSTALLED
+                        and not conflicting
+                        and not depends_on_changing_python
+                    ):
+                        pinned_packages.append(installed)
+                    else:
+                        locked_packages.append(installed)
             elif installed:
                 # rattler.solve() API is declarative. Anything not requested may get removed.
                 # In this block we need to make sure that installed packages remain installed
