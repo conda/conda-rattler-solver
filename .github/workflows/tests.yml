@@ -106,26 +106,31 @@ jobs:
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 1
+            py-rattler-version: '0.28.0'
           - runs-on: windows-latest
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 2
+            py-rattler-version: '0.28.0'
           - runs-on: windows-latest
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 3
+            py-rattler-version: '0.28.0'
           - runs-on: windows-latest
             python-version: '3.13'
             default-channel: 'conda-forge'
             test-type: unit
             test-group: 1
+            py-rattler-version: '0.28.0'
           - runs-on: windows-latest
             python-version: '3.13'
             default-channel: 'conda-forge'
             test-type: unit
             test-group: 2
+            py-rattler-version: '0.28.0'
     env:
       ErrorActionPreference: Stop  # powershell exit immediately on error
       PYTEST_MARKER: ${{ matrix.test-type == 'unit' && 'not integration and not benchmark' || 'integration and not benchmark' }}
@@ -189,7 +194,6 @@ jobs:
         run: python -m pip install -e conda-rattler-solver/ --no-deps
 
       - name: Select py-rattler version
-        if: ${{ matrix.test-type == 'conda-rattler-solver' }}
         run: |
           python -m pip install --no-deps "py-rattler==${{ matrix.py-rattler-version }}"
           python -c "import rattler; print(rattler.__version__); assert rattler.__version__ == '${{ matrix.py-rattler-version }}'"
@@ -308,26 +312,31 @@ jobs:
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 1
+            py-rattler-version: '0.28.0'
           - runs-on: ubuntu-latest # linux-64
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 2
+            py-rattler-version: '0.28.0'
           - runs-on: ubuntu-latest # linux-64
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 3
+            py-rattler-version: '0.28.0'
           - runs-on: ubuntu-24.04-arm # linux-aarch64
             python-version: '3.13'
             default-channel: 'conda-forge'
             test-type: unit
             test-group: 1
+            py-rattler-version: '0.28.0'
           - runs-on: ubuntu-24.04-arm # linux-aarch64
             python-version: '3.13'
             default-channel: 'conda-forge'
             test-type: unit
             test-group: 2
+            py-rattler-version: '0.28.0'
     env:
       PYTEST_MARKER: ${{ matrix.test-type == 'unit' && 'not integration and not benchmark' || 'integration and not benchmark' }}
       PYTEST_SPLITS: ${{ matrix.test-type == 'unit' && '2' || '3' }}
@@ -384,7 +393,6 @@ jobs:
         run: python -m pip install -e conda-rattler-solver/ --no-deps
 
       - name: Select py-rattler version
-        if: ${{ matrix.test-type == 'conda-rattler-solver' }}
         run: |
           python -m pip install --no-deps "py-rattler==${{ matrix.py-rattler-version }}"
           python -c "import rattler; print(rattler.__version__); assert rattler.__version__ == '${{ matrix.py-rattler-version }}'"
@@ -483,26 +491,31 @@ jobs:
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 1
+            py-rattler-version: '0.28.0'
           - runs-on: macos-latest # osx-arm64
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 2
+            py-rattler-version: '0.28.0'
           - runs-on: macos-latest # osx-arm64
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 3
+            py-rattler-version: '0.28.0'
           - runs-on: macos-latest # osx-arm64
             python-version: '3.14'
             default-channel: 'conda-forge'
             test-type: unit
             test-group: 1
+            py-rattler-version: '0.28.0'
           - runs-on: macos-latest # osx-arm64
             python-version: '3.14'
             default-channel: 'conda-forge'
             test-type: unit
             test-group: 2
+            py-rattler-version: '0.28.0'
     env:
       PYTEST_MARKER: ${{ matrix.test-type == 'unit' && 'not integration and not benchmark' || 'integration and not benchmark' }}
       PYTEST_SPLITS: ${{ matrix.test-type == 'unit' && '2' || '3' }}
@@ -560,7 +573,6 @@ jobs:
         run: python -m pip install -e conda-rattler-solver/ --no-deps
 
       - name: Select py-rattler version
-        if: ${{ matrix.test-type == 'conda-rattler-solver' }}
         run: |
           python -m pip install --no-deps "py-rattler==${{ matrix.py-rattler-version }}"
           python -c "import rattler; print(rattler.__version__); assert rattler.__version__ == '${{ matrix.py-rattler-version }}'"
