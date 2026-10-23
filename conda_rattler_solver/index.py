@@ -47,7 +47,8 @@ log = logging.getLogger(f"conda.{__name__}")
 def _root_extras(in_state: SolverInputState) -> dict[str, list[str]]:
     """
     Build the ``root_extras`` mapping for ``build_repodata_subset``
-    from the extras on the requested specs. Root packages only.
+    from the extras on the requested specs and history unless pruning
+    which ignores history. Root packages only.
     """
     return {
         name: list(extras)
