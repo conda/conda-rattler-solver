@@ -7,6 +7,7 @@ import json
 import shutil
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -15,8 +16,13 @@ from conda.core.subdir_data import SubdirData
 from conda.gateways.logging import initialize_logging
 from conda.gateways.shards import build_repodata_subset
 from conda.models.channel import Channel
+from conda.models.match_spec import MatchSpec
 
-from conda_rattler_solver.index import RattlerIndexHelper, _is_sharded_repodata_enabled
+from conda_rattler_solver.index import (
+    RattlerIndexHelper,
+    _is_sharded_repodata_enabled,
+    _root_extras,
+)
 from conda_rattler_solver.state import SolverInputState
 
 if TYPE_CHECKING:
@@ -371,3 +377,55 @@ def test_query_search_requested_packages_benchmark(
         list(index.search(query, search_expanded_index=expand_search))
 
     benchmark(run)
+
+
+@pytest.mark.parametrize(
+    "requested,history,prune,expected",
+    [
+        pytest.param(["httpx", "numpy"], [], False, {}, id="no-extras"),
+        pytest.param(
+            ["httpx[extras=cli]", "numpy"], [], False, {"httpx": ["cli"]}, id="requested"
+        ),
+        pytest.param(
+            ['httpx[extras="cli,http2"]', "requests[extras=socks]"],
+            [],
+            False,
+            {"httpx": ["cli", "http2"], "requests": ["socks"]},
+            id="several-packages-and-extras",
+        ),
+        pytest.param([], ["httpx[extras=cli]"], False, {"httpx": ["cli"]}, id="history-only"),
+        # the solver uses the requested spec instead of the history one, so it wins
+        pytest.param(
+            ["httpx[extras=http2]"],
+            ["httpx[extras=cli]"],
+            False,
+            {"httpx": ["http2"]},
+            id="requested-overrides-history",
+        ),
+        pytest.param(["httpx"], ["httpx[extras=cli]"], False, {}, id="requested-without-extras"),
+        pytest.param(
+            ["numpy"],
+            ["httpx[extras=cli]"],
+            False,
+            {"httpx": ["cli"]},
+            id="history-kept-for-other-packages",
+        ),
+        # pruning acts as if there were no history
+        pytest.param(["numpy"], ["httpx[extras=cli]"], True, {}, id="prune-ignores-history"),
+        pytest.param(
+            ["httpx[extras=http2]"],
+            ["httpx[extras=cli]", "requests[extras=socks]"],
+            True,
+            {"httpx": ["http2"]},
+            id="prune-keeps-requested",
+        ),
+    ],
+)
+def test_root_extras(requested, history, prune, expected):
+    # minimal stand-in for SolverInputState with only what `_root_extras` reads
+    state = SimpleNamespace(
+        requested={s.name: s for s in map(MatchSpec, requested)},
+        history={s.name: s for s in map(MatchSpec, history)},
+        prune=prune,
+    )
+    assert _root_extras(state) == expected
