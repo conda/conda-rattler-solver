@@ -38,7 +38,7 @@ from conda.testing.solver_helpers import SolverTests
 from rattler.exceptions import SolverError as RattlerSolverError
 
 from conda_rattler_solver.exceptions import RattlerUnsatisfiableError
-from conda_rattler_solver.index import RattlerIndexHelper
+from conda_rattler_solver.index import RattlerIndexHelper, _MultiSource
 from conda_rattler_solver.solver import RattlerSolver as Solver
 from conda_rattler_solver.state import SolverInputState, SolverOutputState
 
@@ -174,16 +174,19 @@ def test_python_downgrade_reinstalls_noarch_packages(
         pip_cli("--version", prefix=prefix)
 
 
-@pytest.mark.xfail(
-    reason="multichannels not fully implemented yet: https://github.com/conda/rattler/issues/1327",
-    strict=True,
+@pytest.mark.skipif(
+    _MultiSource is None,
+    reason="multichannels need py-rattler >=0.27.1",
 )
 def test_defaults_specs_work(conda_cli: CondaCLIFixture) -> None:
     """
     See https://github.com/conda/conda-libmamba-solver/issues/173
 
     defaults is secretly (main, r and msys2), and repos are built using those
-    actual channels. Multichannels are not present in rattler so far.
+    actual channels. The channels are grouped in a 'rattler.MultiSource', so
+    'defaults::-style specs match any of its members. Member names work too:
+    conda canonicalizes them to the multichannel name ('pkgs/main::' becomes
+    'defaults::') before the specs reach the solver.
     """
     out, err, rc = conda_cli(
         "create",
@@ -204,6 +207,25 @@ def test_defaults_specs_work(conda_cli: CondaCLIFixture) -> None:
             break
     else:
         raise AssertionError("libarchive not found in LINK actions")
+
+    out, err, rc = conda_cli(
+        "create",
+        "--dry-run",
+        "--json",
+        "--solver=rattler",
+        "--override-channels",
+        "--channel=conda-forge",
+        "pkgs/main::python=3.9",
+        raises=DryRunExit,
+    )
+    data = json.loads(out)
+    assert data.get("success") is True
+    for link in data["actions"]["LINK"]:
+        if link["name"] == "python":
+            assert link["channel"] in ("defaults", "pkgs/main")
+            break
+    else:
+        raise AssertionError("python not found in LINK actions")
 
 
 def test_determinism(tmpdir):

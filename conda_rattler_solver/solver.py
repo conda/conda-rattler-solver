@@ -6,7 +6,6 @@ import logging
 import os
 import sys
 from collections import defaultdict
-from dataclasses import replace
 from functools import cache
 from inspect import stack
 from itertools import chain
@@ -388,14 +387,12 @@ class RattlerSolver(Solver):
             # would also reject newer versions whose build numbers start over at zero.
             # Reject only lower builds of the installed version as records are loaded.
             solve = rattler.solve
-            sources = list(index._index.values())
-            if allow_build_downgrades:
-                sources = [replace(info, installed={}) for info in sources]
+            sources = index.solve_sources(allow_build_downgrades=allow_build_downgrades)
             solve_kwargs.update(sources=sources, platforms=index._subdirs)
         else:
             solve = rattler.solve_with_sparse_repodata
             solve_kwargs.update(
-                sparse_repodata=[info.repo for info in index._index.values()],
+                sparse_repodata=index.solve_sparse_repodata(),
                 package_format_selection=index._package_format,
             )
         if log.isEnabledFor(logging.DEBUG):
