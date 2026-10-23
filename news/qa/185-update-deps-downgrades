@@ -1,0 +1,135 @@
+### Title
+
+Update dependencies without downgrading the requested package
+
+### Why
+
+The second solve for `conda update --update-deps` must retain downgrade protections while allowing compatible dependencies to upgrade. Explicit downgrades through `conda install` must remain possible.
+
+### Platforms
+
+- [ ] Windows
+- [ ] macOS
+- [ ] Linux
+
+### Prerequisites
+
+A test environment with conda and the conda-rattler-solver build under test installed. Use that environment's Python to run the script. The script uses only Python's standard library and the conda CLI, with temporary local packages and environments.
+
+### Steps
+
+1. Save the following script as `qa186.py`.
+
+```python
+import hashlib
+import io
+import json
+import os
+import subprocess
+import sys
+import tarfile
+import tempfile
+from pathlib import Path
+
+with tempfile.TemporaryDirectory(prefix="rattler-qa-") as directory:
+    work = Path(directory)
+    channel = work / "channel"
+    noarch = channel / "noarch"
+    noarch.mkdir(parents=True)
+    repodata = {"info": {"subdir": "noarch"}, "packages": {}, "packages.conda": {}}
+
+    def package(name, version, depends=()):
+        record = {
+            "name": name, "version": version, "build": "0", "build_number": 0,
+            "depends": list(depends), "noarch": "generic", "subdir": "noarch",
+        }
+        filename = f"{name}-{version}-0.tar.bz2"
+        with tarfile.open(noarch / filename, "w:bz2") as archive:
+            for path, value in {
+                "info/index.json": record,
+                "info/paths.json": {"paths": [], "paths_version": 1},
+            }.items():
+                data = json.dumps(value).encode()
+                entry = tarfile.TarInfo(path)
+                entry.size = len(data)
+                archive.addfile(entry, io.BytesIO(data))
+        archive_bytes = (noarch / filename).read_bytes()
+        record["sha256"] = hashlib.sha256(archive_bytes).hexdigest()
+        record["size"] = len(archive_bytes)
+        repodata["packages"][filename] = record
+        (noarch / "repodata.json").write_text(json.dumps(repodata))
+
+    env = os.environ.copy()
+    env.update({
+        "CONDA_PKGS_DIRS": str(work / "pkgs"),
+        "CONDA_ENVS_PATH": str(work / "envs"),
+        "CONDA_REGISTER_ENVS": "false",
+        "CONDA_AGGRESSIVE_UPDATE_PACKAGES": "",
+        "CONDA_PINNED_PACKAGES": "",
+        "CONDA_AUTO_UPDATE_CONDA": "false",
+        "CONDA_NOTIFY_OUTDATED_CONDA": "false",
+        "CONDA_REPODATA_USE_SHARDS": "false",
+        "CONDA_REPODATA_USE_ZST": "false",
+        "CONDA_NUMBER_CHANNEL_NOTICES": "0",
+    })
+
+    def conda(command, prefix, *specs):
+        result = subprocess.run(
+            [sys.executable, "-m", "conda", command, "--prefix", str(prefix),
+             "--solver=rattler", "--override-channels", "--channel", channel.as_uri(),
+             "--repodata-fn=repodata.json", "--offline", "--no-pin", "--yes",
+             *specs],
+            env=env, capture_output=True, text=True,
+        )
+        if result.returncode:
+            raise RuntimeError(result.stdout + result.stderr)
+
+    def check(label, prefix, expected):
+        records = [json.loads(path.read_text()) for path in (prefix / "conda-meta").glob("*.json")]
+        installed = {record["name"]: record["version"] for record in records}
+        actual = {name: installed[name] for name in expected}
+        print(f"{label}: {actual}", flush=True)
+        assert actual == expected, (actual, expected)
+
+    package("runtime", "1.0")
+    package("plugin", "2.0", ("runtime >=1,<2",))
+    package("app", "2.0", ("plugin >=2",))
+    package("dep", "1.0")
+    package("helper-app", "1.0", ("dep >=1",))
+    app_env, helper_env = work / "app-env", work / "helper-env"
+    conda("create", app_env, "--no-default-packages", "app")
+    conda("create", helper_env, "--no-default-packages", "helper-app")
+
+    package("runtime", "2.0")
+    package("plugin", "1.0", ("runtime >=1",))
+    package("app", "1.0", ("plugin >=1",))
+    package("app", "3.0", ("plugin >=2",))
+    package("dep", "2.0")
+
+    conda("update", app_env, "app", "--update-deps")
+    check("update", app_env, {"app": "3.0", "plugin": "2.0", "runtime": "1.0"})
+    conda("update", helper_env, "helper-app", "--update-deps")
+    check("dependency upgrade", helper_env, {"helper-app": "1.0", "dep": "2.0"})
+    conda("install", app_env, "app=1.0", "--update-deps")
+    check("explicit downgrade", app_env, {"app": "1.0", "plugin": "1.0", "runtime": "2.0"})
+```
+
+2. Run `python qa186.py`. The script removes its temporary directory when it exits.
+
+### Pass criteria
+
+The script exits successfully and prints:
+
+```text
+update: {'app': '3.0', 'plugin': '2.0', 'runtime': '1.0'}
+dependency upgrade: {'helper-app': '1.0', 'dep': '2.0'}
+explicit downgrade: {'app': '1.0', 'plugin': '1.0', 'runtime': '2.0'}
+```
+
+The requested app upgrades from 2.0 to 3.0 while retaining plugin 2.0 and runtime 1.0. The separate helper-app scenario upgrades dep from 1.0 to 2.0 without changing helper-app. An explicit install of app 1.0 then succeeds with plugin 1.0 and runtime 2.0.
+
+### Out of scope / notes
+
+The script checks the version-selection behavior reported in #185. Build-number downgrade protection and pin-required build downgrades have separate coverage in `tests/test_solver.py`.
+
+Verified with conda 26.9.1 and py-rattler 0.26.0 against commit `8e3bded`. On base `e841255`, the first update selects app 1.0, plugin 1.0 and runtime 2.0, and the assertion fails. Deliberately skipping the second solve leaves dep at 1.0 and fails the dependency-upgrade assertion.
