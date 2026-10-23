@@ -46,6 +46,14 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ['3.12', '3.13', '3.14']
+        py-rattler-version: ['0.28.0']
+        include:
+          - os: ubuntu-latest
+            python-version: '3.13'
+            py-rattler-version: '0.26.0'
+          - os: ubuntu-latest
+            python-version: '3.13'
+            py-rattler-version: '0.27.1'
 
     steps:
       - name: Checkout conda-rattler-solver
@@ -73,15 +81,14 @@ jobs:
         run: conda install -n base --yes --override-channels -c conda-forge "conda>=26.5" conda-pypi
 
       - name: Install conda dependencies
-        # py-rattler and conda are conda packages (py-rattler has no PyPI
-        # package), so `conda pypi install -e` cannot install them; install
-        # them explicitly via dev/requirements.txt.
+        # Install dependencies before the editable project installs below.
         run: >
           conda install
           --yes
           --override-channels -c conda-forge
           --file conda-rattler-solver/dev/requirements.txt
           python=${{ matrix.python-version }}
+          pip
 
       - name: Install pytest-conda-solvers dependencies
         # `conda pypi install -e` does not resolve dependencies, so install
@@ -111,6 +118,11 @@ jobs:
         run: |
           conda pypi install --yes -e conda-rattler-solver
           conda pypi install --yes -e pytest-conda-solvers
+
+      - name: Select py-rattler version
+        run: |
+          python -m pip install --no-deps "py-rattler==${{ matrix.py-rattler-version }}"
+          python -c "import rattler; print(rattler.__version__); assert rattler.__version__ == '${{ matrix.py-rattler-version }}'"
 
       - name: Conda Info
         run: python -m conda info --verbose
