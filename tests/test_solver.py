@@ -282,6 +282,26 @@ def test_update_from_latest_not_downgrade(
         assert original_python.version == update_python.version
 
 
+def test_update_deps_upgrades_dependencies(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+) -> None:
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "dep", "1.0")
+    _make_noarch_package(channel, "app", "1.0", depends=("dep >=1",))
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("app", *args) as prefix:
+        _make_noarch_package(channel, "dep", "2.0")
+
+        conda_cli("update", "app", "--update-deps", f"--prefix={prefix}", *args, "--yes")
+
+        PrefixData._cache_.clear()
+        records = PrefixData(prefix)
+        assert records.get("app").version == "1.0"
+        assert records.get("dep").version == "2.0"
+
+
 @pytest.mark.parametrize(
     "command,spec,expected_version",
     [("update", "app", "3.0"), ("install", "app=1.0", "1.0")],
