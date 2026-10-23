@@ -36,6 +36,7 @@ from .utils import (
     matchspec_from_solver_diagnostic,
     maybe_ignore_current_repodata,
     notify_conda_outdated,
+    rattler_build_string,
     rattler_record_to_conda_record,
 )
 
@@ -881,7 +882,7 @@ class RattlerSolver(Solver):
             rattler.GenericVirtualPackage(
                 rattler.PackageName(pkg.name),
                 rattler.Version(pkg.version),
-                pkg.build,
+                rattler_build_string(pkg.build),
             )
             for pkg in in_state.virtual.values()
         ]

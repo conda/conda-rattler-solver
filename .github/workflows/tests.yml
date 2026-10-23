@@ -98,6 +98,12 @@ jobs:
           - runs-on: windows-latest
             python-version: '3.11'
             default-channel: 'conda-forge'
+            test-type: conda-rattler-solver
+            test-group: 1
+            py-rattler-version: '0.28.0'
+          - runs-on: windows-latest
+            python-version: '3.11'
+            default-channel: 'conda-forge'
             test-type: integration
             test-group: 1
           - runs-on: windows-latest
@@ -294,6 +300,12 @@ jobs:
           - runs-on: ubuntu-latest # linux-64
             python-version: '3.11'
             default-channel: 'conda-forge'
+            test-type: conda-rattler-solver
+            test-group: 1
+            py-rattler-version: '0.28.0'
+          - runs-on: ubuntu-latest # linux-64
+            python-version: '3.11'
+            default-channel: 'conda-forge'
             test-type: integration
             test-group: 1
           - runs-on: ubuntu-latest # linux-64
@@ -460,6 +472,12 @@ jobs:
             test-type: conda-rattler-solver
             test-group: 1
             py-rattler-version: '0.27.1'
+          - runs-on: macos-latest # osx-arm64
+            python-version: '3.11'
+            default-channel: 'conda-forge'
+            test-type: conda-rattler-solver
+            test-group: 1
+            py-rattler-version: '0.28.0'
           - runs-on: macos-latest # osx-arm64
             python-version: '3.11'
             default-channel: 'conda-forge'

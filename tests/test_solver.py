@@ -15,6 +15,7 @@ from itertools import chain, permutations, repeat
 from pathlib import Path
 from subprocess import run
 from textwrap import dedent
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -2335,3 +2336,15 @@ def test_can_update_env_with_python(
 
         # python keeps its installed version
         assert linked.get("python", {"version": "3.13.1"})["version"] == "3.13.1"
+
+
+@pytest.mark.parametrize("build", ["0", "x86_64_v3", "plugin-build"])
+def test_virtual_package_build_is_preserved(build: str) -> None:
+    record = PrefixRecord(name="__plugin", version="1.0", build=build, build_number=0)
+    in_state = SimpleNamespace(virtual={record.name: record})
+
+    (result,) = Solver._rattler_virtual_packages(None, in_state)
+
+    assert result.name.normalized == record.name
+    assert str(result.version) == record.version
+    assert str(result.build_string) == build
