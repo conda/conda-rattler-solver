@@ -480,7 +480,9 @@ class SolverOutputState:
         self.neutered: dict[str, MatchSpec] = neutered or {}
         self.conflicts: dict[str, MatchSpec] = conflicts or {}
         self.pins: dict[str, MatchSpec] = pins or {}
-        self.installed_without_candidates: set[str] = set(installed_without_candidates) if installed_without_candidates else set()
+        self.installed_without_candidates: set[str] = (
+            set(installed_without_candidates) if installed_without_candidates else set()
+        )
 
     @property
     def current_solution(self) -> IndexedSet[PackageRecord]:

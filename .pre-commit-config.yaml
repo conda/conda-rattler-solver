@@ -8,8 +8,12 @@ repos:
     hooks:
       # standard end of line/end of file cleanup
       - id: mixed-line-ending
+        exclude: \.zst$
       - id: end-of-file-fixer
+        # binary fixtures (content-addressed shards) must not be rewritten
+        exclude: \.zst$
       - id: trailing-whitespace
+        exclude: \.zst$
       # ensure syntaxes are valid
       - id: check-toml
       - id: check-yaml
