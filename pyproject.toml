@@ -33,6 +33,7 @@ dynamic = ["version"]
 
 [project.urls]
 Changelog = "https://github.com/conda/conda-rattler-solver/blob/main/CHANGELOG.md"
+Documentation = "https://conda.github.io/conda-rattler-solver/"
 Homepage = "https://github.com/conda/conda-rattler-solver"
 Issues = "https://github.com/conda/conda-rattler-solver/issues"
 Repository = "https://github.com/conda/conda-rattler-solver"
