@@ -5,6 +5,8 @@
 
 The fast pixi solver, now in conda!
 
+Documentation: https://conda.github.io/conda-rattler-solver/
+
 ## What is this exactly?
 
 If `conda-libmamba-solver` brought the `mamba` solver to `conda`, `conda-rattler-solver` tries to integrate the `pixi` solver (called `resolvo`, as provided in `rattler`) in `conda`.
