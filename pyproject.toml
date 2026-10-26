@@ -79,7 +79,7 @@ description = "Run pre-commit hooks to lint the codebase. Alias for `pre-commit`
 
 
 [tool.pixi.feature.docs.tasks]
-docs = { cmd = "python -m sphinx.cmd.build -M dirhtml . _build", cwd = "docs" }
+docs = { cmd = "python -m sphinx.cmd.build -M dirhtml . _build -W --keep-going", cwd = "docs" }
 serve = { cmd = "python -m http.server", cwd = "docs/_build/dirhtml" }
 clean = { cmd = "rm -rf _build", cwd = "docs" }
 
