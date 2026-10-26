@@ -99,6 +99,7 @@ def rattler_record_to_conda_record(
         arch=record.arch,
         platform=str(record.platform or "") or None,
         depends=depends,
+        extra_depends=dict(record.extra_depends) or None,
         constrains=record.constrains or (),
         track_features=record.track_features or (),
         features=record.features or (),
