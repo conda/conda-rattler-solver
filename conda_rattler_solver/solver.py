@@ -36,6 +36,7 @@ from .utils import (
     matchspec_from_solver_diagnostic,
     maybe_ignore_current_repodata,
     notify_conda_outdated,
+    rattler_build_string,
     rattler_record_to_conda_record,
 )
 
@@ -570,7 +571,14 @@ class RattlerSolver(Solver):
                     specs.append(spec_str)
                 else:
                     specs.append(history)
-                    locked_packages.append(installed)
+                    if (
+                        in_state.update_modifier.FREEZE_INSTALLED
+                        and not conflicting
+                        and not depends_on_changing_python
+                    ):
+                        pinned_packages.append(installed)
+                    else:
+                        locked_packages.append(installed)
             elif installed:
                 # rattler.solve() API is declarative. Anything not requested may get removed.
                 # In this block we need to make sure that installed packages remain installed
@@ -747,22 +755,12 @@ class RattlerSolver(Solver):
                 unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(
                     f"{words[0]} {words[1]}"
                 )
-            elif "which cannot be installed because there are no viable options" in line:
-                spec = matchspec_from_solver_diagnostic(f"{words[0]} {words[1].strip(',')}")
-                unsatisfiable[spec.name] = spec
-                if (
-                    in_state.is_updating
-                    and (installed := in_state.installed.get(spec.name))
-                    and spec.get_raw_value("build_number") == f">={installed.build_number}"
-                    and spec.match(installed)
-                ):
-                    # Strict priority can exclude every candidate meeting the build
-                    # floor, while the installed record can still satisfy it.
-                    out_state.installed_without_candidates.add(spec.name)
             elif "cannot be installed because there are no viable options" in line:
-                unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(
-                    f"{words[0]} {words[1]}"
-                )
+                spec = matchspec_from_solver_diagnostic(f"{words[0]} {words[1].rstrip(',')}")
+                unsatisfiable[spec.name] = spec
+                if (installed := in_state.installed.get(spec.name)) and spec.match(installed):
+                    # Repository candidates may all have unavailable dependencies.
+                    out_state.installed_without_candidates.add(spec.name)
             elif "the constraint" in line and "cannot be fulfilled" in line:
                 unsatisfiable[words[2]] = matchspec_from_solver_diagnostic(" ".join(words[2:-3]))
             elif (
@@ -888,7 +886,7 @@ class RattlerSolver(Solver):
             rattler.GenericVirtualPackage(
                 rattler.PackageName(pkg.name),
                 rattler.Version(pkg.version),
-                pkg.build,
+                rattler_build_string(pkg.build),
             )
             for pkg in in_state.virtual.values()
         ]

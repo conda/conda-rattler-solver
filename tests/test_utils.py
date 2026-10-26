@@ -34,7 +34,11 @@ class _FakeIndex:
 
 def test_rattler_record_to_conda_record_keeps_indexed_timestamp() -> None:
     package = rattler.PackageRecord(
-        name="foo", version="1.0", build="0", build_number=0, subdir="noarch"
+        name="foo",
+        version="1.0",
+        build=utils_module.rattler_build_string("0"),
+        build_number=0,
+        subdir="noarch",
     )
     package.timestamp = datetime.fromtimestamp(1_700_000_000, timezone.utc)
     record = rattler.RepoDataRecord(
@@ -295,3 +299,23 @@ def test_matchspec_from_solver_diagnostic(
     monkeypatch.setenv("CONDA_SOLVER", "rattler")
     reset_context()
     assert str(utils_module.matchspec_from_solver_diagnostic(diagnostic_text)) == expected_str
+
+
+@pytest.mark.parametrize("build", ["py313h1234567_0", "py3-none-any"])
+def test_prefix_record_roundtrip_preserves_build(build: str) -> None:
+    record = PrefixRecord(
+        name="example",
+        version="1.0",
+        build=build,
+        build_number=0,
+        channel="https://conda.anaconda.org/conda-forge",
+        subdir="noarch",
+        fn=f"example-1.0-{build}.conda",
+        url=f"https://conda.anaconda.org/conda-forge/noarch/example-1.0-{build}.conda",
+    )
+
+    rattler_record = utils_module.conda_prefix_record_to_rattler_prefix_record(record)
+    result = utils_module.rattler_record_to_conda_record(rattler_record)
+
+    assert result.build == build
+    assert (result.name, result.version, result.build_number) == ("example", "1.0", 0)

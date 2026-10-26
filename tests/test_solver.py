@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import bz2
 import importlib.util
+import inspect
 import io
 import json
 import os
@@ -15,9 +16,11 @@ from itertools import chain, permutations, repeat
 from pathlib import Path
 from subprocess import run
 from textwrap import dedent
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
+import rattler
 from conda._private.shards import ShardLike
 from conda.base.constants import UpdateModifier
 from conda.base.context import context, reset_context
@@ -30,11 +33,13 @@ from conda.exceptions import (
     SpecsConfigurationConflictError,
     UnsatisfiableError,
 )
+from conda.gateways.shards import build_repodata_subset
 from conda.models.channel import Channel
 from conda.models.match_spec import MatchSpec
 from conda.models.records import PrefixRecord
 from conda.testing.integration import package_is_installed
 from conda.testing.solver_helpers import SolverTests
+from packaging.version import Version
 from rattler.exceptions import SolverError as RattlerSolverError
 
 from conda_rattler_solver.exceptions import RattlerUnsatisfiableError
@@ -97,6 +102,7 @@ def _make_noarch_package(
             info.size = len(payload)
             tar.addfile(info, io.BytesIO(payload))
     (noarch_dir / fn).write_bytes(bz2.compress(buf.getvalue()))
+    index_json["size"] = (noarch_dir / fn).stat().st_size
 
     repodata_path = noarch_dir / "repodata.json"
     repodata = (
@@ -854,6 +860,48 @@ def test_python_updates_match_reference_solvers(
                 solver,
                 results,
             )
+
+
+@pytest.mark.parametrize("solver", ["classic", "rattler"])
+@pytest.mark.parametrize("include_installed_channel", [False, True])
+@pytest.mark.parametrize(
+    "package_spec,available_version,expected_version,expected_build",
+    [
+        pytest.param("ca-certificates", "1.0", "2.0", "low", id="keep-newer-installed"),
+        pytest.param("ca-certificates", "3.0", "3.0", "low", id="allow-upgrade"),
+        pytest.param("ca-certificates=1.0", "1.0", "1.0", "high", id="explicit-downgrade"),
+    ],
+)
+def test_install_keeps_unrequested_history_packages(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    solver: str,
+    include_installed_channel: bool,
+    package_spec: str,
+    available_version: str,
+    expected_version: str,
+    expected_build: str,
+) -> None:
+    low = tmp_path / "low"
+    high = tmp_path / "high"
+    _make_noarch_package(low, "ca-certificates", "2.0")
+    _make_noarch_package(low, "app", "1.0", build="low", depends=("ca-certificates >=2",))
+    _make_noarch_package(high, "ca-certificates", available_version)
+    _make_noarch_package(high, "ca-certificates", "4.0", depends=("__unavailable",))
+    _make_noarch_package(high, "app", "1.0", build="high", depends=("ca-certificates >=1",))
+    monkeypatch.setenv("CONDA_AGGRESSIVE_UPDATE_PACKAGES", "")
+    args = ("--override-channels", f"--solver={solver}")
+    with tmp_env("app", f"--channel={low}", *args) as prefix:
+        channels = [f"--channel={high}"]
+        if include_installed_channel:
+            channels.append(f"--channel={low}")
+        conda_cli("install", f"--prefix={prefix}", package_spec, *channels, *args, "--yes")
+        PrefixData._cache_.clear()
+        installed = PrefixData(prefix)
+        assert installed.get("ca-certificates").version == expected_version
+        assert installed.get("app").build == expected_build
 
 
 @pytest.mark.skipif(not on_linux, reason="Linux only")
@@ -2405,3 +2453,74 @@ def test_can_update_env_with_python(
 
         # python keeps its installed version
         assert linked.get("python", {"version": "3.13.1"})["version"] == "3.13.1"
+
+
+@pytest.mark.skipif(
+    "root_extras" not in inspect.signature(build_repodata_subset).parameters
+    or Version(rattler.__version__) < Version("0.27.0"),
+    reason="root_extras requires conda>=26.10 and py-rattler>=0.27",
+)
+@pytest.mark.usefixtures("solver_rattler")
+def test_root_extras_reach_solution(
+    http_test_server: HttpTestServerFixture, tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """
+    Extras on a requested spec are fetched from sharded repodata and solved, but only
+    for the root package: pkg-b's own `more` extra (pkg-d) is never pulled in.
+
+    https://github.com/conda/conda-rattler-solver/issues/155
+    """
+    import hashlib
+
+    import msgpack
+    from conda._private.zstd import compress  # same zstd backend conda uses
+
+    # Create tiny sharded test channel
+    noarch = http_test_server.directory / "noarch"
+    noarch.mkdir()
+    index = {
+        "info": {"subdir": "noarch", "base_url": "", "shards_base_url": ""},
+        "version": 1,
+        "shards": {},
+    }
+    for name, extra_depends in {
+        "pkg-a": {"cli": ["pkg-b"]},
+        "pkg-b": {"more": ["pkg-d"]},
+        "pkg-d": {},
+    }.items():
+        record = {
+            "name": name,
+            "version": "1.0",
+            "build": "0",
+            "build_number": 0,
+            "extra_depends": extra_depends,
+        }
+        shard = compress(msgpack.packb({"packages.conda": {f"{name}-1.0-0.conda": record}}))
+        digest = hashlib.sha256(shard).hexdigest()
+        (noarch / f"{digest}.msgpack.zst").write_bytes(shard)
+        index["shards"][name] = bytes.fromhex(digest)
+    (noarch / "repodata_shards.msgpack.zst").write_bytes(compress(msgpack.packb(index)))
+    monkeypatch.setattr(context, "repodata_use_shards", True)
+
+    # Test that root extras are fetched from sharded repodata
+    for spec, expected in (("pkg-a", {"pkg-a"}), ("pkg-a[extras=cli]", {"pkg-a", "pkg-b"})):
+        solver = Solver(
+            prefix=tmp_path / "env",
+            channels=[Channel(http_test_server.url)],
+            subdirs=("noarch",),
+            specs_to_add=[spec],
+            build_repodata_subset=build_repodata_subset,
+        )
+        assert {record.name for record in solver.solve_final_state()} == expected
+
+
+@pytest.mark.parametrize("build", ["0", "x86_64_v3", "plugin-build"])
+def test_virtual_package_build_is_preserved(build: str) -> None:
+    record = PrefixRecord(name="__plugin", version="1.0", build=build, build_number=0)
+    in_state = SimpleNamespace(virtual={record.name: record})
+
+    (result,) = Solver._rattler_virtual_packages(None, in_state)
+
+    assert result.name.normalized == record.name
+    assert str(result.version) == record.version
+    assert str(result.build_string) == build

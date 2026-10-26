@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import os
@@ -43,6 +44,47 @@ if TYPE_CHECKING:
     from .state import SolverInputState
 
 log = logging.getLogger(f"conda.{__name__}")
+
+
+def _root_extras(in_state: SolverInputState) -> dict[str, list[str]]:
+    """
+    Build the ``root_extras`` mapping for ``build_repodata_subset``
+    from the extras on the requested specs and history unless pruning
+    which ignores history. Root packages only.
+    """
+    return {
+        name: list(extras)
+        for name, spec in {
+            **({} if in_state.prune else in_state.history),
+            **in_state.requested,
+        }.items()
+        # `.extras` only exists on newer conda; use it once conda>=26.10 is required
+        if (extras := spec.get_raw_value("extras"))
+    }
+
+
+# NOTE: This is a runtime compatibility check for conda versions older than 26.10, whose
+# `build_repodata_subset` has no `root_extras` option. It can be deleted, passing
+# `root_extras=` directly to `build_repodata_subset`, once this package requires
+# `conda >=26.10.0`.
+def _root_extras_kwargs(
+    build_repodata_subset: BuildRepodataSubset, root_extras: dict[str, list[str]] | None
+) -> dict[str, dict[str, list[str]]]:
+    """
+    Keyword arguments to forward ``root_extras`` to ``build_repodata_subset``.
+
+    Returns an empty dict when there are no extras to fetch, or when the callable provided
+    by conda has no ``root_extras`` parameter (conda < 26.10). Passing the keyword to an
+    older conda would raise ``TypeError``, so extras are simply not fetched there.
+    """
+    if not root_extras:
+        return {}
+    try:
+        if "root_extras" in inspect.signature(build_repodata_subset).parameters:
+            return {"root_extras": root_extras}
+    except (TypeError, ValueError):  # signature cannot be inspected
+        pass
+    return {}
 
 
 @dataclass
@@ -318,8 +360,13 @@ class RattlerIndexHelper:
         """
         root_packages = (*self.in_state.installed.keys(), *self.in_state.requested)
         log.debug("build_repodata_subset root_packages: %s", root_packages)
+        root_extras = _root_extras(self.in_state)
+        log.debug("build_repodata_subset root_extras: %s", root_extras)
         channel_data = self.build_repodata_subset(
-            root_packages, urls_to_channel, repodata_version=3
+            root_packages,
+            urls_to_channel,
+            repodata_version=3,
+            **_root_extras_kwargs(self.build_repodata_subset, root_extras),
         )
         log.debug(
             "build_repodata_subset returned channels: %s",
@@ -382,7 +429,7 @@ class RattlerIndexHelper:
         if self.in_state and (installed := self.in_state.installed.get(record.name.source)):
             if (
                 installed.version == str(record.version)
-                and installed.build == record.build
+                and installed.build == str(record.build)
                 and installed.fn == record.file_name
                 and installed.url
                 and installed.url == record.url
