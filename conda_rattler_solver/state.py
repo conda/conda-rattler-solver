@@ -480,7 +480,9 @@ class SolverOutputState:
         self.neutered: dict[str, MatchSpec] = neutered or {}
         self.conflicts: dict[str, MatchSpec] = conflicts or {}
         self.pins: dict[str, MatchSpec] = pins or {}
-        self.installed_without_candidates: set[str] = set(installed_without_candidates) if installed_without_candidates else set()
+        self.installed_without_candidates: set[str] = (
+            set(installed_without_candidates) if installed_without_candidates else set()
+        )
 
     @property
     def current_solution(self) -> IndexedSet[PackageRecord]:
@@ -757,7 +759,7 @@ class SolverOutputState:
                     subdirs=solver.subdirs,
                     specs_to_add=specs_to_add,
                     specs_to_remove=specs_to_remove,
-                    command="recursive_call_for_update_deps",
+                    command=sis._command,
                 ).solve_final_state(
                     update_modifier=UpdateModifier.UPDATE_SPECS,  # avoid recursion!
                     deps_modifier=sis._deps_modifier,
