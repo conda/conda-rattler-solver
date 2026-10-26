@@ -15,6 +15,7 @@ Environments solve meaningfully faster with Rattler, especially large or complex
 
 ### Project status
 
+<!-- Keep in sync with docs/index.md Project status heading -->
 Beta - Opt in to test, not recommended for production. We want your feedback!
 
 ## Install instructions
