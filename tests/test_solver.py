@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import bz2
 import importlib.util
+import inspect
 import io
 import json
 import os
@@ -19,6 +20,7 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
+import rattler
 from conda._private.shards import ShardLike
 from conda.base.constants import UpdateModifier
 from conda.base.context import context, reset_context
@@ -30,11 +32,13 @@ from conda.exceptions import (
     SpecsConfigurationConflictError,
     UnsatisfiableError,
 )
+from conda.gateways.shards import build_repodata_subset
 from conda.models.channel import Channel
 from conda.models.match_spec import MatchSpec
 from conda.models.records import PrefixRecord
 from conda.testing.integration import package_is_installed
 from conda.testing.solver_helpers import SolverTests
+from packaging.version import Version
 from rattler.exceptions import SolverError as RattlerSolverError
 
 from conda_rattler_solver.exceptions import RattlerUnsatisfiableError
@@ -2379,6 +2383,65 @@ def test_can_update_env_with_python(
 
         # python keeps its installed version
         assert linked.get("python", {"version": "3.13.1"})["version"] == "3.13.1"
+
+
+@pytest.mark.skipif(
+    "root_extras" not in inspect.signature(build_repodata_subset).parameters
+    or Version(rattler.__version__) < Version("0.27.0"),
+    reason="root_extras requires conda>=26.10 and py-rattler>=0.27",
+)
+@pytest.mark.usefixtures("solver_rattler")
+def test_root_extras_reach_solution(
+    http_test_server: HttpTestServerFixture, tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """
+    Extras on a requested spec are fetched from sharded repodata and solved, but only
+    for the root package: pkg-b's own `more` extra (pkg-d) is never pulled in.
+
+    https://github.com/conda/conda-rattler-solver/issues/155
+    """
+    import hashlib
+
+    import msgpack
+    from conda._private.zstd import compress  # same zstd backend conda uses
+
+    # Create tiny sharded test channel
+    noarch = http_test_server.directory / "noarch"
+    noarch.mkdir()
+    index = {
+        "info": {"subdir": "noarch", "base_url": "", "shards_base_url": ""},
+        "version": 1,
+        "shards": {},
+    }
+    for name, extra_depends in {
+        "pkg-a": {"cli": ["pkg-b"]},
+        "pkg-b": {"more": ["pkg-d"]},
+        "pkg-d": {},
+    }.items():
+        record = {
+            "name": name,
+            "version": "1.0",
+            "build": "0",
+            "build_number": 0,
+            "extra_depends": extra_depends,
+        }
+        shard = compress(msgpack.packb({"packages.conda": {f"{name}-1.0-0.conda": record}}))
+        digest = hashlib.sha256(shard).hexdigest()
+        (noarch / f"{digest}.msgpack.zst").write_bytes(shard)
+        index["shards"][name] = bytes.fromhex(digest)
+    (noarch / "repodata_shards.msgpack.zst").write_bytes(compress(msgpack.packb(index)))
+    monkeypatch.setattr(context, "repodata_use_shards", True)
+
+    # Test that root extras are fetched from sharded repodata
+    for spec, expected in (("pkg-a", {"pkg-a"}), ("pkg-a[extras=cli]", {"pkg-a", "pkg-b"})):
+        solver = Solver(
+            prefix=tmp_path / "env",
+            channels=[Channel(http_test_server.url)],
+            subdirs=("noarch",),
+            specs_to_add=[spec],
+            build_repodata_subset=build_repodata_subset,
+        )
+        assert {record.name for record in solver.solve_final_state()} == expected
 
 
 @pytest.mark.parametrize("build", ["0", "x86_64_v3", "plugin-build"])
