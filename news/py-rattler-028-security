@@ -1,0 +1,4 @@
+### Bug fixes
+
+* Support py-rattler 0.28.0, including its new build-string API, while retaining support for 0.26 and 0.27.
+* Preserve packages from environment history during frozen installs and retain compatible installed records when channel candidates have unsatisfied dependencies.
