@@ -16,6 +16,7 @@ from itertools import chain, permutations, repeat
 from pathlib import Path
 from subprocess import run
 from textwrap import dedent
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -100,6 +101,7 @@ def _make_noarch_package(
             info.size = len(payload)
             tar.addfile(info, io.BytesIO(payload))
     (noarch_dir / fn).write_bytes(bz2.compress(buf.getvalue()))
+    index_json["size"] = (noarch_dir / fn).stat().st_size
 
     repodata_path = noarch_dir / "repodata.json"
     repodata = (
@@ -788,6 +790,48 @@ def test_python_updates_match_reference_solvers(
                 solver,
                 results,
             )
+
+
+@pytest.mark.parametrize("solver", ["classic", "rattler"])
+@pytest.mark.parametrize("include_installed_channel", [False, True])
+@pytest.mark.parametrize(
+    "package_spec,available_version,expected_version,expected_build",
+    [
+        pytest.param("ca-certificates", "1.0", "2.0", "low", id="keep-newer-installed"),
+        pytest.param("ca-certificates", "3.0", "3.0", "low", id="allow-upgrade"),
+        pytest.param("ca-certificates=1.0", "1.0", "1.0", "high", id="explicit-downgrade"),
+    ],
+)
+def test_install_keeps_unrequested_history_packages(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    solver: str,
+    include_installed_channel: bool,
+    package_spec: str,
+    available_version: str,
+    expected_version: str,
+    expected_build: str,
+) -> None:
+    low = tmp_path / "low"
+    high = tmp_path / "high"
+    _make_noarch_package(low, "ca-certificates", "2.0")
+    _make_noarch_package(low, "app", "1.0", build="low", depends=("ca-certificates >=2",))
+    _make_noarch_package(high, "ca-certificates", available_version)
+    _make_noarch_package(high, "ca-certificates", "4.0", depends=("__unavailable",))
+    _make_noarch_package(high, "app", "1.0", build="high", depends=("ca-certificates >=1",))
+    monkeypatch.setenv("CONDA_AGGRESSIVE_UPDATE_PACKAGES", "")
+    args = ("--override-channels", f"--solver={solver}")
+    with tmp_env("app", f"--channel={low}", *args) as prefix:
+        channels = [f"--channel={high}"]
+        if include_installed_channel:
+            channels.append(f"--channel={low}")
+        conda_cli("install", f"--prefix={prefix}", package_spec, *channels, *args, "--yes")
+        PrefixData._cache_.clear()
+        installed = PrefixData(prefix)
+        assert installed.get("ca-certificates").version == expected_version
+        assert installed.get("app").build == expected_build
 
 
 @pytest.mark.skipif(not on_linux, reason="Linux only")
@@ -2357,6 +2401,7 @@ def test_root_extras_reach_solution(
     https://github.com/conda/conda-rattler-solver/issues/155
     """
     import hashlib
+
     import msgpack
     from conda._private.zstd import compress  # same zstd backend conda uses
 
@@ -2397,3 +2442,15 @@ def test_root_extras_reach_solution(
             build_repodata_subset=build_repodata_subset,
         )
         assert {record.name for record in solver.solve_final_state()} == expected
+
+
+@pytest.mark.parametrize("build", ["0", "x86_64_v3", "plugin-build"])
+def test_virtual_package_build_is_preserved(build: str) -> None:
+    record = PrefixRecord(name="__plugin", version="1.0", build=build, build_number=0)
+    in_state = SimpleNamespace(virtual={record.name: record})
+
+    (result,) = Solver._rattler_virtual_packages(None, in_state)
+
+    assert result.name.normalized == record.name
+    assert str(result.version) == record.version
+    assert str(result.build_string) == build
