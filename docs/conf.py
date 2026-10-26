@@ -45,6 +45,7 @@ myst_enable_extensions = [
     "tasklist",
 ]
 
+templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 # -- Options for HTML output -------------------------------------------------
@@ -63,6 +64,7 @@ html_extra_path = ["robots.txt"]
 html_theme_options = {
     "navigation_depth": -1,
     "use_edit_page_button": True,
+    "navbar_center": ["navbar_center"],
     "icon_links": [
         {
             "name": "GitHub",
