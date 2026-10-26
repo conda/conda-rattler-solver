@@ -72,12 +72,6 @@ html_theme_options = {
             "icon": "fa-brands fa-square-github",
             "type": "fontawesome",
         },
-        {
-            "name": "Zulip",
-            "url": "https://conda.zulipchat.com",
-            "icon": "fa-custom fa-zulip",
-            "type": "fontawesome",
-        },
     ],
 }
 
