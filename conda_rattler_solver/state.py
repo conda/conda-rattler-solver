@@ -798,11 +798,13 @@ def _requested_extras_specs(records, requested_specs) -> list[MatchSpec]:
     Dependency specs from the `extra_depends` groups selected by requested specs
     (e.g. `pkg-a[extras=cli]`), for the solved records those specs match.
     """
+    requested_with_extras = [
+        (spec, extras) for spec in requested_specs if (extras := spec.get_raw_value("extras"))
+    ]
+    if not requested_with_extras:
+        return []
     specs = []
-    for requested in requested_specs:
-        extras = requested.get_raw_value("extras")
-        if not extras:
-            continue
+    for requested, extras in requested_with_extras:
         for record in records:
             if not requested.match(record):
                 continue

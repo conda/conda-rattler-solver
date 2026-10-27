@@ -1301,6 +1301,11 @@ def test_prune_existing_env_dependencies_are_solved(
         assert rc == 0
 
 
+@pytest.mark.skipif(
+    "root_extras" not in inspect.signature(build_repodata_subset).parameters
+    or Version(rattler.__version__) < Version("0.27.0"),
+    reason="root_extras requires conda>=26.10 and py-rattler>=0.27",
+)
 @pytest.mark.parametrize("prune", [False, True])
 def test_prune_keeps_dependencies_of_requested_extras(
     http_test_server: HttpTestServerFixture,
