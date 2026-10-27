@@ -323,9 +323,10 @@ class RattlerIndexHelper:
             shutil.copy(json_path, path_copy)
             json_path = path_copy
             self._unlink_on_del.append(path_copy)
-        # Use the fetched URL (which may carry auth/token) so record URLs built
-        # from this repo can download packages from authenticated channels.
-        rattler_channel = rattler.Channel(url.rsplit("/", 1)[0])
+        # Keep the rattler channel unauthenticated so channel-qualified specs
+        # (e.g. 'channel::package') match records cleanly; download credentials
+        # are restored when converting the selected records (see to_conda_record).
+        rattler_channel = rattler.Channel(noauth_url.rsplit("/", 1)[0])
         repo = rattler.SparseRepoData(rattler_channel, channel.subdir, json_path)
         return _ChannelRepoInfo(
             repo=repo,
@@ -579,6 +580,7 @@ class RattlerIndexHelper:
             for record in info.repo.load_matching_records([spec]):
                 yield rattler_record_to_conda_record(
                     record,
+                    info=info,
                     add_pip_as_python_dependency=context.add_pip_as_python_dependency,
                 )
 

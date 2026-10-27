@@ -342,7 +342,7 @@ class RattlerSolver(Solver):
                 raise exc
 
         # We didn't fail? Nice, let's return the calculated state
-        self._export_solved_records(solution, out_state)
+        self._export_solved_records(solution, out_state, index)
 
         # Run post-solve tasks
         out_state.post_solve(solver=self)
@@ -858,12 +858,12 @@ class RattlerSolver(Solver):
         )
         raise exc
 
-    def _export_solved_records(self, records, out_state):
+    def _export_solved_records(self, records, out_state, index):
         out_state.records.clear()
         for rattler_record in records:
             # Repository candidates are patched by py-rattler before solving. Do not
             # patch here because locked records must preserve their installed metadata.
-            conda_record = rattler_record_to_conda_record(rattler_record)
+            conda_record = rattler_record_to_conda_record(rattler_record, index=index)
             out_state.records[conda_record.name] = conda_record
 
     # endregion
