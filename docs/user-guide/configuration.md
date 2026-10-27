@@ -36,10 +36,15 @@ $ conda config --set channel_priority strict
 
 ### `pinned_packages`
 
-Pins are honoured. Specs listed in `pinned_packages`, or in the `pinned` file
-of the target environment, constrain the solve in the same way as with the
-other solvers. A request that conflicts with a pin fails with
-`UnsatisfiableError`.
+Specs listed in `pinned_packages` or in the target environment's
+`conda-meta/pinned` file constrain the solve. Like `libmamba`, rattler
+rejects command-line requests that conflict with configured pins instead
+of overriding the pins as `classic` does. Edit or remove the pin before
+requesting a conflicting version. Direct pin conflicts can raise
+`SpecsConfigurationConflictError`.
+
+If a package is already installed, a pin containing only its name locks
+it to its installed version and build.
 
 ### `add_pip_as_python_dependency`
 
