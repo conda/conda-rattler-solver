@@ -57,7 +57,7 @@ that were tried and explains which requirements could not be satisfied.
 A request for an unavailable package can raise `PackagesNotFoundError`.
 A direct conflict between requested specs and configured pins can raise
 `SpecsConfigurationConflictError`. See
-[`pinned_packages`](configuration.md#pinned-packages) for pinning behavior.
+[`pinned_packages`](configuration.md#pinned_packages) for pinning behavior.
 
 ## Solutions that differ from `classic`
 
