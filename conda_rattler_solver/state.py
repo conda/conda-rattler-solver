@@ -781,7 +781,20 @@ class SolverOutputState:
         # ## Prune ###
         # remove orphan leaves in the graph
         if sis.prune:
-            graph = PrefixGraph(list(self.records.values()), list(sis.requested.values()))
+            # PrefixGraph only follows ordinary `depends`, so dependencies selected via
+            # `spec[extras=...]` are anchored explicitly or they would be pruned away.
+            anchors = list(sis.requested.values())
+            for requested in sis.requested.values():
+                if not (extras := requested.get_raw_value("extras")):
+                    continue
+                for record in self.records.values():
+                    if not requested.match(record):
+                        continue
+                    for extra in extras:
+                        anchors.extend(
+                            MatchSpec(dep) for dep in (record.extra_depends or {}).get(extra, ())
+                        )
+            graph = PrefixGraph(list(self.records.values()), anchors)
             graph.prune()
             self.records.clear()
             self.records.update({record.name: record for record in graph.graph})

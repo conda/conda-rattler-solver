@@ -71,6 +71,7 @@ def _make_noarch_package(
     build: str = "0",
     build_number: int = 0,
     depends: tuple[str, ...] = (),
+    extra_depends: dict[str, list[str]] | None = None,
 ) -> None:
     """
     Write a minimal (content-free) noarch package tarball into ``channel_dir / "noarch"``,
@@ -91,6 +92,8 @@ def _make_noarch_package(
         "timestamp": 1700000000000,
         "version": version,
     }
+    if extra_depends:
+        index_json["extra_depends"] = extra_depends
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tar:
         for relpath, payload in (
@@ -1296,6 +1299,70 @@ def test_prune_existing_env_dependencies_are_solved(
         print(out)
         print(err, file=sys.stderr)
         assert rc == 0
+
+
+@pytest.mark.skipif(
+    "root_extras" not in inspect.signature(build_repodata_subset).parameters
+    or Version(rattler.__version__) < Version("0.27.0"),
+    reason="root_extras requires conda>=26.10 and py-rattler>=0.27",
+)
+@pytest.mark.parametrize("prune", [False, True])
+def test_prune_keeps_dependencies_of_requested_extras(
+    http_test_server: HttpTestServerFixture,
+    tmp_path: Path,
+    prune: bool,
+) -> None:
+    """
+    https://github.com/conda/conda-rattler-solver/issues/184
+
+    `PrefixGraph` only follows `depends`, so pruning dropped packages that were
+    only required by an explicitly requested extra. Unrelated packages must still go.
+    """
+    channel = http_test_server.directory
+    _make_noarch_package(channel, "pkg-a", "1.0", extra_depends={"cli": ["pkg-b"]})
+    _make_noarch_package(channel, "pkg-b", "1.0")
+    _make_noarch_package(channel, "pkg-c", "1.0")
+    prefix = tmp_path / "env"
+    (prefix / "conda-meta").mkdir(parents=True)
+    solver = Solver(
+        prefix=prefix,
+        channels=[Channel(http_test_server.url)],
+        subdirs=("noarch",),
+        specs_to_add=("pkg-a=1[extras=cli]",),
+        command="install",
+    )
+    names = {record.name for record in solver.solve_final_state(prune=prune)}
+    assert names == {"pkg-a", "pkg-b"}
+
+
+@pytest.mark.skipif(
+    "root_extras" not in inspect.signature(build_repodata_subset).parameters
+    or Version(rattler.__version__) < Version("0.27.0"),
+    reason="root_extras requires conda>=26.10 and py-rattler>=0.27",
+)
+def test_prune_still_removes_unrelated_packages_with_extras(
+    tmp_env: TmpEnvFixture,
+    http_test_server: HttpTestServerFixture,
+) -> None:
+    """Companion to the test above: the extras anchor must not keep everything."""
+    channel = http_test_server.directory
+    _make_noarch_package(channel, "pkg-a", "1.0", extra_depends={"cli": ["pkg-b"]})
+    _make_noarch_package(channel, "pkg-b", "1.0")
+    _make_noarch_package(channel, "pkg-c", "1.0")
+    with tmp_env(
+        "pkg-c", "--override-channels", f"--channel={channel}", "--solver=rattler"
+    ) as prefix:
+        PrefixData._cache_.clear()
+        assert PrefixData(prefix).get("pkg-c")
+        solver = Solver(
+            prefix=prefix,
+            channels=[Channel(http_test_server.url)],
+            subdirs=("noarch",),
+            specs_to_add=("pkg-a=1[extras=cli]",),
+            command="install",
+        )
+        names = {record.name for record in solver.solve_final_state(prune=True)}
+        assert names == {"pkg-a", "pkg-b"}
 
 
 def test_satisfied_skip_solve_matchspec(
