@@ -759,7 +759,7 @@ class SolverOutputState:
                     subdirs=solver.subdirs,
                     specs_to_add=specs_to_add,
                     specs_to_remove=specs_to_remove,
-                    command="recursive_call_for_update_deps",
+                    command=sis._command,
                 ).solve_final_state(
                     update_modifier=UpdateModifier.UPDATE_SPECS,  # avoid recursion!
                     deps_modifier=sis._deps_modifier,
