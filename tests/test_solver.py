@@ -1335,6 +1335,11 @@ def test_prune_keeps_dependencies_of_requested_extras(
     assert names == {"pkg-a", "pkg-b"}
 
 
+@pytest.mark.skipif(
+    "root_extras" not in inspect.signature(build_repodata_subset).parameters
+    or Version(rattler.__version__) < Version("0.27.0"),
+    reason="root_extras requires conda>=26.10 and py-rattler>=0.27",
+)
 def test_prune_still_removes_unrelated_packages_with_extras(
     tmp_env: TmpEnvFixture,
     http_test_server: HttpTestServerFixture,
