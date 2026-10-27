@@ -50,14 +50,14 @@ you need to keep it, add the original channel back or pin the package.
 
 ## Error messages
 
-When conda cannot find a solution with the conda-rattler-solver, the error
-message looks different from the one `classic` or `libmamba` would show.
-It walks through the packages that were tried and explains which requirement
-ruled each one out, and it may not repeat the name of the package you asked
-for. If you asked for a package that does not exist, or your request clashes
-with a
-[pinned package](https://docs.conda.io/projects/conda/en/stable/user-guide/tasks/manage-pkgs.html#preventing-packages-from-updating-pinning), you get this same kind of
-message rather than the specific error `classic` shows for those cases.
+For unsatisfiable dependency conflicts, conda-rattler-solver reports
+`RattlerUnsatisfiableError`. Its diagnostic walks through the packages
+that were tried and explains which requirements could not be satisfied.
+
+A request for an unavailable package can raise `PackagesNotFoundError`.
+A direct conflict between requested specs and configured pins can raise
+`SpecsConfigurationConflictError`. See
+[`pinned_packages`](configuration.md#pinned-packages) for pinning behavior.
 
 ## Solutions that differ from `classic`
 
