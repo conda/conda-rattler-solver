@@ -176,19 +176,6 @@ def test_http_server_auth_none(
     )
 
 
-def test_http_server_auth_basic(
-    http_server_auth_basic,  # noqa: F811
-    conda_cli: CondaCLIFixture,
-    path_factory: PathFactoryFixture,
-):
-    conda_cli(
-        "create",
-        f"--prefix={path_factory()}",
-        "--solver=rattler",
-        "--json",
-        "--override-channels",
-        f"--channel={http_server_auth_basic}",
-        "test-package",
 @pytest.mark.parametrize("channel_qualified", [False, True])
 def test_http_server_auth_basic(
     http_server_auth_basic,  # noqa: F811
@@ -230,19 +217,6 @@ def test_http_server_auth_basic_email(
     )
 
 
-def test_http_server_auth_token(
-    http_server_auth_token,  # noqa: F811
-    conda_cli: CondaCLIFixture,
-    path_factory: PathFactoryFixture,
-):
-    conda_cli(
-        "create",
-        f"--prefix={path_factory()}",
-        "--solver=rattler",
-        "--json",
-        "--override-channels",
-        f"--channel={http_server_auth_token}",
-        "test-package",
 @pytest.mark.parametrize("channel_qualified", [False, True])
 def test_http_server_auth_token(
     http_server_auth_token,  # noqa: F811
@@ -355,7 +329,8 @@ def test_custom_multichannels(
     repo_b = tmp_path / "repo_b"
     for repo in (repo_a, repo_b):
         shutil.copytree(DATA / "mamba_repo", repo)
-    # Add a newer build of test-package to repo_b
+    # Move the only build of test-package in repo_b to build 1, so build zero
+    # is only available from repo_a.
     repodata = repo_b / "noarch" / "repodata.json"
     repodata_contents = json.loads(repodata.read_text())
     newer = dict(repodata_contents["packages"].pop("test-package-0.1-0.tar.bz2"), build_number=1)
