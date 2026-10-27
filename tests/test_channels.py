@@ -189,7 +189,29 @@ def test_http_server_auth_basic(
         "--override-channels",
         f"--channel={http_server_auth_basic}",
         "test-package",
+@pytest.mark.parametrize("channel_qualified", [False, True])
+def test_http_server_auth_basic(
+    http_server_auth_basic,  # noqa: F811
+    conda_cli: CondaCLIFixture,
+    path_factory: PathFactoryFixture,
+    channel_qualified: bool,
+):
+    prefix = path_factory()
+    spec = (
+        f"{Channel(http_server_auth_basic).canonical_name}::test-package"
+        if channel_qualified
+        else "test-package"
     )
+    conda_cli(
+        "create",
+        f"--prefix={prefix}",
+        "--solver=rattler",
+        "--json",
+        "--override-channels",
+        f"--channel={http_server_auth_basic}",
+        spec,
+    )
+    assert package_is_installed(prefix, spec)
 
 
 def test_http_server_auth_basic_email(
@@ -221,7 +243,29 @@ def test_http_server_auth_token(
         "--override-channels",
         f"--channel={http_server_auth_token}",
         "test-package",
+@pytest.mark.parametrize("channel_qualified", [False, True])
+def test_http_server_auth_token(
+    http_server_auth_token,  # noqa: F811
+    conda_cli: CondaCLIFixture,
+    path_factory: PathFactoryFixture,
+    channel_qualified: bool,
+):
+    prefix = path_factory()
+    spec = (
+        f"{Channel(http_server_auth_token).canonical_name}::test-package"
+        if channel_qualified
+        else "test-package"
     )
+    conda_cli(
+        "create",
+        f"--prefix={prefix}",
+        "--solver=rattler",
+        "--json",
+        "--override-channels",
+        f"--channel={http_server_auth_token}",
+        spec,
+    )
+    assert package_is_installed(prefix, spec)
 
 
 @pytest.mark.skipif(
@@ -288,7 +332,18 @@ def test_local_spec() -> None:
     _MultiSource is None,
     reason="multichannels need py-rattler >=0.27.1",
 )
-def test_custom_multichannels(tmp_path: Path) -> None:
+@pytest.mark.parametrize("member_first", [False, True])
+@pytest.mark.parametrize(
+    "spec,expected_build",
+    [
+        ("test-package", 1),
+        ("mygroup::test-package", 1),
+        ("mygroup::test-package[build_number=0]", 0),
+    ],
+)
+def test_custom_multichannels(
+    tmp_path: Path, member_first: bool, spec: str, expected_build: int
+) -> None:
     """
     condarc 'custom_multichannels' groups several channels under one name.
     Group-named specs (e.g. 'mygroup::test-package') must match any member, and
@@ -303,7 +358,7 @@ def test_custom_multichannels(tmp_path: Path) -> None:
     # Add a newer build of test-package to repo_b
     repodata = repo_b / "noarch" / "repodata.json"
     repodata_contents = json.loads(repodata.read_text())
-    newer = dict(repodata_contents["packages"]["test-package-0.1-0.tar.bz2"], build_number=1)
+    newer = dict(repodata_contents["packages"].pop("test-package-0.1-0.tar.bz2"), build_number=1)
     repodata_contents["packages"]["test-package-0.1-1.tar.bz2"] = newer
     repodata.write_text(json.dumps(repodata_contents))
     shutil.copy(
@@ -319,28 +374,27 @@ def test_custom_multichannels(tmp_path: Path) -> None:
     write_env_config(
         tmp_path,
         force=True,
-        channels=["mygroup"],
+        channels=[path_to_url(str(repo_a)), "mygroup"] if member_first else ["mygroup"],
         channel_priority="strict",
         custom_multichannels={
             "mygroup": [path_to_url(str(repo_a)), path_to_url(str(repo_b))],
         },
     )
 
-    for spec in ("test-package", "mygroup::test-package"):
-        process = conda_subprocess(
-            "create",
-            "--dry-run",
-            "--json",
-            "--solver=rattler",
-            f"--prefix={tmp_path / 'env'}",
-            spec,
-            env=env,
-        )
-        result = json.loads(process.stdout)
-        assert result["success"] is True
-        (record,) = (pkg for pkg in result["actions"]["LINK"] if pkg["name"] == "test-package")
-        # the newer build in the later member is not hidden by the earlier member
-        assert record["build_number"] == 1
+    process = conda_subprocess(
+        "create",
+        "--dry-run",
+        "--json",
+        "--solver=rattler",
+        f"--prefix={tmp_path / 'env'}",
+        spec,
+        env=env,
+    )
+    result = json.loads(process.stdout)
+    assert result["success"] is True
+    (record,) = (pkg for pkg in result["actions"]["LINK"] if pkg["name"] == "test-package")
+    # Build zero is only in repo_a, while unconstrained requests prefer repo_b.
+    assert record["build_number"] == expected_build
 
 
 def test_nameless_channel(

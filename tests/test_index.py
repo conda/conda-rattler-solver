@@ -245,6 +245,46 @@ def test_collect_channel_urls_authenticated_first(tmp_path: Path):
     assert url_groups == {"https://example.com/conda/noarch": None}
 
 
+@pytest.mark.parametrize("use_cdn", [False, True], ids=["channel-download", "cdn-download"])
+def test_expanded_search_preserves_authenticated_downloads(http_test_server, monkeypatch, use_cdn):
+    noarch = http_test_server.directory / "noarch"
+    noarch.mkdir()
+    info = {"subdir": "noarch"}
+    if use_cdn:
+        info["base_url"] = "https://cdn.example.test/packages/noarch/"
+    filename = "demo-1.0-0.tar.bz2"
+    (noarch / "repodata.json").write_text(
+        json.dumps(
+            {
+                "info": info,
+                "repodata_version": 2,
+                "packages": {
+                    filename: {
+                        "name": "demo",
+                        "version": "1.0",
+                        "build": "0",
+                        "build_number": 0,
+                        "depends": [],
+                        "subdir": "noarch",
+                    }
+                },
+                "packages.conda": {},
+            }
+        )
+    )
+    authenticated = http_test_server.url.replace("http://", "http://user:password@")
+    index = RattlerIndexHelper(channels=[Channel(authenticated)], subdirs=("noarch",))
+    expanded = index._index
+    monkeypatch.setattr(index, "_index", {})
+    monkeypatch.setattr(index, "_get_root_package_from_shard", lambda names: expanded)
+
+    (record,) = index.search("demo", search_expanded_index=True)
+
+    assert record.channel.url(with_credentials=True) == f"{authenticated}/noarch"
+    download_base = info["base_url"] if use_cdn else f"{authenticated}/noarch/"
+    assert record.url == f"{download_base}{filename}"
+
+
 @pytest.mark.parametrize(
     "load_type,requested",
     [
