@@ -368,7 +368,9 @@ class RattlerIndexHelper:
                 group_name: str | None = channel.canonical_name
             else:
                 members = (channel,)
-                group_name = None
+                group_name = channel.canonical_name
+                if group_name not in context.custom_multichannels:
+                    group_name = None
             for member in members:
                 noauth_urls = member.urls(with_credentials=False, subdirs=self._subdirs)
                 if seen_noauth.issuperset(noauth_urls):
