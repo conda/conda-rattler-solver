@@ -783,34 +783,21 @@ class SolverOutputState:
         if sis.prune:
             # PrefixGraph only follows ordinary `depends`, so dependencies selected via
             # `spec[extras=...]` are anchored explicitly or they would be pruned away.
-            anchors = [
-                *sis.requested.values(),
-                *_requested_extras_specs(self.records.values(), sis.requested.values()),
-            ]
+            anchors = list(sis.requested.values())
+            for requested in sis.requested.values():
+                if not (extras := requested.get_raw_value("extras")):
+                    continue
+                for record in self.records.values():
+                    if not requested.match(record):
+                        continue
+                    for extra in extras:
+                        anchors.extend(
+                            MatchSpec(dep) for dep in (record.extra_depends or {}).get(extra, ())
+                        )
             graph = PrefixGraph(list(self.records.values()), anchors)
             graph.prune()
             self.records.clear()
             self.records.update({record.name: record for record in graph.graph})
-
-
-def _requested_extras_specs(records, requested_specs) -> list[MatchSpec]:
-    """
-    Dependency specs from the `extra_depends` groups selected by requested specs
-    (e.g. `pkg-a[extras=cli]`), for the solved records those specs match.
-    """
-    requested_with_extras = [
-        (spec, extras) for spec in requested_specs if (extras := spec.get_raw_value("extras"))
-    ]
-    if not requested_with_extras:
-        return []
-    specs = []
-    for requested, extras in requested_with_extras:
-        for record in records:
-            if not requested.match(record):
-                continue
-            for extra in extras:
-                specs.extend(MatchSpec(dep) for dep in (record.extra_depends or {}).get(extra, ()))
-    return specs
 
 
 def sort_by_spec_strictness(key_value_tuple: tuple[str, MatchSpec]) -> tuple[int, str]:
