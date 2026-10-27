@@ -71,6 +71,7 @@ def _make_noarch_package(
     build: str = "0",
     build_number: int = 0,
     depends: tuple[str, ...] = (),
+    extra_depends: dict[str, list[str]] | None = None,
 ) -> None:
     """
     Write a minimal (content-free) noarch package tarball into ``channel_dir / "noarch"``,
@@ -91,6 +92,8 @@ def _make_noarch_package(
         "timestamp": 1700000000000,
         "version": version,
     }
+    if extra_depends:
+        index_json["extra_depends"] = extra_depends
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tar:
         for relpath, payload in (
@@ -347,7 +350,56 @@ def test_update_from_latest_not_downgrade(
         assert original_python.version == update_python.version
 
 
-@pytest.mark.parametrize("update_args", [("--all",), ("libxml2",)])
+def test_update_deps_upgrades_dependencies(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+) -> None:
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "dep", "1.0")
+    _make_noarch_package(channel, "app", "1.0", depends=("dep >=1",))
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("app", *args) as prefix:
+        _make_noarch_package(channel, "dep", "2.0")
+
+        conda_cli("update", "app", "--update-deps", f"--prefix={prefix}", *args, "--yes")
+
+        PrefixData._cache_.clear()
+        records = PrefixData(prefix)
+        assert records.get("app").version == "1.0"
+        assert records.get("dep").version == "2.0"
+
+
+@pytest.mark.parametrize(
+    "command,spec,expected_version",
+    [("update", "app", "3.0"), ("install", "app=1.0", "1.0")],
+)
+def test_update_deps_does_not_downgrade_unless_requested(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+    command: str,
+    spec: str,
+    expected_version: str,
+) -> None:
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "runtime", "1.0")
+    _make_noarch_package(channel, "plugin", "2.0", depends=("runtime >=1,<2",))
+    _make_noarch_package(channel, "app", "2.0", depends=("plugin >=2",))
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("app", *args) as prefix:
+        _make_noarch_package(channel, "runtime", "2.0")
+        _make_noarch_package(channel, "plugin", "1.0", depends=("runtime >=1",))
+        _make_noarch_package(channel, "app", "1.0", depends=("plugin >=1",))
+        _make_noarch_package(channel, "app", "3.0", depends=("plugin >=2",))
+
+        conda_cli(command, spec, "--update-deps", f"--prefix={prefix}", *args, "--yes")
+
+        PrefixData._cache_.clear()
+        assert PrefixData(prefix).get("app").version == expected_version
+
+
+@pytest.mark.parametrize("update_args", [("--all",), ("libxml2",), ("libxml2", "--update-deps")])
 @pytest.mark.parametrize("pin_unrelated", [False, True])
 def test_update_does_not_downgrade_installed_builds(
     tmp_env: TmpEnvFixture,
@@ -387,7 +439,7 @@ def test_update_does_not_downgrade_installed_builds(
             assert records.get("unrelated").version == "1.0"
 
 
-@pytest.mark.parametrize("update_args", [("app",), ("--all",)])
+@pytest.mark.parametrize("update_args", [("app",), ("--all",), ("app", "--update-deps")])
 def test_update_allows_build_downgrade_required_by_pin(
     tmp_env: TmpEnvFixture,
     conda_cli: CondaCLIFixture,
@@ -1308,6 +1360,70 @@ def test_prune_existing_env_dependencies_are_solved(
         print(out)
         print(err, file=sys.stderr)
         assert rc == 0
+
+
+@pytest.mark.skipif(
+    "root_extras" not in inspect.signature(build_repodata_subset).parameters
+    or Version(rattler.__version__) < Version("0.27.0"),
+    reason="root_extras requires conda>=26.10 and py-rattler>=0.27",
+)
+@pytest.mark.parametrize("prune", [False, True])
+def test_prune_keeps_dependencies_of_requested_extras(
+    http_test_server: HttpTestServerFixture,
+    tmp_path: Path,
+    prune: bool,
+) -> None:
+    """
+    https://github.com/conda/conda-rattler-solver/issues/184
+
+    `PrefixGraph` only follows `depends`, so pruning dropped packages that were
+    only required by an explicitly requested extra. Unrelated packages must still go.
+    """
+    channel = http_test_server.directory
+    _make_noarch_package(channel, "pkg-a", "1.0", extra_depends={"cli": ["pkg-b"]})
+    _make_noarch_package(channel, "pkg-b", "1.0")
+    _make_noarch_package(channel, "pkg-c", "1.0")
+    prefix = tmp_path / "env"
+    (prefix / "conda-meta").mkdir(parents=True)
+    solver = Solver(
+        prefix=prefix,
+        channels=[Channel(http_test_server.url)],
+        subdirs=("noarch",),
+        specs_to_add=("pkg-a=1[extras=cli]",),
+        command="install",
+    )
+    names = {record.name for record in solver.solve_final_state(prune=prune)}
+    assert names == {"pkg-a", "pkg-b"}
+
+
+@pytest.mark.skipif(
+    "root_extras" not in inspect.signature(build_repodata_subset).parameters
+    or Version(rattler.__version__) < Version("0.27.0"),
+    reason="root_extras requires conda>=26.10 and py-rattler>=0.27",
+)
+def test_prune_still_removes_unrelated_packages_with_extras(
+    tmp_env: TmpEnvFixture,
+    http_test_server: HttpTestServerFixture,
+) -> None:
+    """Companion to the test above: the extras anchor must not keep everything."""
+    channel = http_test_server.directory
+    _make_noarch_package(channel, "pkg-a", "1.0", extra_depends={"cli": ["pkg-b"]})
+    _make_noarch_package(channel, "pkg-b", "1.0")
+    _make_noarch_package(channel, "pkg-c", "1.0")
+    with tmp_env(
+        "pkg-c", "--override-channels", f"--channel={channel}", "--solver=rattler"
+    ) as prefix:
+        PrefixData._cache_.clear()
+        assert PrefixData(prefix).get("pkg-c")
+        solver = Solver(
+            prefix=prefix,
+            channels=[Channel(http_test_server.url)],
+            subdirs=("noarch",),
+            specs_to_add=("pkg-a=1[extras=cli]",),
+            command="install",
+        )
+        names = {record.name for record in solver.solve_final_state(prune=True)}
+        assert names == {"pkg-a", "pkg-b"}
 
 
 def test_satisfied_skip_solve_matchspec(

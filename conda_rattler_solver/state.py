@@ -480,7 +480,9 @@ class SolverOutputState:
         self.neutered: dict[str, MatchSpec] = neutered or {}
         self.conflicts: dict[str, MatchSpec] = conflicts or {}
         self.pins: dict[str, MatchSpec] = pins or {}
-        self.installed_without_candidates: set[str] = set(installed_without_candidates) if installed_without_candidates else set()
+        self.installed_without_candidates: set[str] = (
+            set(installed_without_candidates) if installed_without_candidates else set()
+        )
 
     @property
     def current_solution(self) -> IndexedSet[PackageRecord]:
@@ -757,7 +759,7 @@ class SolverOutputState:
                     subdirs=solver.subdirs,
                     specs_to_add=specs_to_add,
                     specs_to_remove=specs_to_remove,
-                    command="recursive_call_for_update_deps",
+                    command=sis._command,
                 ).solve_final_state(
                     update_modifier=UpdateModifier.UPDATE_SPECS,  # avoid recursion!
                     deps_modifier=sis._deps_modifier,
@@ -779,7 +781,20 @@ class SolverOutputState:
         # ## Prune ###
         # remove orphan leaves in the graph
         if sis.prune:
-            graph = PrefixGraph(list(self.records.values()), list(sis.requested.values()))
+            # PrefixGraph only follows ordinary `depends`, so dependencies selected via
+            # `spec[extras=...]` are anchored explicitly or they would be pruned away.
+            anchors = list(sis.requested.values())
+            for requested in sis.requested.values():
+                if not (extras := requested.get_raw_value("extras")):
+                    continue
+                for record in self.records.values():
+                    if not requested.match(record):
+                        continue
+                    for extra in extras:
+                        anchors.extend(
+                            MatchSpec(dep) for dep in (record.extra_depends or {}).get(extra, ())
+                        )
+            graph = PrefixGraph(list(self.records.values()), anchors)
             graph.prune()
             self.records.clear()
             self.records.update({record.name: record for record in graph.graph})

@@ -5,7 +5,6 @@ See https://github.com/conda/conda-rattler-solver/issues/118.
 from __future__ import annotations
 
 import shutil
-from contextlib import ExitStack
 from pathlib import Path
 from typing import TYPE_CHECKING
 
