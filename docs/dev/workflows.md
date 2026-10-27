@@ -43,9 +43,15 @@ pixi run --locked lint
 ### Upstream `conda` tests
 
 The [Tests workflow](https://github.com/conda/conda-rattler-solver/actions/workflows/tests.yml)
-also runs conda's own test suite with `CONDA_TEST_SOLVERS=rattler`. To do the
-same locally from a clone of `conda/conda` next to this repository, with
-conda-rattler-solver installed in editable mode:
+also runs conda's own test suite with `CONDA_TEST_SOLVERS=rattler`. To run
+it locally, use a clone of `conda/conda` next to this repository. Follow
+[conda's development environment guide](https://docs.conda.io/projects/conda/en/stable/dev-guide/development-environment.html)
+and activate that environment, then install conda-rattler-solver in editable
+mode with its dependencies using [Manual setup](setup.md#manual-setup).
+The Pixi test environments above do not include all of conda's test
+dependencies.
+
+From the conda-rattler-solver checkout, run:
 
 ```shell
 cd ../conda
