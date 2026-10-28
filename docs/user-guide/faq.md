@@ -46,9 +46,7 @@ CondaValueError: Invalid choice for 'solver': rattler
 ```
 
 the plugin is not installed in the environment that provides the `conda`
-command, which is usually `base`. That should not happen on conda 26.5 and
-later, where the plugin ships with conda. Install it in `base`, not in the
-environment you are trying to modify:
+command, which is usually `base`. Install it there:
 
 ```console
 $ conda install -n base conda-rattler-solver
