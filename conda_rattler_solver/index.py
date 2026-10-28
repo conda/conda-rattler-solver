@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 import logging
 import os
 import random
@@ -18,6 +19,7 @@ from conda.base.constants import REPODATA_FN
 from conda.base.context import context
 from conda.common.io import DummyExecutor, ThreadLimitedThreadPoolExecutor
 from conda.common.url import path_to_url, remove_auth, split_anaconda_token
+from conda.core.exclude_newer import ExcludeNewerPolicy
 from conda.core.package_cache_data import PackageCacheData
 from conda.core.subdir_data import SubdirData
 from conda.models.channel import Channel
@@ -96,6 +98,8 @@ class _ChannelRepoInfo:
     local_json: str | None
     installed: Mapping[str, PackageRecord]
     package_format: rattler.PackageFormatSelection
+    source: str
+    indexed_timestamps: dict[str, int | float]
 
     def package_names(self, platform: rattler.Platform) -> list[str]:
         if str(platform) != self.repo.subdir:
@@ -147,6 +151,7 @@ class RattlerIndexHelper:
         pkgs_dirs: PathsType = (),
         in_state: SolverInputState | None = None,
         build_repodata_subset: BuildRepodataSubset | None = None,
+        exclude_newer_policy: ExcludeNewerPolicy | None = None,
     ):
         self._unlink_on_del: list[Path] = []
 
@@ -155,7 +160,9 @@ class RattlerIndexHelper:
         self._repodata_fn = repodata_fn
         self.in_state = in_state
         self.build_repodata_subset = build_repodata_subset
-
+        self.exclude_newer_policy = (
+            ExcludeNewerPolicy() if exclude_newer_policy is None else exclude_newer_policy
+        )
         self._index: dict[str, _ChannelRepoInfo] = {}
         self._index.update(self._load_channels())
         if pkgs_dirs:
@@ -188,6 +195,8 @@ class RattlerIndexHelper:
                 if repo_info.noauth_url == new_repo_info.noauth_url:
                     repo_info.repo.close()
                     repo_info.repo = new_repo_info.repo
+                    repo_info.local_json = new_repo_info.local_json
+                    repo_info.indexed_timestamps = new_repo_info.indexed_timestamps
                     break
 
     def n_packages(
@@ -249,6 +258,38 @@ class RattlerIndexHelper:
             shutil.copy(json_path, path_copy)
             json_path = path_copy
             self._unlink_on_del.append(path_copy)
+        repodata = json.loads(json_path.read_text())
+        indexed_timestamps = {}
+        filter_repodata = self.exclude_newer_policy.active
+        base_url = url.rstrip("/")
+        groups = [(repodata, "packages", None), (repodata, "packages.conda", None)]
+        if v3 := repodata.get("v3"):
+            groups.extend((v3, extension, extension) for extension in v3)
+
+        for parent, group_name, extension in groups:
+            records = parent.get(group_name, {})
+            kept_records = {}
+            for key, record in records.items():
+                filename = record.get("fn") or key
+                if filter_repodata:
+                    package_url = record.get("url") or f"{base_url}/{filename}"
+                    if not self.exclude_newer_policy.should_include(
+                        {**record, "channel": url, "fn": filename, "url": package_url}
+                    ):
+                        continue
+                    kept_records[key] = record
+                if indexed_timestamp := record.get("indexed_timestamp"):
+                    # Rattler 0.26 derives v3 filenames from the map key.
+                    rattler_filename = f"{key}.{extension}" if extension else key
+                    indexed_timestamps[rattler_filename] = indexed_timestamp
+            if filter_repodata:
+                parent[group_name] = kept_records
+
+        if filter_repodata:
+            with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+                f.write(json_dump(repodata))
+            json_path = Path(f.name)
+            self._unlink_on_del.append(json_path)
         # TODO: Support multichannel https://github.com/conda/rattler/issues/1327
         rattler_channel = rattler.Channel(noauth_url_sans_subdir)
         repo = rattler.SparseRepoData(rattler_channel, channel.subdir, json_path)
@@ -260,6 +301,8 @@ class RattlerIndexHelper:
             local_json=json_path,
             installed=self.in_state.installed if self.in_state else {},
             package_format=self._package_format,
+            source=noauth_url_sans_subdir.rstrip("/"),
+            indexed_timestamps=indexed_timestamps,
         )
 
     def _urls_from_channels(self, channels: Iterable[Channel | str] | None = None) -> tuple[str]:
@@ -377,6 +420,23 @@ class RattlerIndexHelper:
             index[info.noauth_url] = info
         return index
 
+    def indexed_timestamp_for(self, record: rattler.RepoDataRecord) -> int | float | None:
+        source = (record.channel or "").rstrip("/")
+        for info in self._index.values():
+            if info.source == source and str(info.repo.subdir) == record.subdir:
+                if indexed_timestamp := info.indexed_timestamps.get(record.file_name):
+                    return indexed_timestamp
+        if self.in_state and (installed := self.in_state.installed.get(record.name.source)):
+            if (
+                installed.version == str(record.version)
+                and installed.build == str(record.build)
+                and installed.fn == record.file_name
+                and installed.url
+                and installed.url == record.url
+            ):
+                return installed.get("indexed_timestamp") or None
+        return None
+
     def _load_channels(self, urls: Iterable[str] | None = None) -> dict[str, _ChannelRepoInfo]:
         if urls is None:
             urls = self._urls_from_channels()
@@ -415,9 +475,15 @@ class RattlerIndexHelper:
             package_cache_data.load()
             arch = empty_repodata_dict(subdir, base_url=path_as_url)
             noarch = empty_repodata_dict("noarch", base_url=path_as_url)
+            indexed_timestamps: dict[str, dict[str, int | float]] = {subdir: {}, "noarch": {}}
             for record in package_cache_data.values():
                 record: PackageCacheRecord
-                if record.subdir not in self._subdirs:
+                if record.subdir not in (subdir, "noarch"):
+                    continue
+                if (
+                    self.exclude_newer_policy.active
+                    and not self.exclude_newer_policy.should_include(record)
+                ):
                     continue
                 record_data = dict(record.dump())
                 for field in (
@@ -435,8 +501,10 @@ class RattlerIndexHelper:
                     value = getattr(record, field, None)
                     if value is not None:
                         record_data[field] = value
+                if indexed_timestamp := record_data.get("indexed_timestamp"):
+                    indexed_timestamps[record.subdir][record.fn] = indexed_timestamp
                 key = "packages" if record.fn.endswith(".tar.bz2") else "packages.conda"
-                if record.noarch:
+                if record.subdir == "noarch":
                     noarch[key][record.fn] = record_data
                 else:
                     arch[key][record.fn] = record_data
@@ -456,6 +524,8 @@ class RattlerIndexHelper:
                         local_json=f.name,
                         installed=self.in_state.installed if self.in_state else {},
                         package_format=self._package_format,
+                        source=path_as_url.rstrip("/"),
+                        indexed_timestamps=indexed_timestamps[subdir_name],
                     )
                 )
                 self._unlink_on_del.append(Path(f.name))
@@ -474,6 +544,7 @@ class RattlerIndexHelper:
                 yield rattler_record_to_conda_record(
                     record,
                     add_pip_as_python_dependency=context.add_pip_as_python_dependency,
+                    indexed_timestamp=info.indexed_timestamps.get(record.file_name),
                 )
 
     def search(

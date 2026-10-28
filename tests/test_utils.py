@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
+import rattler
 from conda import __version__ as _conda_version
 from conda.base.context import reset_context
 from conda.models.records import PackageRecord, PrefixRecord
@@ -28,6 +30,35 @@ class _FakeIndex:
 
     def search(self, spec, search_expanded_index: bool = False):
         return self._newer_records
+
+
+def test_rattler_record_to_conda_record_keeps_indexed_timestamp() -> None:
+    package = rattler.PackageRecord(
+        name="foo",
+        version="1.0",
+        build=utils_module.rattler_build_string("0"),
+        build_number=0,
+        subdir="noarch",
+    )
+    package.timestamp = datetime.fromtimestamp(1_700_000_000, timezone.utc)
+    record = rattler.RepoDataRecord(
+        package,
+        "foo-1.0-0.tar.bz2",
+        "https://example.test/noarch/foo-1.0-0.tar.bz2",
+        "https://example.test",
+    )
+
+    class IndexedRecord:
+        indexed_timestamp = datetime.fromtimestamp(1_700_000_030, timezone.utc)
+
+        def __getattr__(self, name: str):
+            return getattr(record, name)
+
+    converted = utils_module.rattler_record_to_conda_record(IndexedRecord())
+
+    assert converted.timestamp == 1_700_000_000
+    assert converted.indexed_timestamp == 1_700_000_030
+    assert converted.dump()["indexed_timestamp"] == 1_700_000_030_000
 
 
 class _FakePrefixData:
