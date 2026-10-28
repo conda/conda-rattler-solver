@@ -1,10 +1,8 @@
 # conda-rattler-solver
 
-Welcome to the conda-rattler-solver documentation! conda-rattler-solver brings
-the Rust-based [`resolvo`](https://github.com/prefix-dev/resolvo) solver,
-as provided by [`rattler`](https://github.com/conda/rattler), to `conda`, and it
-is the default solver since `conda` 26.10. On this site, you will find
-information about how to install, configure, and use this solver.
+`conda-rattler-solver` brings the Rust-based
+[`resolvo`](https://github.com/prefix-dev/resolvo) solver to `conda`
+through [`rattler`](https://github.com/conda/rattler).
 
 <!-- Keep in sync with README.md -->
 ```{admonition} Project status
