@@ -1,8 +1,8 @@
 # Known limitations and differences
 
 conda-rattler-solver aims to be a drop-in replacement for the `classic` and
-`libmamba` solvers, but it is still in beta and there are some areas where it
-behaves differently. This page lists these known limitations and differences.
+`libmamba` solvers, but there are some areas where it behaves differently. This
+page lists these known limitations and differences.
 
 ```{tip}
 You can always use `--solver=classic` or `--solver=libmamba` to run a single

@@ -9,36 +9,23 @@ and its Python bindings, `py-rattler`.
 Environments solve meaningfully faster with `rattler`, especially large or
 complex ones, and your existing environments and workflows keep working.
 
-<!-- TODO: remove this once we make it the default? Keep in sync with README.md -->
+<!-- Keep in sync with README.md -->
 ```{admonition} Project status
-:class: warning
+:class: note
 
-conda-rattler-solver is in beta. Opt in to test it and send us your
-feedback, but it is not yet recommended for production use.
+conda-rattler-solver is conda's default solver starting with conda 26.10.
 ```
 
 ## How to install
 
-% Once conda-rattler-solver ships as the default solver (planned for conda 26.10,
-% see https://github.com/conda/conda/issues/16853 and
-% https://github.com/conda/conda-rattler-solver/issues/173), replace the paragraph
-% below with the conda-libmamba-solver wording (fill in the conda version):
-%
-% If you have a recent `conda` (26.10 or later), you don't have to do anything.
-% conda-rattler-solver is already preconfigured as default. For older versions of
-% `conda`, we simply recommend updating `conda` to a more recent version:
+If you have a recent `conda` (26.10 or later), you don't have to do anything.
+conda-rattler-solver is already preconfigured as the default solver.
 
 conda-rattler-solver requires `conda` 26.7 or later. If you have an older
 `conda`, we simply recommend updating `conda` to a more recent version first:
 
 ```console
-$ conda update -n base conda
-```
-
-Then install the package in your `base` environment:
-
-```console
-$ conda install -n base conda-rattler-solver
+$ conda self update --all
 ```
 
 Development builds are published to the `conda-canary` channel under the `dev`
@@ -50,15 +37,8 @@ $ conda install -n base conda-canary/label/dev::conda-rattler-solver
 
 ## Usage
 
-% Once conda-rattler-solver ships as the default solver (planned for conda 26.10,
-% see https://github.com/conda/conda/issues/16853 and
-% https://github.com/conda/conda-rattler-solver/issues/173), add this above the
-% subsections below (fill in the conda version) and move the "Set it as the
-% default" subsection into a "Usage with conda 26.9 and below" admonition, as
-% the conda-libmamba-solver docs do:
-%
-% From `conda` 26.10, conda-rattler-solver is the default solver. You don't have
-% to do anything else. It will just work.
+From `conda` 26.10, conda-rattler-solver is the default solver. You don't have
+to do anything else.
 
 ### Try it on a single command
 
@@ -79,8 +59,8 @@ $ CONDA_SOLVER=rattler conda install numpy
 
 ### Set it as the default
 
-To use rattler for every solve, add `solver: rattler` to your `.condarc` file,
-either manually or with this command:
+This is only needed on conda 26.9 and below. To use rattler for every solve, add
+`solver: rattler` to your `.condarc` file, either manually or with this command:
 
 ```console
 $ conda config --set solver rattler
@@ -92,7 +72,6 @@ If you ever need another solver temporarily, use the `--solver` flag:
 
 ```console
 $ conda install numpy --solver=libmamba
-$ conda install numpy --solver=classic
 ```
 
 To revert the default configuration, remove the `solver` key:
@@ -101,7 +80,7 @@ To revert the default configuration, remove the `solver` key:
 $ conda config --remove-key solver
 ```
 
-`conda` then falls back to its own default, which is `libmamba`. You can also
+`conda` then falls back to its own default, which is `rattler`. You can also
 make a different choice explicit with `conda config --set solver libmamba`.
 
 ```{tip}
