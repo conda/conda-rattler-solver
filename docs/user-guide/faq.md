@@ -18,18 +18,20 @@ Run:
 $ conda config --show solver
 ```
 
-If the output is `solver: rattler`, conda-rattler-solver is the default solver.
-To see where the setting comes from, use `conda config --show-sources`.
+If the output is `solver: rattler`, conda is using conda-rattler-solver. That
+is the default from conda 26.10 onwards. To see where the setting comes from,
+use `conda config --show-sources`.
 
-## How do I configure conda to use the solver permanently?
+## Do I need to configure conda to use the solver?
 
-Use the following command to always use `rattler` as your default solver:
+Starting with conda 26.10, no: conda-rattler-solver is the default solver. On
+earlier releases, or if another solver was configured, make it the default with:
 
 ```console
 $ conda config --set solver rattler
 ```
 
-To undo this change, run:
+To undo this change and return to conda's default solver, run:
 
 ```console
 $ conda config --remove-key solver
@@ -44,8 +46,9 @@ CondaValueError: Invalid choice for 'solver': rattler
 ```
 
 the plugin is not installed in the environment that provides the `conda`
-command, which is usually `base`. Install it there, not in the environment
-you are trying to modify:
+command, which is usually `base`. That should not happen on conda 26.5 and
+later, where the plugin ships with conda. Install it in `base`, not in the
+environment you are trying to modify:
 
 ```console
 $ conda install -n base conda-rattler-solver
@@ -53,7 +56,15 @@ $ conda install -n base conda-rattler-solver
 
 ## How do I uninstall it?
 
-If you don't want to use the solver anymore, follow these instructions:
+From conda 26.10, conda-rattler-solver is the default solver. To use a
+different solver, select one:
+
+```console
+$ conda config --set solver libmamba
+```
+
+If you installed the plugin yourself on an earlier conda release, follow these
+instructions:
 
 ```{warning}
 Please make sure you __follow all steps below__ to uninstall the solver!

@@ -18,11 +18,18 @@ conda-rattler-solver is conda's default solver starting with conda 26.10.
 
 ## How to install
 
-If you have a recent `conda` (26.10 or later), you don't have to do anything.
-conda-rattler-solver is already preconfigured as the default solver.
+If you have conda 26.10 or later, conda-rattler-solver is the default solver,
+so no installation or configuration is needed.
 
-conda-rattler-solver requires `conda` 26.7 or later. If you have an older
-`conda`, we simply recommend updating `conda` to a more recent version first:
+conda-rattler-solver has shipped with conda since 26.5. To use it on conda 26.5
+to 26.9, select it as your solver:
+
+```console
+$ conda config --set solver rattler
+```
+
+If you have an older `conda`, we simply recommend updating `conda` to a more
+recent version first:
 
 ```console
 $ conda self update --all
@@ -80,8 +87,9 @@ To revert the default configuration, remove the `solver` key:
 $ conda config --remove-key solver
 ```
 
-`conda` then falls back to its own default, which is `rattler`. You can also
-make a different choice explicit with `conda config --set solver libmamba`.
+On conda 26.10 and later, `conda` then falls back to its own default, which is
+`rattler`; older releases fall back to `libmamba`. You can also make a different
+choice explicit with `conda config --set solver libmamba`.
 
 ```{tip}
 If you are unsure what configuration is being used by conda, you can inspect
