@@ -6,7 +6,7 @@ page lists these known limitations and differences.
 
 ```{tip}
 You can always use `--solver=classic` or `--solver=libmamba` to run a single
-operation with another solver, even after setting `rattler` as the default.
+operation with another solver, even though `rattler` is the default.
 ```
 
 ## Features and `track_features`

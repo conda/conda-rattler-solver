@@ -47,7 +47,7 @@ about:
   license: BSD-3-Clause
   license_family: BSD
   license_file: src/LICENSE
-  summary: 'The fast pixi solver, now in conda!'
+  summary: 'The fast, Rust-based solver for conda'
 
 extra:
   recipe-maintainers:
