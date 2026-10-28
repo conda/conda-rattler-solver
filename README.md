@@ -20,11 +20,16 @@ and the [user guide](https://conda.github.io/conda-rattler-solver/user-guide/) f
 
 ## Install instructions
 
-Starting with conda 26.10, conda-rattler-solver is conda's default solver, so no
-configuration is needed.
+Conda 26.10 and later use conda-rattler-solver by default unless another
+solver is explicitly selected in your configuration.
 
-conda-rattler-solver has shipped with conda since 26.5. To use it on 26.5 to
-26.9, select it as your solver:
+If your installation does not include the plugin, install it in `base`:
+
+```
+conda install --name base conda-rattler-solver
+```
+
+On conda 26.5 through 26.9, or if another solver is configured, select rattler:
 
 ```
 conda config --set solver rattler
