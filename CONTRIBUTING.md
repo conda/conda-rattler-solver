@@ -1,5 +1,12 @@
 # How to contribute
 
+<!--
+Keep this file in sync with the developer guide in docs/dev/:
+- "Setup" with docs/dev/setup.md, and
+- "Tests and formatting" with docs/dev/workflows.md, and
+- "Benchmarks" with docs/dev/benchmarks.md
+-->
+
 ## Setup
 
 Install [Pixi](https://pixi.sh/latest/installation/) and Git. Clone this repository

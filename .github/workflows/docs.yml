@@ -1,0 +1,84 @@
+# Mostly adapted from the docs workflows in conda-libmamba-solver and
+# pytest-conda-solvers. Builds the Sphinx site with the locked pixi `docs`
+# environment and deploys it to GitHub Pages from main.
+name: Docs
+
+on:
+  # https://docs.github.com/en/webhooks-and-events/webhooks/webhook-events-and-payloads#push
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'CHANGELOG.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'pyproject.toml'
+      - 'pixi.lock'
+      - '.github/workflows/docs.yml'
+
+  # https://docs.github.com/en/webhooks-and-events/webhooks/webhook-events-and-payloads#pull_request
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'CHANGELOG.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'pyproject.toml'
+      - 'pixi.lock'
+      - '.github/workflows/docs.yml'
+
+  # https://docs.github.com/en/webhooks-and-events/webhooks/webhook-events-and-payloads#workflow_dispatch
+  workflow_dispatch:
+
+concurrency:
+  # Concurrency group that uses the workflow name and PR number if available
+  # or commit SHA as a fallback. If a new build is triggered under that
+  # concurrency group while a previous build is running it will be canceled.
+  # Repeated pushes to a PR will cancel all previous builds, while multiple
+  # merges to main will not cancel.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Pixi
+        uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          pixi-version: v0.70.1
+          environments: docs
+          locked: true
+
+      - name: Build documentation
+        run: pixi run --locked -e docs docs
+
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: docs/_build/dirhtml
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write  # required to deploy to GitHub Pages
+      id-token: write  # required for OIDC token exchange used by deploy-pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
