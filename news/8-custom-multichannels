@@ -1,3 +1,4 @@
 ### Enhancements
 
-* Add multichannel support: conda's `defaults`, conda-build's `local` and condarc's `custom_multichannels` are passed to the solver as `rattler.MultiSource` groups when available (py-rattler >=0.27.1), so their members share a channel priority tier and group-named specs (e.g. `defaults::python`) can match any member. Older py-rattler versions keep the previous ungrouped behavior. (#8)
+* Add multichannel support: conda's `defaults`, conda-build's `local` and condarc's `custom_multichannels` are passed to the solver as `rattler.MultiSource` groups, so their members share a channel priority tier and group-named specs (e.g. `defaults::python`) can match any member. (#8)
+* Require py-rattler >=0.27.1, which adds the `rattler.MultiSource` API multichannel support builds on. (#8)

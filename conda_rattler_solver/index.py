@@ -43,10 +43,6 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(f"conda.{__name__}")
 
-# py-rattler 0.27.1 groups multichannels via rattler.MultiSource; older
-# versions are still supported but leave multichannels ungrouped.
-_MultiSource = getattr(rattler, "MultiSource", None)
-
 
 def _root_extras(in_state: SolverInputState) -> dict[str, list[str]]:
     """
@@ -204,12 +200,7 @@ class RattlerIndexHelper:
         loaded for that multichannel, in channel order; the position of each
         group or standalone source in the returned list matches channel order,
         which the solver uses to assign priority.
-
-        Returns a flat list of standalone pairs when 'rattler.MultiSource' is
-        not available (py-rattler <0.27.1).
         """
-        if _MultiSource is None:
-            return [(None, [info]) for info in self._index.values()]
         groups: dict[str, list[_ChannelRepoInfo]] = {}
         for url, group_name in self._multichannel_urls.items():
             if group_name is not None and url in self._index:
@@ -245,10 +236,10 @@ class RattlerIndexHelper:
         for name, infos in self._grouped_sources():
             if allow_build_downgrades:
                 infos = [replace(info, installed={}) for info in infos]
-            if _MultiSource is None or name is None:
+            if name is None:
                 sources.append(infos[0])
             else:
-                sources.append(_MultiSource(name, infos))
+                sources.append(rattler.MultiSource(name, infos))
         return sources
 
     def solve_sparse_repodata(self) -> list[rattler.SparseRepoData | rattler.MultiSource]:
@@ -259,8 +250,8 @@ class RattlerIndexHelper:
         return [
             (
                 infos[0].repo
-                if _MultiSource is None or name is None
-                else _MultiSource(name, [info.repo for info in infos])
+                if name is None
+                else rattler.MultiSource(name, [info.repo for info in infos])
             )
             for name, infos in self._grouped_sources()
         ]

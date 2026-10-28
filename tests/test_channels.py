@@ -21,8 +21,6 @@ from conda.exceptions import DryRunExit
 from conda.models.channel import Channel
 from conda.testing.integration import package_is_installed
 
-from conda_rattler_solver.index import _MultiSource
-
 from .channel_testing.helpers import (
     http_server_auth_basic,  # noqa: F401
     http_server_auth_basic_email,  # noqa: F401
@@ -242,10 +240,6 @@ def test_http_server_auth_token(
     assert package_is_installed(prefix, spec)
 
 
-@pytest.mark.skipif(
-    _MultiSource is None,
-    reason="multichannels need py-rattler >=0.27.1",
-)
 def test_http_server_auth_token_in_defaults(
     http_server_auth_token,  # noqa: F811
     path_factory: PathFactoryFixture,
@@ -274,10 +268,6 @@ def test_http_server_auth_token_in_defaults(
             condarc.unlink()
 
 
-@pytest.mark.skipif(
-    _MultiSource is None,
-    reason="multichannels need py-rattler >=0.27.1",
-)
 def test_local_spec() -> None:
     """https://github.com/conda/conda-libmamba-solver/issues/398"""
     env = os.environ.copy()
@@ -302,10 +292,6 @@ def test_local_spec() -> None:
     assert process.returncode == 0
 
 
-@pytest.mark.skipif(
-    _MultiSource is None,
-    reason="multichannels need py-rattler >=0.27.1",
-)
 @pytest.mark.parametrize("member_first", [False, True])
 @pytest.mark.parametrize(
     "spec,expected_build",

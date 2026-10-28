@@ -42,7 +42,7 @@ from packaging.version import Version
 from rattler.exceptions import SolverError as RattlerSolverError
 
 from conda_rattler_solver.exceptions import RattlerUnsatisfiableError
-from conda_rattler_solver.index import RattlerIndexHelper, _MultiSource
+from conda_rattler_solver.index import RattlerIndexHelper
 from conda_rattler_solver.solver import RattlerSolver as Solver
 from conda_rattler_solver.state import SolverInputState, SolverOutputState
 
@@ -181,10 +181,6 @@ def test_python_downgrade_reinstalls_noarch_packages(
         pip_cli("--version", prefix=prefix)
 
 
-@pytest.mark.skipif(
-    _MultiSource is None,
-    reason="multichannels need py-rattler >=0.27.1",
-)
 def test_defaults_specs_work(conda_cli: CondaCLIFixture) -> None:
     """
     See https://github.com/conda/conda-libmamba-solver/issues/173

@@ -19,12 +19,10 @@ from conda.gateways.shards import build_repodata_subset
 from conda.models.channel import Channel, MultiChannel
 from conda.models.match_spec import MatchSpec
 
-import conda_rattler_solver.index
 from conda_rattler_solver.index import (
     RattlerIndexHelper,
     _ChannelRepoInfo,
     _is_sharded_repodata_enabled,
-    _MultiSource,
     _root_extras,
 )
 from conda_rattler_solver.state import SolverInputState
@@ -128,10 +126,6 @@ def test_reload_channels(tmp_path: Path):
     assert index.n_packages() == initial_count + 1
 
 
-@pytest.mark.skipif(
-    _MultiSource is None,
-    reason="multichannels need py-rattler >=0.27.1",
-)
 def test_solve_sources_multichannel_grouping(tmp_path: Path):
     """
     Channels grouped in a multichannel (e.g. conda's 'defaults' or condarc's
@@ -166,32 +160,6 @@ def test_solve_sources_multichannel_grouping(tmp_path: Path):
     assert isinstance(sparse[1], rattler.SparseRepoData)
 
 
-@pytest.mark.skipif(
-    _MultiSource is None,
-    reason="multichannels need py-rattler >=0.27.1",
-)
-def test_solve_sources_without_multi_source_support(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    "Without 'rattler.MultiSource' (py-rattler <0.27.1), sources stay ungrouped."
-    monkeypatch.setattr(conda_rattler_solver.index, "_MultiSource", None)
-    repo_a, repo_b = tmp_path / "repo_a", tmp_path / "repo_b"
-    for repo in (repo_a, repo_b):
-        shutil.copytree(DATA / "mamba_repo", repo)
-    multichannel = MultiChannel("mygroup", (Channel(str(repo_a)), Channel(str(repo_b))))
-
-    index = RattlerIndexHelper(channels=(multichannel,), subdirs=("noarch",))
-
-    sources = index.solve_sources()
-    assert len(sources) == 2
-    assert all(isinstance(source, _ChannelRepoInfo) for source in sources)
-    assert index.solve_sparse_repodata() == [source.repo for source in sources]
-
-
-@pytest.mark.skipif(
-    _MultiSource is None,
-    reason="multichannels need py-rattler >=0.27.1",
-)
 def test_solve_sources_empty_multichannel(tmp_path: Path):
     "Multichannels without members (e.g. 'local' without conda-build paths) are ignored."
     standalone = tmp_path / "standalone"
