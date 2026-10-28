@@ -46,7 +46,7 @@ To restore conda's default solver:
 conda config --remove-key solver
 ```
 
-You may also try a solver in isolated commands with no changes to your configuration by using the `--solver` flag:
+To use rattler for a single command without changing your configuration, pass `--solver rattler`:
 
 ```
 conda install --solver rattler <package>
