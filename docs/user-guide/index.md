@@ -66,7 +66,7 @@ $ CONDA_SOLVER=rattler conda install numpy
 
 ### Set it as the default
 
-This is only needed on conda 26.9 and below. To use rattler for every solve, add
+For older conda versions, or to override an existing solver setting, add
 `solver: rattler` to your `.condarc` file, either manually or with this command:
 
 ```console
