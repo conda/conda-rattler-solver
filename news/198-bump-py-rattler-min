@@ -1,0 +1,3 @@
+### Enhancements
+
+* Raise the minimum supported `py-rattler` version to 0.27.1 in the Python package, conda recipe, and Pixi workspace. (#198)
