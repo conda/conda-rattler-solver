@@ -15,7 +15,7 @@ from conda.models.channel import Channel
 from conda.models.records import PackageRecord, PrefixRecord
 
 import conda_rattler_solver.utils as utils_module
-from conda_rattler_solver.utils import notify_conda_outdated
+from conda_rattler_solver.utils import notify_conda_outdated, rattler_build_string
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -316,7 +316,7 @@ def test_rattler_record_to_conda_record_restores_channel_from_cdn_url() -> None:
         package_record=rattler.PackageRecord(
             name="example",
             version="1.0",
-            build="0",
+            build=rattler_build_string("0"),
             build_number=0,
             subdir="noarch",
         ),
