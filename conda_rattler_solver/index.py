@@ -283,7 +283,7 @@ class RattlerIndexHelper:
             shutil.copy(json_path, path_copy)
             json_path = path_copy
             self._unlink_on_del.append(path_copy)
-        # Keep the rattler channel unauthenticated so channel-qualified specs
+        # Keep the rattler channel unauthenticated so specs naming the channel
         # (e.g. 'channel::package') match records cleanly; download credentials
         # are restored when converting the selected records (see to_conda_record).
         rattler_channel = rattler.Channel(noauth_url.rsplit("/", 1)[0])
@@ -321,7 +321,7 @@ class RattlerIndexHelper:
             # listing of a registered multichannel member (e.g. `-c pkgs/main`
             # when `pkgs/main` is part of `defaults`) resolves to the
             # multichannel's canonical name (`defaults`) and joins that group.
-            # The group name drives the priority tier and group-qualified specs
+            # The group name drives the priority tier and specs naming the multichannel
             # (e.g. `defaults::python` matches any member), not the channel
             # label: records keep their member channel's name for display
             # (`pkgs/main`).

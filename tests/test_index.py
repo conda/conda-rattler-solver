@@ -132,7 +132,7 @@ def test_solve_sources_multichannel_grouping(tmp_path: Path, subdirs: tuple[str,
     """
     Each member of a multichannel (e.g. conda's 'defaults' or condarc's
     'custom_multichannels') becomes its own 'rattler.MultiSource' named after
-    the multichannel, so group-named specs match any member while the members
+    the multichannel, so specs naming the multichannel match any member while the members
     keep the priority order of the channel list. Standalone channels are
     passed through as-is.
     """

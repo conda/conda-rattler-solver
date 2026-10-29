@@ -313,7 +313,7 @@ def test_custom_multichannels(
 ) -> None:
     """
     condarc 'custom_multichannels' groups several channels under one name.
-    Group-named specs (e.g. 'mygroup::test-package') must match any member, and
+    Specs naming the group (e.g. 'mygroup::test-package') must match any member, and
     the members share the multichannel's priority tier: with strict channel
     priority the best build wins regardless of which member provides it, while
     a build that only exists in one member is still selectable through a
