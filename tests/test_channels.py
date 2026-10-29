@@ -305,7 +305,11 @@ def test_local_spec() -> None:
     ],
 )
 def test_custom_multichannels(
-    tmp_path: Path, member_first: bool, spec: str, expected_build: int
+    tmp_path: Path,
+    member_first: bool,
+    spec: str,
+    expected_build: int,
+    isolated_condarc_env: dict[str, str],
 ) -> None:
     """
     condarc 'custom_multichannels' groups several channels under one name.
@@ -332,12 +336,6 @@ def test_custom_multichannels(
         repo_b / "noarch" / "test-package-0.1-1.tar.bz2",
     )
 
-    env = os.environ.copy()
-    env.pop("CONDA_CHANNELS", None)
-    env["HOME"] = str(tmp_path)
-    env["USERPROFILE"] = str(tmp_path)  # Windows config discovery
-    env["CONDARC"] = str(tmp_path / ".condarc")
-    env["CONDA_PKGS_DIRS"] = str(tmp_path / "pkgs")
     write_env_config(
         tmp_path,
         force=True,
@@ -355,7 +353,7 @@ def test_custom_multichannels(
         "--solver=rattler",
         f"--prefix={tmp_path / 'env'}",
         spec,
-        env=env,
+        env=isolated_condarc_env,
     )
     result = json.loads(process.stdout)
     assert result["success"] is True
@@ -365,7 +363,10 @@ def test_custom_multichannels(
     assert record["build_number"] == expected_build
 
 
-def test_custom_multichannels_member_priority(tmp_path: Path) -> None:
+def test_custom_multichannels_member_priority(
+    tmp_path: Path,
+    isolated_condarc_env: dict[str, str],
+) -> None:
     """
     Listing a member of a custom multichannel on its own must not pull the
     whole multichannel to that position: with strict priority and the channel
@@ -380,12 +381,6 @@ def test_custom_multichannels_member_priority(tmp_path: Path) -> None:
     _make_noarch_package(hotfix, "openssl", "3.0.9")
     _make_noarch_package(defaults, "requests", "2.0")
 
-    env = os.environ.copy()
-    env.pop("CONDA_CHANNELS", None)
-    env["HOME"] = str(tmp_path)
-    env["USERPROFILE"] = str(tmp_path)  # Windows config discovery
-    env["CONDARC"] = str(tmp_path / ".condarc")
-    env["CONDA_PKGS_DIRS"] = str(tmp_path / "pkgs")
     write_env_config(
         tmp_path,
         force=True,
@@ -404,7 +399,7 @@ def test_custom_multichannels_member_priority(tmp_path: Path) -> None:
         "--solver=rattler",
         f"--prefix={tmp_path / 'env'}",
         "requests",
-        env=env,
+        env=isolated_condarc_env,
     )
     result = json.loads(process.stdout)
     assert result["success"] is True
@@ -418,19 +413,17 @@ def test_custom_multichannels_member_priority(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("pin_new_app", [False, True])
-def test_custom_multichannel_update(tmp_path: Path, pin_new_app: bool) -> None:
+def test_custom_multichannel_update(
+    tmp_path: Path,
+    pin_new_app: bool,
+    isolated_condarc_env: dict[str, str],
+) -> None:
     """Grouped update sources retain build floors unless a pin requires a downgrade."""
     dependencies = tmp_path / "dependencies"
     applications = tmp_path / "applications"
     _make_noarch_package(dependencies, "dep", "1.0", build="2", build_number=2)
     _make_noarch_package(applications, "app", "1.0", depends=("dep 1.0 2",))
 
-    env = os.environ.copy()
-    env.pop("CONDA_CHANNELS", None)
-    env["HOME"] = str(tmp_path)
-    env["USERPROFILE"] = str(tmp_path)  # Windows config discovery
-    env["CONDARC"] = str(tmp_path / ".condarc")
-    env["CONDA_PKGS_DIRS"] = str(tmp_path / "pkgs")
     write_env_config(
         tmp_path,
         force=True,
@@ -448,13 +441,13 @@ def test_custom_multichannel_update(tmp_path: Path, pin_new_app: bool) -> None:
         f"--prefix={prefix}",
         "--yes",
     )
-    conda_subprocess("create", "mygroup::app", *args, env=env)
+    conda_subprocess("create", "mygroup::app", *args, env=isolated_condarc_env)
 
     _make_noarch_package(dependencies, "dep", "1.0", build="0")
     _make_noarch_package(applications, "app", "2.0", depends=("dep 1.0 0",))
     if pin_new_app:
         (prefix / "conda-meta" / "pinned").write_text("app >=2\n")
-    conda_subprocess("update", "--all", *args, env=env)
+    conda_subprocess("update", "--all", *args, env=isolated_condarc_env)
 
     records = PrefixData(prefix)
     assert records.get("app").version == ("2.0" if pin_new_app else "1.0")
