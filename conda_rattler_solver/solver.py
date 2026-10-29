@@ -392,7 +392,7 @@ class RattlerSolver(Solver):
         else:
             solve = rattler.solve_with_sparse_repodata
             solve_kwargs.update(
-                sparse_repodata=index.solve_sparse_repodata(),
+                sparse_repodata=index.solve_sources(sparse=True),
                 package_format_selection=index._package_format,
             )
         if log.isEnabledFor(logging.DEBUG):

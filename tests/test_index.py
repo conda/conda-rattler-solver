@@ -127,7 +127,8 @@ def test_reload_channels(tmp_path: Path):
     assert index.n_packages() == initial_count + 1
 
 
-def test_solve_sources_multichannel_grouping(tmp_path: Path):
+@pytest.mark.parametrize("subdirs", [("noarch",), ("linux-64", "noarch")])
+def test_solve_sources_multichannel_grouping(tmp_path: Path, subdirs: tuple[str, ...]):
     """
     Each member of a multichannel (e.g. conda's 'defaults' or condarc's
     'custom_multichannels') becomes its own 'rattler.MultiSource' named after
@@ -138,30 +139,33 @@ def test_solve_sources_multichannel_grouping(tmp_path: Path):
     repo_a, repo_b, standalone = tmp_path / "repo_a", tmp_path / "repo_b", tmp_path / "standalone"
     for repo in (repo_a, repo_b, standalone):
         shutil.copytree(DATA / "mamba_repo", repo)
+        for subdir in subdirs:
+            repodata = repo / subdir / "repodata.json"
+            if not repodata.exists():
+                repodata.parent.mkdir(parents=True, exist_ok=True)
+                repodata.write_text(json.dumps({"info": {"subdir": subdir}, "packages": {}}))
     multichannel = MultiChannel("mygroup", (Channel(str(repo_a)), Channel(str(repo_b))))
 
-    index = RattlerIndexHelper(
-        channels=(multichannel, Channel(str(standalone))), subdirs=("noarch",)
-    )
+    index = RattlerIndexHelper(channels=(multichannel, Channel(str(standalone))), subdirs=subdirs)
 
     sources = index.solve_sources()
-    assert len(sources) == 3
+    assert len(sources) == 2 + len(subdirs)
     for source, repo in ((sources[0], repo_a), (sources[1], repo_b)):
         assert isinstance(source, rattler.MultiSource)
         assert source.name == "mygroup"
-        (member,) = source.sources
-        assert isinstance(member, _ChannelRepoInfo)
-        assert member.noauth_url == f"{path_to_url(str(repo))}/noarch"
-    assert isinstance(sources[2], _ChannelRepoInfo)
+        for member, subdir in zip(source.sources, subdirs, strict=True):
+            assert isinstance(member, _ChannelRepoInfo)
+            assert member.noauth_url == f"{path_to_url(str(repo))}/{subdir}"
+    assert all(isinstance(source, _ChannelRepoInfo) for source in sources[2:])
 
-    sparse = index.solve_sparse_repodata()
-    assert len(sparse) == 3
+    sparse = index.solve_sources(sparse=True)
+    assert len(sparse) == 2 + len(subdirs)
     for source in sparse[:2]:
         assert isinstance(source, rattler.MultiSource)
         assert source.name == "mygroup"
-        (member,) = source.sources
-        assert isinstance(member, rattler.SparseRepoData)
-    assert isinstance(sparse[2], rattler.SparseRepoData)
+        assert len(source.sources) == len(subdirs)
+        assert all(isinstance(member, rattler.SparseRepoData) for member in source.sources)
+    assert all(isinstance(source, rattler.SparseRepoData) for source in sparse[2:])
 
 
 def test_solve_sources_empty_multichannel(tmp_path: Path):
@@ -176,7 +180,7 @@ def test_solve_sources_empty_multichannel(tmp_path: Path):
     sources = index.solve_sources()
     assert len(sources) == 1
     assert isinstance(sources[0], _ChannelRepoInfo)
-    assert index.solve_sparse_repodata() == [sources[0].repo]
+    assert index.solve_sources(sparse=True) == [sources[0].repo]
 
 
 def test_solve_sources_multichannel_run_separation(tmp_path: Path):
@@ -198,7 +202,7 @@ def test_solve_sources_multichannel_run_separation(tmp_path: Path):
         subdirs=("noarch",),
     )
 
-    sources = index.solve_sparse_repodata()
+    sources = index.solve_sources(sparse=True)
     assert len(sources) == 3
     first, middle, last = sources
     assert isinstance(first, rattler.MultiSource)
@@ -228,16 +232,11 @@ def test_channel_plan_first_listing_wins(tmp_path: Path):
             Channel("https://user:pass@example.com/conda"),
         )
     )
-    assert [(name, [str(member) for member in members]) for name, members in plan] == [
-        (None, ["https://example.com/conda"]),
-        (None, ["https://conda.anaconda.org/conda-forge"]),
+    assert [(name, list(member_urls)) for name, member_urls in plan] == [
+        (None, ["https://example.com/conda/noarch"]),
+        (None, ["https://conda.anaconda.org/conda-forge/noarch"]),
     ]
-    fetch_urls = [
-        fetch_url
-        for _, members in plan
-        for member_urls in members.values()
-        for fetch_url in member_urls.values()
-    ]
+    fetch_urls = [fetch_url for _, member_urls in plan for fetch_url in member_urls.values()]
     assert fetch_urls == [
         "https://example.com/conda/noarch",
         "https://conda.anaconda.org/conda-forge/noarch",
@@ -255,12 +254,7 @@ def test_channel_plan_authenticated_first(tmp_path: Path):
             Channel("https://example.com/conda"),
         )
     )
-    fetch_urls = [
-        fetch_url
-        for _, members in plan
-        for member_urls in members.values()
-        for fetch_url in member_urls.values()
-    ]
+    fetch_urls = [fetch_url for _, member_urls in plan for fetch_url in member_urls.values()]
     assert fetch_urls == ["https://example.com/conda/t/some-token/noarch"]
 
 

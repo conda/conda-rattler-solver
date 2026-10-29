@@ -260,6 +260,8 @@ def test_http_server_auth_token_in_defaults(
             "create",
             f"--prefix={path_factory()}",
             "--solver=rattler",
+            "--override-channels",
+            "--channel=defaults",
             "test-package",
         )
     finally:
@@ -331,6 +333,7 @@ def test_custom_multichannels(
     )
 
     env = os.environ.copy()
+    env.pop("CONDA_CHANNELS", None)
     env["HOME"] = str(tmp_path)
     env["USERPROFILE"] = str(tmp_path)  # Windows config discovery
     env["CONDARC"] = str(tmp_path / ".condarc")
@@ -378,6 +381,7 @@ def test_custom_multichannels_member_priority(tmp_path: Path) -> None:
     _make_noarch_package(defaults, "requests", "2.0")
 
     env = os.environ.copy()
+    env.pop("CONDA_CHANNELS", None)
     env["HOME"] = str(tmp_path)
     env["USERPROFILE"] = str(tmp_path)  # Windows config discovery
     env["CONDARC"] = str(tmp_path / ".condarc")
@@ -411,6 +415,50 @@ def test_custom_multichannels_member_priority(tmp_path: Path) -> None:
     # identity rather than an exact string.
     assert record["channel"].endswith("defaults_local")
     assert "approved" not in record["channel"]
+
+
+@pytest.mark.parametrize("pin_new_app", [False, True])
+def test_custom_multichannel_update(tmp_path: Path, pin_new_app: bool) -> None:
+    """Grouped update sources retain build floors unless a pin requires a downgrade."""
+    dependencies = tmp_path / "dependencies"
+    applications = tmp_path / "applications"
+    _make_noarch_package(dependencies, "dep", "1.0", build="2", build_number=2)
+    _make_noarch_package(applications, "app", "1.0", depends=("dep 1.0 2",))
+
+    env = os.environ.copy()
+    env.pop("CONDA_CHANNELS", None)
+    env["HOME"] = str(tmp_path)
+    env["USERPROFILE"] = str(tmp_path)  # Windows config discovery
+    env["CONDARC"] = str(tmp_path / ".condarc")
+    env["CONDA_PKGS_DIRS"] = str(tmp_path / "pkgs")
+    write_env_config(
+        tmp_path,
+        force=True,
+        channels=["mygroup"],
+        channel_priority="strict",
+        custom_multichannels={
+            "mygroup": [path_to_url(str(dependencies)), path_to_url(str(applications))],
+        },
+    )
+    prefix = tmp_path / "env"
+    args = (
+        "--solver=rattler",
+        "--override-channels",
+        "--channel=mygroup",
+        f"--prefix={prefix}",
+        "--yes",
+    )
+    conda_subprocess("create", "mygroup::app", *args, env=env)
+
+    _make_noarch_package(dependencies, "dep", "1.0", build="0")
+    _make_noarch_package(applications, "app", "2.0", depends=("dep 1.0 0",))
+    if pin_new_app:
+        (prefix / "conda-meta" / "pinned").write_text("app >=2\n")
+    conda_subprocess("update", "--all", *args, env=env)
+
+    records = PrefixData(prefix)
+    assert records.get("app").version == ("2.0" if pin_new_app else "1.0")
+    assert records.get("dep").build_number == (0 if pin_new_app else 2)
 
 
 def test_nameless_channel(

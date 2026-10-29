@@ -141,8 +141,8 @@ def _is_sharded_repodata_enabled():
 class RattlerIndexHelper:
     def __init__(
         self,
-        channels: Iterable[Channel | str] = None,
-        subdirs: Iterable[str] = None,
+        channels: Iterable[Channel | str] | None = None,
+        subdirs: Iterable[str] | None = None,
         repodata_fn: str = REPODATA_FN,
         pkgs_dirs: PathsType = (),
         in_state: SolverInputState | None = None,
@@ -157,14 +157,11 @@ class RattlerIndexHelper:
         self.build_repodata_subset = build_repodata_subset
 
         self._plan = self._plan_channels()
+        self._channel_urls = tuple(
+            fetch_url for _, member_urls in self._plan for fetch_url in member_urls.values()
+        )
         self._index: dict[str, _ChannelRepoInfo] = {}
-        urls = [
-            fetch_url
-            for _, members in self._plan
-            for member_urls in members.values()
-            for fetch_url in member_urls.values()
-        ]
-        self._index.update(self._load_channels(urls))
+        self._index.update(self._load_channels(self._channel_urls))
         if pkgs_dirs:
             self._index.update(
                 {info.noauth_url: info for info in self._load_pkgs_cache(pkgs_dirs)}
@@ -197,84 +194,34 @@ class RattlerIndexHelper:
                     repo_info.repo = new_repo_info.repo
                     break
 
-    def _grouped_sources(self) -> list[tuple[str | None, list[_ChannelRepoInfo]]]:
-        """
-        Solver sources derived from the channel plan, in channel-list order:
-        one (multichannel name, member infos) entry per multichannel listing —
-        its members share the multichannel's priority tier — and one
-        (None, [info]) entry per URL for standalone channels. URLs not
-        contributed by a channel (e.g. the local package cache) are appended
-        last, one (None, [info]) per URL.
-
-        rattler keys the priority tier by the multichannel's name, so entries
-        sharing a name act as one priority tier — whether they are adjacent or
-        separated by other channels. Splitting a multichannel into several
-        entries only preserves the repodata order, which decides the tier a
-        package name is first encountered in (and thus kept) under strict
-        priority.
-        """
-        sources: list[tuple[str | None, list[_ChannelRepoInfo]]] = []
-        for group_name, members in self._plan:
-            for member_urls in members.values():
-                infos = [
-                    self._index[noauth_url]
-                    for noauth_url in member_urls
-                    if noauth_url in self._index
-                ]
-                if group_name is None:
-                    sources.extend((None, [info]) for info in infos)
-                else:
-                    sources.append((group_name, infos))
-        planned = {
-            noauth_url
-            for members in (members for _, members in self._plan)
-            for member_urls in members.values()
-            for noauth_url in member_urls
-        }
-        sources.extend(
-            (None, [info]) for noauth_url, info in self._index.items() if noauth_url not in planned
-        )
-        return sources
-
     def solve_sources(
-        self, *, allow_build_downgrades: bool = False
-    ) -> list[_ChannelRepoInfo | rattler.MultiSource]:
+        self, *, sparse: bool = False, allow_build_downgrades: bool = False
+    ) -> list[_ChannelRepoInfo | rattler.SparseRepoData | rattler.MultiSource]:
         """
-        Sources for 'rattler.solve'. URLs grouped under a multichannel (e.g.
-        conda's 'defaults', conda-build's 'local', or condarc's
-        'custom_multichannels') are wrapped in a 'rattler.MultiSource', so its
-        members share a channel priority tier and group-named specs (e.g.
-        'defaults::python') can match them. Standalone channels and URLs not
-        contributed by a channel (e.g. the local package cache) are passed
-        through as-is.
+        Build solver sources in channel-list order, keeping each multichannel
+        member's subdirs together and appending package-cache sources last.
 
-        When 'allow_build_downgrades' is set, the installed-build floor is
-        removed from every source, so lower builds of the installed version can
-        be selected.
+        Use SparseRepoData for the sparse solver. Otherwise, keep the repo
+        wrappers and optionally remove their installed-build restrictions.
         """
-        sources: list[_ChannelRepoInfo | rattler.MultiSource] = []
-        for name, infos in self._grouped_sources():
-            if allow_build_downgrades:
-                infos = [replace(info, installed={}) for info in infos]
-            if name is None:
-                sources.append(infos[0])
+        remaining = {}
+        for url, info in self._index.items():
+            if sparse:
+                remaining[url] = info.repo
+            elif allow_build_downgrades:
+                remaining[url] = replace(info, installed={})
             else:
-                sources.append(rattler.MultiSource(name, infos))
-        return sources
+                remaining[url] = info
 
-    def solve_sparse_repodata(self) -> list[rattler.SparseRepoData | rattler.MultiSource]:
-        """
-        Sources for 'rattler.solve_with_sparse_repodata', which only accepts
-        'rattler.MultiSource' groups made of 'rattler.SparseRepoData'.
-        """
-        return [
-            (
-                infos[0].repo
-                if name is None
-                else rattler.MultiSource(name, [info.repo for info in infos])
-            )
-            for name, infos in self._grouped_sources()
-        ]
+        sources = []
+        for name, member_urls in self._plan:
+            members = [remaining.pop(url) for url in member_urls if url in remaining]
+            if name is None:
+                sources.extend(members)
+            else:
+                sources.append(rattler.MultiSource(name, members))
+        sources.extend(remaining.values())
+        return sources
 
     def n_packages(
         self,
@@ -351,24 +298,21 @@ class RattlerIndexHelper:
 
     def _plan_channels(
         self, channels: Iterable[Channel | str] | None = None
-    ) -> list[tuple[str | None, dict[Channel, dict[str, str]]]]:
+    ) -> list[tuple[str | None, dict[str, str]]]:
         """
-        Build the channel plan: one entry per listing in the channel list, in
-        order. A multichannel listing expands to its member channels (whose
-        auth and tokens are preserved); a standalone listing contributes
-        itself. Each member maps its URLs from their unauthenticated form (the
-        identity used for deduplication and lookups) to their fetch form
-        (carrying credentials when the listing has them).
+        Build the channel plan with one entry per member, in channel-list
+        order. Each entry pairs the multichannel name (or None for a
+        standalone channel) with that member's URLs, mapping their
+        unauthenticated form to their fetch form with credentials.
 
-        The first listing of a URL owns it: later listings of the same URL are
-        skipped.
+        The first listing of a URL owns it. Later listings of the same URL
+        are skipped. Duplicate members within a listing are merged before
+        their entries are added to the plan.
 
-        The plan preserves the structure `context.channels` provides — which
-        listing contributed which members, in what order — so grouping and
-        priority can be derived from it without inverting a flattened
-        URL-to-group mapping.
+        Each member keeps its subdirs together. Separate listings remain in
+        order, even when they share a multichannel name.
         """
-        plan: list[tuple[str | None, dict[Channel, dict[str, str]]]] = []
+        plan: list[tuple[str | None, dict[str, str]]] = []
         seen: set[str] = set()
         for channel in map(Channel, channels or self._channels):
             # Multichannels expand to their member channels. A standalone
@@ -402,19 +346,8 @@ class RattlerIndexHelper:
                     seen.update(member_urls)
                     # Duplicate member listings merge into the same member.
                     planned.setdefault(member, {}).update(member_urls)
-            if planned:
-                plan.append((group_name, planned))
+            plan.extend((group_name, member_urls) for member_urls in planned.values())
         return plan
-
-    def _urls_from_channels(
-        self, channels: Iterable[Channel | str] | None = None
-    ) -> tuple[str, ...]:
-        return tuple(
-            fetch_url
-            for _, members in self._plan_channels(channels)
-            for member_urls in members.values()
-            for fetch_url in member_urls.values()
-        )
 
     def _get_root_package_from_shard(
         self, package_names: list[str]
@@ -423,7 +356,7 @@ class RattlerIndexHelper:
         Builds the repodata subset for a set of packages. Only applicable to sharded channels.
         """
         result: dict[str, _ChannelRepoInfo] = {}
-        urls = self._urls_from_channels()
+        urls = self._channel_urls
         if self.build_repodata_subset and _is_sharded_repodata_enabled():
             urls_to_channel = {url: Channel.from_url(url) for url in urls}
             channel_data = self.build_repodata_subset(
@@ -508,10 +441,7 @@ class RattlerIndexHelper:
             index[info.noauth_url] = info
         return index
 
-    def _load_channels(self, urls: Iterable[str] | None = None) -> dict[str, _ChannelRepoInfo]:
-        if urls is None:
-            urls = self._urls_from_channels()
-
+    def _load_channels(self, urls: Iterable[str]) -> dict[str, _ChannelRepoInfo]:
         # Prefer sharded repodata loading if enabled and the solver provided the callable
         if self.in_state and self.build_repodata_subset and _is_sharded_repodata_enabled():
             urls_to_channel = {url: Channel.from_url(url) for url in urls}
