@@ -215,6 +215,8 @@ class RattlerIndexHelper:
 
         sources = []
         for name, member_urls in self._plan:
+            # Every planned URL is loaded into the index (the fetch list is the
+            # plan's URLs), so the membership guard is only defensive.
             members = [remaining.pop(url) for url in member_urls if url in remaining]
             if name is None:
                 sources.extend(members)
@@ -306,8 +308,8 @@ class RattlerIndexHelper:
         unauthenticated form to their fetch form with credentials.
 
         The first listing of a URL owns it. Later listings of the same URL
-        are skipped. Duplicate members within a listing are merged before
-        their entries are added to the plan.
+        are skipped. Duplicate members within a listing are dropped: their
+        URLs are already claimed by the first listing.
 
         Each member keeps its subdirs together. Separate listings remain in
         order, even when they share a multichannel name.
@@ -331,12 +333,13 @@ class RattlerIndexHelper:
                 group_name = channel.canonical_name
                 if group_name not in context.custom_multichannels:
                     group_name = None
-            planned: dict[Channel, dict[str, str]] = {}
             for member in members:
                 noauth_urls = member.urls(with_credentials=False, subdirs=self._subdirs)
                 fetch_urls = member.urls(with_credentials=True, subdirs=self._subdirs)
                 # The unauthenticated URL is the identity (deduplication and
                 # lookups); the fetch URL carries the member's credentials.
+                # URLs claimed by an earlier listing are filtered out here, so
+                # duplicate member listings contribute nothing.
                 member_urls = {
                     noauth_url: fetch_url
                     for noauth_url, fetch_url in zip(noauth_urls, fetch_urls, strict=True)
@@ -344,9 +347,7 @@ class RattlerIndexHelper:
                 }
                 if member_urls:
                     seen.update(member_urls)
-                    # Duplicate member listings merge into the same member.
-                    planned.setdefault(member, {}).update(member_urls)
-            plan.extend((group_name, member_urls) for member_urls in planned.values())
+                    plan.append((group_name, member_urls))
         return plan
 
     def _get_root_package_from_shard(
