@@ -4,4 +4,4 @@ conda-index
 conda-lock
 nvidia-virtual-packages
 conda-forge::pre-commit
-pytest
+pytest <9.2  # pytest-benchmark 5.3.0 reads Node._nodeid, removed in pytest 9.2; see ionelmc/pytest-benchmark#321

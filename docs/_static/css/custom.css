@@ -1,0 +1,10 @@
+/**
+ * This rule is here to avoid the scrollbar appearing when this
+ * is not hosted on ReadTheDocs
+ *
+ * Copied from conda-libmamba-solver.
+ * https://github.com/conda/conda-libmamba-solver/blob/e2acae1df90be791cdc18d581f096d9d2a6ef1a7/docs/_static/css/custom.css
+ */
+#rtd-footer-container {
+    display: none;
+}

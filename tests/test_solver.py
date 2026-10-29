@@ -12,6 +12,7 @@ import os
 import shutil
 import sys
 import tarfile
+from http.server import SimpleHTTPRequestHandler
 from itertools import chain, permutations, repeat
 from pathlib import Path
 from subprocess import run
@@ -549,7 +550,14 @@ def test_update_resolves_url_specs_without_network_requests(
     _make_noarch_package(channel, "foo", "0.5")
     requests = []
 
-    class RecordingHandler(http_test_server.server.RequestHandlerClass):
+    class RecordingHandler(SimpleHTTPRequestHandler):
+        def __init__(self, *args, directory=None, **kwargs):
+            super().__init__(
+                *args,
+                directory=directory if directory is not None else str(channel),
+                **kwargs,
+            )
+
         def log_request(self, *args):
             requests.append(self.path)
             super().log_request(*args)
