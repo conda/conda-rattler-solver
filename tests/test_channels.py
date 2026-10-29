@@ -351,7 +351,6 @@ def test_custom_multichannels(
         "--dry-run",
         "--json",
         "--solver=rattler",
-        f"--prefix={tmp_path / 'env'}",
         spec,
         env=isolated_condarc_env,
     )
@@ -397,7 +396,6 @@ def test_custom_multichannels_member_priority(
         "--dry-run",
         "--json",
         "--solver=rattler",
-        f"--prefix={tmp_path / 'env'}",
         "requests",
         env=isolated_condarc_env,
     )
@@ -409,6 +407,22 @@ def test_custom_multichannels_member_priority(
     # channels relative to registered locations), so assert on the channel
     # identity rather than an exact string.
     assert record["channel"].endswith("defaults_local")
+
+    # A group-qualified spec matches the first run the package name is
+    # encountered in, so 'internal::openssl' resolves from the 'hotfix' member.
+    process = conda_subprocess(
+        "create",
+        "--dry-run",
+        "--json",
+        "--solver=rattler",
+        "internal::openssl",
+        env=isolated_condarc_env,
+    )
+    result = json.loads(process.stdout)
+    assert result["success"] is True
+    (record,) = (pkg for pkg in result["actions"]["LINK"] if pkg["name"] == "openssl")
+    assert record["version"] == "3.0.9"
+    assert record["channel"].endswith("hotfix")
     assert "approved" not in record["channel"]
 
 
