@@ -71,7 +71,7 @@ jobs:
           run-post: false  # skip post cleanup
 
       - name: Update conda in base
-        run: conda install -n base --yes --override-channels -c conda-forge "conda>=26.5" conda-pypi
+        run: conda install -n base --yes --override-channels -c conda-forge "conda>=26.7" conda-pypi
 
       - name: Install conda dependencies
         # Install dependencies before the editable project installs below.
