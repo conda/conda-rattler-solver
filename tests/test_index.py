@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import pytest
 import rattler
 from conda.base.context import context, reset_context
+from conda.common.url import path_to_url
 from conda.core.subdir_data import SubdirData
 from conda.gateways.logging import initialize_logging
 from conda.gateways.shards import build_repodata_subset
@@ -150,7 +151,7 @@ def test_solve_sources_multichannel_grouping(tmp_path: Path):
         assert source.name == "mygroup"
         (member,) = source.sources
         assert isinstance(member, _ChannelRepoInfo)
-        assert member.noauth_url == f"file://{repo}/noarch"
+        assert member.noauth_url == f"{path_to_url(str(repo))}/noarch"
     assert isinstance(sources[2], _ChannelRepoInfo)
 
     sparse = index.solve_sparse_repodata()
@@ -210,8 +211,8 @@ def test_solve_sources_multichannel_run_separation(tmp_path: Path):
     # each run holds its own member's repodata
     (first_record,) = first.sources[0].load_all_records()
     (last_record,) = last.sources[0].load_all_records()
-    assert str(first_record.channel).rstrip("/") == f"file://{repo_x}"
-    assert str(last_record.channel).rstrip("/") == f"file://{repo_y}"
+    assert str(first_record.channel).rstrip("/") == path_to_url(str(repo_x))
+    assert str(last_record.channel).rstrip("/") == path_to_url(str(repo_y))
 
 
 def test_channel_plan_first_listing_wins(tmp_path: Path):
