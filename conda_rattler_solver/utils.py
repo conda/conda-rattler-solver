@@ -126,8 +126,14 @@ def rattler_record_to_conda_record(
         python_site_packages_path=record.python_site_packages_path,
     )
     if info is None and index is not None:
-        with suppress(KeyError):
-            info = index.get_info(str(record.url).rsplit("/", 1)[0])
+        # Repodata with `info.base_url` can serve packages from a different
+        # host, so the directory in `record.url` may not match the channel URL
+        # key in the index. Fall back to `record.channel`, which still
+        # identifies the source channel.
+        for key in (str(record.url).rsplit("/", 1)[0], str(record.channel)):
+            with suppress(KeyError):
+                info = index.get_info(key)
+                break
     if info is not None:
         conda_record.channel = info.channel
         if conda_record.url and conda_record.url.startswith(info.noauth_url + "/"):
