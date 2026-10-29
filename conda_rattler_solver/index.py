@@ -205,6 +205,13 @@ class RattlerIndexHelper:
         (None, [info]) entry per URL for standalone channels. URLs not
         contributed by a channel (e.g. the local package cache) are appended
         last, one (None, [info]) per URL.
+
+        rattler keys the priority tier by the multichannel's name, so entries
+        sharing a name act as one priority tier — whether they are adjacent or
+        separated by other channels. Splitting a multichannel into several
+        entries only preserves the repodata order, which decides the tier a
+        package name is first encountered in (and thus kept) under strict
+        priority.
         """
         sources: list[tuple[str | None, list[_ChannelRepoInfo]]] = []
         for group_name, members in self._plan:
@@ -362,7 +369,7 @@ class RattlerIndexHelper:
         URL-to-group mapping.
         """
         plan: list[tuple[str | None, dict[Channel, dict[str, str]]]] = []
-        claimed: set[str] = set()
+        seen: set[str] = set()
         for channel in map(Channel, channels or self._channels):
             # Multichannels expand to their member channels. A standalone
             # listing of a registered multichannel member (e.g. `-c pkgs/main`
@@ -389,10 +396,10 @@ class RattlerIndexHelper:
                 member_urls = {
                     noauth_url: fetch_url
                     for noauth_url, fetch_url in zip(noauth_urls, fetch_urls, strict=True)
-                    if noauth_url not in claimed
+                    if noauth_url not in seen
                 }
                 if member_urls:
-                    claimed.update(member_urls)
+                    seen.update(member_urls)
                     # Duplicate member listings merge into the same member.
                     planned.setdefault(member, {}).update(member_urls)
             if planned:
