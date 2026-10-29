@@ -27,6 +27,7 @@ from .channel_testing.helpers import (
     http_server_auth_none,  # noqa: F401
     http_server_auth_token,  # noqa: F401
 )
+from .test_solver import _make_noarch_package
 from .utils import conda_subprocess, write_env_config
 
 if TYPE_CHECKING:
@@ -307,8 +308,10 @@ def test_custom_multichannels(
     """
     condarc 'custom_multichannels' groups several channels under one name.
     Group-named specs (e.g. 'mygroup::test-package') must match any member, and
-    members must share a priority tier: with strict channel priority, the newer
-    build in the second member must not be hidden by the first one.
+    the members share the multichannel's priority tier: with strict channel
+    priority the best build wins regardless of which member provides it, while
+    a build that only exists in one member is still selectable through a
+    build-qualified spec.
     https://github.com/conda/conda-rattler-solver/issues/8
     """
     repo_a = tmp_path / "repo_a"
@@ -354,8 +357,60 @@ def test_custom_multichannels(
     result = json.loads(process.stdout)
     assert result["success"] is True
     (record,) = (pkg for pkg in result["actions"]["LINK"] if pkg["name"] == "test-package")
-    # Build zero is only in repo_a, while unconstrained requests prefer repo_b.
+    # The members share the multichannel's tier, so the best build wins; a
+    # build that only exists in one member is still selectable.
     assert record["build_number"] == expected_build
+
+
+def test_custom_multichannels_member_priority(tmp_path: Path) -> None:
+    """
+    Listing a member of a custom multichannel on its own must not pull the
+    whole multichannel to that position: with strict priority and the channel
+    list [hotfix, defaults, internal{approved, hotfix}], 'requests' comes from
+    'defaults' (2.0), not from 'approved' (2.5).
+    https://github.com/conda/conda-rattler-solver/pull/182#issuecomment-6475380055
+    """
+    approved = tmp_path / "approved"
+    hotfix = tmp_path / "hotfix"
+    defaults = tmp_path / "defaults_local"
+    _make_noarch_package(approved, "requests", "2.5")
+    _make_noarch_package(hotfix, "openssl", "3.0.9")
+    _make_noarch_package(defaults, "requests", "2.0")
+
+    env = os.environ.copy()
+    env["HOME"] = str(tmp_path)
+    env["USERPROFILE"] = str(tmp_path)  # Windows config discovery
+    env["CONDARC"] = str(tmp_path / ".condarc")
+    env["CONDA_PKGS_DIRS"] = str(tmp_path / "pkgs")
+    write_env_config(
+        tmp_path,
+        force=True,
+        channels=[path_to_url(str(hotfix)), path_to_url(str(defaults)), "internal"],
+        channel_priority="strict",
+        custom_multichannels={
+            "internal": [path_to_url(str(approved)), path_to_url(str(hotfix))],
+        },
+        default_channels=[path_to_url(str(defaults))],
+    )
+
+    process = conda_subprocess(
+        "create",
+        "--dry-run",
+        "--json",
+        "--solver=rattler",
+        f"--prefix={tmp_path / 'env'}",
+        "requests",
+        env=env,
+    )
+    result = json.loads(process.stdout)
+    assert result["success"] is True
+    (record,) = (pkg for pkg in result["actions"]["LINK"] if pkg["name"] == "requests")
+    assert record["version"] == "2.0"
+    # The channel name is context-dependent (conda resolves nested local
+    # channels relative to registered locations), so assert on the channel
+    # identity rather than an exact string.
+    assert record["channel"].endswith("defaults_local")
+    assert "approved" not in record["channel"]
 
 
 def test_nameless_channel(

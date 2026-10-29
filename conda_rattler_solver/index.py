@@ -156,9 +156,14 @@ class RattlerIndexHelper:
         self.in_state = in_state
         self.build_repodata_subset = build_repodata_subset
 
+        self._plan = self._plan_channels()
         self._index: dict[str, _ChannelRepoInfo] = {}
-        self._multichannel_urls: dict[str, str | None] = {}
-        urls, self._multichannel_urls = self._collect_channel_urls()
+        urls = [
+            fetch_url
+            for _, members in self._plan
+            for member_urls in members.values()
+            for fetch_url in member_urls.values()
+        ]
         self._index.update(self._load_channels(urls))
         if pkgs_dirs:
             self._index.update(
@@ -194,26 +199,34 @@ class RattlerIndexHelper:
 
     def _grouped_sources(self) -> list[tuple[str | None, list[_ChannelRepoInfo]]]:
         """
-        Group the loaded repos as (multichannel name, member infos) pairs.
-        Standalone channels and URLs not contributed by a channel (e.g. the
-        local package cache) are (None, [info]). Groups hold every member URL
-        loaded for that multichannel, in channel order; the position of each
-        group or standalone source in the returned list matches channel order,
-        which the solver uses to assign priority.
+        Solver sources derived from the channel plan, in channel-list order:
+        one (multichannel name, member infos) entry per multichannel listing —
+        its members share the multichannel's priority tier — and one
+        (None, [info]) entry per URL for standalone channels. URLs not
+        contributed by a channel (e.g. the local package cache) are appended
+        last, one (None, [info]) per URL.
         """
-        groups: dict[str, list[_ChannelRepoInfo]] = {}
-        for url, group_name in self._multichannel_urls.items():
-            if group_name is not None and url in self._index:
-                groups.setdefault(group_name, []).append(self._index[url])
         sources: list[tuple[str | None, list[_ChannelRepoInfo]]] = []
-        emitted: set[str] = set()
-        for noauth_url, info in self._index.items():
-            group_name = self._multichannel_urls.get(noauth_url)
-            if group_name is None:
-                sources.append((None, [info]))
-            elif group_name not in emitted:
-                sources.append((group_name, groups[group_name]))
-                emitted.add(group_name)
+        for group_name, members in self._plan:
+            for member_urls in members.values():
+                infos = [
+                    self._index[noauth_url]
+                    for noauth_url in member_urls
+                    if noauth_url in self._index
+                ]
+                if group_name is None:
+                    sources.extend((None, [info]) for info in infos)
+                else:
+                    sources.append((group_name, infos))
+        planned = {
+            noauth_url
+            for members in (members for _, members in self._plan)
+            for member_urls in members.values()
+            for noauth_url in member_urls
+        }
+        sources.extend(
+            (None, [info]) for noauth_url, info in self._index.items() if noauth_url not in planned
+        )
         return sources
 
     def solve_sources(
@@ -329,31 +342,36 @@ class RattlerIndexHelper:
             package_format=self._package_format,
         )
 
-    def _collect_channel_urls(
+    def _plan_channels(
         self, channels: Iterable[Channel | str] | None = None
-    ) -> tuple[tuple[str, ...], dict[str, str | None]]:
+    ) -> list[tuple[str | None, dict[Channel, dict[str, str]]]]:
         """
-        Expand channels to deduplicated per-subdir URLs, and map each URL to the
-        canonical name of the multichannel that contributed it (if any).
+        Build the channel plan: one entry per listing in the channel list, in
+        order. A multichannel listing expands to its member channels (whose
+        auth and tokens are preserved); a standalone listing contributes
+        itself. Each member maps its URLs from their unauthenticated form (the
+        identity used for deduplication and lookups) to their fetch form
+        (carrying credentials when the listing has them).
 
-        Multichannels (conda's 'defaults', conda-build's 'local', or condarc's
-        'custom_multichannels') are flattened using their member channels, whose
-        auth and tokens are preserved, and grouped under the multichannel's
-        canonical name so its members share a channel priority tier and
-        group-named specs (e.g. 'defaults::python') can match them. Standalone
-        channels stay ungrouped.
+        The first listing of a URL owns it: later listings of the same URL are
+        skipped.
 
-        This mirrors how conda-libmamba-solver collects channels
-        ('LibMambaIndexHelper._channel_urls') and assigns priorities
-        ('_set_repo_priorities' keeps one priority tier per canonical name).
-        The first listing of a channel provides its URLs and credentials;
-        re-listings whose URLs have all been contributed already are skipped.
+        The plan preserves the structure `context.channels` provides — which
+        listing contributed which members, in what order — so grouping and
+        priority can be derived from it without inverting a flattened
+        URL-to-group mapping.
         """
-        urls: list[str] = []
-        seen_noauth: set[str] = set()
-        url_groups: dict[str, str | None] = {}
-        for _c in self._channels if channels is None else channels:
-            channel = Channel(_c)
+        plan: list[tuple[str | None, dict[Channel, dict[str, str]]]] = []
+        claimed: set[str] = set()
+        for channel in map(Channel, channels or self._channels):
+            # Multichannels expand to their member channels. A standalone
+            # listing of a registered multichannel member (e.g. `-c pkgs/main`
+            # when `pkgs/main` is part of `defaults`) resolves to the
+            # multichannel's canonical name (`defaults`) and joins that group.
+            # The group name drives the priority tier and group-qualified specs
+            # (e.g. `defaults::python` matches any member), not the channel
+            # label: records keep their member channel's name for display
+            # (`pkgs/main`).
             if isinstance(channel, MultiChannel):
                 members: tuple[Channel, ...] = channel.channels
                 group_name: str | None = channel.canonical_name
@@ -362,28 +380,34 @@ class RattlerIndexHelper:
                 group_name = channel.canonical_name
                 if group_name not in context.custom_multichannels:
                     group_name = None
+            planned: dict[Channel, dict[str, str]] = {}
             for member in members:
                 noauth_urls = member.urls(with_credentials=False, subdirs=self._subdirs)
-                if seen_noauth.issuperset(noauth_urls):
-                    continue
-                if member.auth or member.token:  # authed member always takes precedence
-                    urls += member.urls(with_credentials=True, subdirs=self._subdirs)
-                    seen_noauth.update(noauth_urls)
-                    url_groups.update(dict.fromkeys(noauth_urls, group_name))
-                    continue
-                for noauth_url in noauth_urls:
-                    if noauth_url not in seen_noauth:
-                        urls.append(noauth_url)
-                        seen_noauth.add(noauth_url)
-                        url_groups[noauth_url] = group_name
-
-        return tuple(dict.fromkeys(urls)), url_groups  # de-duplicate
+                fetch_urls = member.urls(with_credentials=True, subdirs=self._subdirs)
+                # The unauthenticated URL is the identity (deduplication and
+                # lookups); the fetch URL carries the member's credentials.
+                member_urls = {
+                    noauth_url: fetch_url
+                    for noauth_url, fetch_url in zip(noauth_urls, fetch_urls, strict=True)
+                    if noauth_url not in claimed
+                }
+                if member_urls:
+                    claimed.update(member_urls)
+                    # Duplicate member listings merge into the same member.
+                    planned.setdefault(member, {}).update(member_urls)
+            if planned:
+                plan.append((group_name, planned))
+        return plan
 
     def _urls_from_channels(
         self, channels: Iterable[Channel | str] | None = None
     ) -> tuple[str, ...]:
-        urls, _ = self._collect_channel_urls(channels)
-        return urls
+        return tuple(
+            fetch_url
+            for _, members in self._plan_channels(channels)
+            for member_urls in members.values()
+            for fetch_url in member_urls.values()
+        )
 
     def _get_root_package_from_shard(
         self, package_names: list[str]
