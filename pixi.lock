@@ -6778,7 +6778,7 @@ packages:
   - zstd >=1.5.7,<1.6.0a0
   license: BSD-3-Clause AND MIT AND EPL-2.0
   purls:
-  - pkg:pypi/backports-zstd?source=compressed-mapping
+  - pkg:pypi/backports-zstd?source=hash-mapping
   run_exports: {}
   size: 248331
   timestamp: 1788491293611
@@ -6793,7 +6793,7 @@ packages:
   - zstd >=1.5.7,<1.6.0a0
   license: BSD-3-Clause AND MIT AND EPL-2.0
   purls:
-  - pkg:pypi/backports-zstd?source=compressed-mapping
+  - pkg:pypi/backports-zstd?source=hash-mapping
   run_exports: {}
   size: 241113
   timestamp: 1788491295568
@@ -6826,7 +6826,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/brotli?source=compressed-mapping
+  - pkg:pypi/brotli?source=hash-mapping
   run_exports: {}
   size: 367207
   timestamp: 1788480468171
@@ -6976,7 +6976,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/cffi?source=hash-mapping
+  - pkg:pypi/cffi?source=compressed-mapping
   run_exports: {}
   size: 307262
   timestamp: 1788485305536
@@ -9703,7 +9703,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/ruamel-yaml-clib?source=compressed-mapping
+  - pkg:pypi/ruamel-yaml-clib?source=hash-mapping
   run_exports: {}
   size: 160103
   timestamp: 1788881212732
@@ -10419,7 +10419,8 @@ packages:
   - cached_property >=2.0.1,<2.0.2.0a0
   license: BSD-3-Clause
   license_family: BSD
-  purls: []
+  purls:
+  - pkg:pypi/cached-property?source=compressed-mapping
   run_exports: {}
   size: 3720
   timestamp: 1787678456483
@@ -11486,7 +11487,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/jsonschema?source=hash-mapping
+  - pkg:pypi/jsonschema?source=compressed-mapping
   run_exports: {}
   size: 82084
   timestamp: 1787579299493
@@ -12176,7 +12177,7 @@ packages:
   license: MPL-2.0
   license_family: OTHER
   purls:
-  - pkg:pypi/pytest-rerunfailures?source=hash-mapping
+  - pkg:pypi/pytest-rerunfailures?source=compressed-mapping
   run_exports: {}
   size: 26527
   timestamp: 1788434181061
@@ -16012,7 +16013,7 @@ packages:
   - __osx >=11.0
   license: MIT
   purls:
-  - pkg:pypi/rpds-py?source=compressed-mapping
+  - pkg:pypi/rpds-py?source=hash-mapping
   run_exports: {}
   size: 302402
   timestamp: 1791202493727
@@ -16445,7 +16446,7 @@ packages:
   - zstd >=1.5.7,<1.6.0a0
   license: BSD-3-Clause AND MIT AND EPL-2.0
   purls:
-  - pkg:pypi/backports-zstd?source=compressed-mapping
+  - pkg:pypi/backports-zstd?source=hash-mapping
   run_exports: {}
   size: 238779
   timestamp: 1788491297224
@@ -16603,7 +16604,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/cffi?source=hash-mapping
+  - pkg:pypi/cffi?source=compressed-mapping
   run_exports: {}
   size: 295545
   timestamp: 1788485303298
@@ -16619,7 +16620,7 @@ packages:
   license: MIT
   license_family: MIT
   purls:
-  - pkg:pypi/cffi?source=hash-mapping
+  - pkg:pypi/cffi?source=compressed-mapping
   run_exports: {}
   size: 289165
   timestamp: 1788485306633

@@ -5,18 +5,22 @@ from __future__ import annotations
 import json
 import re
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
+import rattler
 from conda import __version__ as _conda_version
 from conda.base.context import reset_context
+from conda.models.channel import Channel
 from conda.models.records import PackageRecord, PrefixRecord
 
 import conda_rattler_solver.utils as utils_module
-from conda_rattler_solver.utils import notify_conda_outdated
+from conda_rattler_solver.utils import notify_conda_outdated, rattler_build_string
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from conda_rattler_solver.index import RattlerIndexHelper
 
 
 class _FakeIndex:
@@ -288,3 +292,42 @@ def test_prefix_record_roundtrip_preserves_build(build: str) -> None:
 
     assert result.build == build
     assert (result.name, result.version, result.build_number) == ("example", "1.0", 0)
+
+
+def test_rattler_record_to_conda_record_restores_channel_from_cdn_url() -> None:
+    auth_channel = "https://user:pass@example.com/conda/noarch"
+    noauth_channel = "https://example.com/conda/noarch"
+    package_url = "https://cdn.example.test/packages/noarch/example-1.0-0.tar.bz2"
+
+    channel = Channel(auth_channel)
+    info = SimpleNamespace(
+        channel=channel,
+        full_url=auth_channel,
+        noauth_url=noauth_channel,
+    )
+
+    class _Index:
+        def get_info(self, key: str):
+            if key == info.noauth_url:
+                return info
+            raise KeyError(key)
+
+    rattler_record = rattler.RepoDataRecord(
+        package_record=rattler.PackageRecord(
+            name="example",
+            version="1.0",
+            build=rattler_build_string("0"),
+            build_number=0,
+            subdir="noarch",
+        ),
+        file_name="example-1.0-0.tar.bz2",
+        url=package_url,
+        channel=noauth_channel,
+    )
+
+    conda_record = utils_module.rattler_record_to_conda_record(
+        rattler_record, index=cast("RattlerIndexHelper", _Index())
+    )
+
+    assert conda_record.url == package_url
+    assert conda_record.channel.url(with_credentials=True) == auth_channel

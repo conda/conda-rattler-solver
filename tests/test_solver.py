@@ -182,16 +182,15 @@ def test_python_downgrade_reinstalls_noarch_packages(
         pip_cli("--version", prefix=prefix)
 
 
-@pytest.mark.xfail(
-    reason="multichannels not fully implemented yet: https://github.com/conda/rattler/issues/1327",
-    strict=True,
-)
 def test_defaults_specs_work(conda_cli: CondaCLIFixture) -> None:
     """
     See https://github.com/conda/conda-libmamba-solver/issues/173
 
     defaults is secretly (main, r and msys2), and repos are built using those
-    actual channels. Multichannels are not present in rattler so far.
+    actual channels. The channels are grouped in a 'rattler.MultiSource', so
+    'defaults::-style specs match any of its members. Member names work too:
+    conda canonicalizes them to the multichannel name ('pkgs/main::' becomes
+    'defaults::') before the specs reach the solver.
     """
     out, err, rc = conda_cli(
         "create",
@@ -212,6 +211,64 @@ def test_defaults_specs_work(conda_cli: CondaCLIFixture) -> None:
             break
     else:
         raise AssertionError("libarchive not found in LINK actions")
+
+    out, err, rc = conda_cli(
+        "create",
+        "--dry-run",
+        "--json",
+        "--solver=rattler",
+        "--override-channels",
+        "--channel=conda-forge",
+        "pkgs/main::python=3.9",
+        raises=DryRunExit,
+    )
+    data = json.loads(out)
+    assert data.get("success") is True
+    for link in data["actions"]["LINK"]:
+        if link["name"] == "python":
+            assert link["channel"] in ("defaults", "pkgs/main")
+            break
+    else:
+        raise AssertionError("python not found in LINK actions")
+
+
+def test_channel_history_survives_package_base_url(tmp_path, tmp_env):
+    from conda.core.subdir_data import SubdirData
+    from conda.history import History
+
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "demo", "1.0")
+    _make_noarch_package(channel, "other", "1.0", depends=("demo >=2",))
+    requested = MatchSpec(f"{channel.as_uri()}::demo")
+    with tmp_env(
+        str(requested),
+        "--solver=rattler",
+        "--override-channels",
+        f"--channel={channel}",
+    ) as prefix:
+        assert History(prefix).get_requested_specs_map()["demo"].get_raw_value("channel")
+        _make_noarch_package(channel, "demo", "2.0")
+        repodata = channel / "noarch" / "repodata.json"
+        data = json.loads(repodata.read_text())
+        data["info"]["base_url"] = "https://cdn.example.test/packages/noarch/"
+        data["repodata_version"] = 2
+        repodata.write_text(json.dumps(data))
+        SubdirData._cache_.clear()
+
+        solver = Solver(
+            prefix=prefix,
+            channels=[Channel(channel.as_uri())],
+            subdirs=("noarch",),
+            specs_to_add=["other"],
+        )
+        records = {record.name: record for record in solver.solve_final_state()}
+
+        assert records["demo"].version == "2.0"
+        assert not solver.neutered_specs
+        assert requested.match(records["demo"])
+        assert records["other"].url == (
+            "https://cdn.example.test/packages/noarch/other-1.0-0.tar.bz2"
+        )
 
 
 def test_determinism(tmpdir):
@@ -1573,7 +1630,7 @@ def test_add_pip_as_python_dependency(
 
         assert isinstance(solution, list)
         assert ("pip" in {record.name.source for record in solution}) is add_pip
-        solver._export_solved_records(solution, out_state)
+        solver._export_solved_records(solution, out_state, index)
         assert ("pip" in out_state.records["python"].depends) is add_pip
 
 

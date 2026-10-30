@@ -1,0 +1,3 @@
+### Enhancements
+
+* Add multichannel support: conda's `defaults`, conda-build's `local` and condarc's `custom_multichannels` are passed to the solver as `rattler.MultiSource` groups, so their members share a channel priority tier and specs naming the multichannel (e.g. `defaults::python`) can match any member. (#8 via #182)

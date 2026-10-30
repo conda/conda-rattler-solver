@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
     from conda.common.path import PathType
 
-    from .index import RattlerIndexHelper
+    from .index import RattlerIndexHelper, _ChannelRepoInfo
 
 log = getLogger(f"conda.{__name__}")
 
@@ -47,10 +47,20 @@ def rattler_build_string(build: str) -> rattler.BuildString | str:
 
 
 def rattler_record_to_conda_record(
-    record: rattler.PackageRecord,
+    record: rattler.RepoDataRecord,
     *,
     add_pip_as_python_dependency: bool = False,
+    info: _ChannelRepoInfo | None = None,
+    index: RattlerIndexHelper | None = None,
 ) -> PackageRecord:
+    """
+    Convert a rattler record to its conda equivalent.
+
+    When the `_ChannelRepoInfo` the record was loaded from is given — directly
+    via `info` or indirectly via the `index` it belongs to — the record's
+    channel and URL are restored to their authenticated forms so packages can
+    be downloaded from authenticated channels.
+    """
     if timestamp := record.timestamp:
         timestamp = int(timestamp.timestamp() * 1000)
     else:
@@ -72,6 +82,8 @@ def rattler_record_to_conda_record(
             channel_url = f"{record.channel}/{record.subdir}"
         else:
             channel_url = record.channel
+    elif record.url:
+        channel_url = str(record.url).rpartition("/")[0]
     else:
         channel_url = ""
 
@@ -83,7 +95,7 @@ def rattler_record_to_conda_record(
     ):
         depends = (*depends, "pip")
 
-    return PackageRecord(
+    conda_record = PackageRecord(
         name=record.name.source,
         version=str(record.version),
         build=str(record.build),
@@ -113,6 +125,20 @@ def rattler_record_to_conda_record(
         size=record.size or 0,
         python_site_packages_path=record.python_site_packages_path,
     )
+    if info is None and index is not None:
+        # Repodata with `info.base_url` can serve packages from a different
+        # host, so the directory in `record.url` may not match the channel URL
+        # key in the index. Fall back to `record.channel`, which still
+        # identifies the source channel.
+        for key in (str(record.url).rsplit("/", 1)[0], str(record.channel)):
+            with suppress(KeyError):
+                info = index.get_info(key)
+                break
+    if info is not None:
+        conda_record.channel = info.channel
+        if conda_record.url and conda_record.url.startswith(info.noauth_url + "/"):
+            conda_record.url = info.full_url + conda_record.url[len(info.noauth_url) :]
+    return conda_record
 
 
 class FakeRattlerLinkType(Enum):

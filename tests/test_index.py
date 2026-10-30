@@ -11,15 +11,18 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
+import rattler
 from conda.base.context import context, reset_context
+from conda.common.url import path_to_url
 from conda.core.subdir_data import SubdirData
 from conda.gateways.logging import initialize_logging
 from conda.gateways.shards import build_repodata_subset
-from conda.models.channel import Channel
+from conda.models.channel import Channel, MultiChannel
 from conda.models.match_spec import MatchSpec
 
 from conda_rattler_solver.index import (
     RattlerIndexHelper,
+    _ChannelRepoInfo,
     _is_sharded_repodata_enabled,
     _root_extras,
 )
@@ -122,6 +125,177 @@ def test_reload_channels(tmp_path: Path):
     time.sleep(1)
     index.reload_channel(Channel(str(tmp_path)))
     assert index.n_packages() == initial_count + 1
+
+
+@pytest.mark.parametrize("subdirs", [("noarch",), ("linux-64", "noarch")])
+def test_solve_sources_multichannel_grouping(tmp_path: Path, subdirs: tuple[str, ...]):
+    """
+    Each member of a multichannel (e.g. conda's 'defaults' or condarc's
+    'custom_multichannels') becomes its own 'rattler.MultiSource' named after
+    the multichannel, so specs naming the multichannel match any member while the members
+    keep the priority order of the channel list. Standalone channels are
+    passed through as-is.
+    """
+    repo_a, repo_b, standalone = tmp_path / "repo_a", tmp_path / "repo_b", tmp_path / "standalone"
+    for repo in (repo_a, repo_b, standalone):
+        shutil.copytree(DATA / "mamba_repo", repo)
+        for subdir in subdirs:
+            repodata = repo / subdir / "repodata.json"
+            if not repodata.exists():
+                repodata.parent.mkdir(parents=True, exist_ok=True)
+                repodata.write_text(json.dumps({"info": {"subdir": subdir}, "packages": {}}))
+    multichannel = MultiChannel("mygroup", (Channel(str(repo_a)), Channel(str(repo_b))))
+
+    index = RattlerIndexHelper(channels=(multichannel, Channel(str(standalone))), subdirs=subdirs)
+
+    sources = index.solve_sources()
+    assert len(sources) == 2 + len(subdirs)
+    for source, repo in ((sources[0], repo_a), (sources[1], repo_b)):
+        assert isinstance(source, rattler.MultiSource)
+        assert source.name == "mygroup"
+        for member, subdir in zip(source.sources, subdirs, strict=True):
+            assert isinstance(member, _ChannelRepoInfo)
+            assert member.noauth_url == f"{path_to_url(str(repo))}/{subdir}"
+    assert all(isinstance(source, _ChannelRepoInfo) for source in sources[2:])
+
+    sparse = index.solve_sources(sparse=True)
+    assert len(sparse) == 2 + len(subdirs)
+    for source in sparse[:2]:
+        assert isinstance(source, rattler.MultiSource)
+        assert source.name == "mygroup"
+        assert len(source.sources) == len(subdirs)
+        assert all(isinstance(member, rattler.SparseRepoData) for member in source.sources)
+    assert all(isinstance(source, rattler.SparseRepoData) for source in sparse[2:])
+
+
+def test_solve_sources_empty_multichannel(tmp_path: Path):
+    "Multichannels without members (e.g. 'local' without conda-build paths) are ignored."
+    standalone = tmp_path / "standalone"
+    shutil.copytree(DATA / "mamba_repo", standalone)
+
+    index = RattlerIndexHelper(
+        channels=(MultiChannel("empty-group", ()), Channel(str(standalone))), subdirs=("noarch",)
+    )
+
+    sources = index.solve_sources()
+    assert len(sources) == 1
+    assert isinstance(sources[0], _ChannelRepoInfo)
+    assert index.solve_sources(sparse=True) == [sources[0].repo]
+
+
+def test_solve_sources_multichannel_run_separation(tmp_path: Path):
+    """
+    A multichannel whose members are separated by other channels forms a
+    separate group at each run, so the repodata order follows the channel list
+    instead of pulling the whole multichannel to the first member's position.
+    """
+    repo_x, repo_y, standalone = tmp_path / "repo_x", tmp_path / "repo_y", tmp_path / "standalone"
+    for repo in (repo_x, repo_y, standalone):
+        shutil.copytree(DATA / "mamba_repo", repo)
+
+    index = RattlerIndexHelper(
+        channels=(
+            MultiChannel("mygroup", (Channel(str(repo_x)),)),
+            Channel(str(standalone)),
+            MultiChannel("mygroup", (Channel(str(repo_y)),)),
+        ),
+        subdirs=("noarch",),
+    )
+
+    sources = index.solve_sources(sparse=True)
+    assert len(sources) == 3
+    first, middle, last = sources
+    assert isinstance(first, rattler.MultiSource)
+    assert first.name == "mygroup"
+    assert len(first.sources) == 1
+    assert isinstance(middle, rattler.SparseRepoData)
+    assert isinstance(last, rattler.MultiSource)
+    assert last.name == "mygroup"
+    assert len(last.sources) == 1
+    # each run holds its own member's repodata
+    (first_record,) = first.sources[0].load_all_records()
+    (last_record,) = last.sources[0].load_all_records()
+    assert str(first_record.channel).rstrip("/") == path_to_url(str(repo_x))
+    assert str(last_record.channel).rstrip("/") == path_to_url(str(repo_y))
+
+
+def test_channel_plan_first_listing_wins(tmp_path: Path):
+    "The first listing of a channel provides its URLs; later re-listings are skipped."
+    repo = tmp_path / "repo"
+    shutil.copytree(DATA / "mamba_repo", repo)
+    index = RattlerIndexHelper(channels=[str(repo)], subdirs=("noarch",))
+    plan = index._plan_channels(
+        channels=(
+            Channel("https://example.com/conda"),
+            Channel("conda-forge"),
+            Channel("https://example.com/t/some-token/conda"),
+            Channel("https://user:pass@example.com/conda"),
+        )
+    )
+    assert [(name, list(member_urls)) for name, member_urls in plan] == [
+        (None, ["https://example.com/conda/noarch"]),
+        (None, ["https://conda.anaconda.org/conda-forge/noarch"]),
+    ]
+    fetch_urls = [fetch_url for _, member_urls in plan for fetch_url in member_urls.values()]
+    assert fetch_urls == [
+        "https://example.com/conda/noarch",
+        "https://conda.anaconda.org/conda-forge/noarch",
+    ]
+
+
+def test_channel_plan_authenticated_first(tmp_path: Path):
+    "The first listing provides the credentials when it has any; re-listings are skipped."
+    repo = tmp_path / "repo"
+    shutil.copytree(DATA / "mamba_repo", repo)
+    index = RattlerIndexHelper(channels=[str(repo)], subdirs=("noarch",))
+    plan = index._plan_channels(
+        channels=(
+            Channel("https://example.com/t/some-token/conda"),
+            Channel("https://example.com/conda"),
+        )
+    )
+    fetch_urls = [fetch_url for _, member_urls in plan for fetch_url in member_urls.values()]
+    assert fetch_urls == ["https://example.com/conda/t/some-token/noarch"]
+
+
+@pytest.mark.parametrize("use_cdn", [False, True], ids=["channel-download", "cdn-download"])
+def test_expanded_search_preserves_authenticated_downloads(http_test_server, monkeypatch, use_cdn):
+    noarch = http_test_server.directory / "noarch"
+    noarch.mkdir()
+    info = {"subdir": "noarch"}
+    if use_cdn:
+        info["base_url"] = "https://cdn.example.test/packages/noarch/"
+    filename = "demo-1.0-0.tar.bz2"
+    (noarch / "repodata.json").write_text(
+        json.dumps(
+            {
+                "info": info,
+                "repodata_version": 2,
+                "packages": {
+                    filename: {
+                        "name": "demo",
+                        "version": "1.0",
+                        "build": "0",
+                        "build_number": 0,
+                        "depends": [],
+                        "subdir": "noarch",
+                    }
+                },
+                "packages.conda": {},
+            }
+        )
+    )
+    authenticated = http_test_server.url.replace("http://", "http://user:password@")
+    index = RattlerIndexHelper(channels=[Channel(authenticated)], subdirs=("noarch",))
+    expanded = index._index
+    monkeypatch.setattr(index, "_index", {})
+    monkeypatch.setattr(index, "_get_root_package_from_shard", lambda names: expanded)
+
+    (record,) = index.search("demo", search_expanded_index=True)
+
+    assert record.channel.url(with_credentials=True) == f"{authenticated}/noarch"
+    download_base = info["base_url"] if use_cdn else f"{authenticated}/noarch/"
+    assert record.url == f"{download_base}{filename}"
 
 
 @pytest.mark.parametrize(

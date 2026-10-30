@@ -6,7 +6,6 @@ import logging
 import os
 import sys
 from collections import defaultdict
-from dataclasses import replace
 from functools import cache
 from inspect import stack
 from itertools import chain
@@ -343,7 +342,7 @@ class RattlerSolver(Solver):
                 raise exc
 
         # We didn't fail? Nice, let's return the calculated state
-        self._export_solved_records(solution, out_state)
+        self._export_solved_records(solution, out_state, index)
 
         # Run post-solve tasks
         out_state.post_solve(solver=self)
@@ -388,14 +387,12 @@ class RattlerSolver(Solver):
             # would also reject newer versions whose build numbers start over at zero.
             # Reject only lower builds of the installed version as records are loaded.
             solve = rattler.solve
-            sources = list(index._index.values())
-            if allow_build_downgrades:
-                sources = [replace(info, installed={}) for info in sources]
+            sources = index.solve_sources(allow_build_downgrades=allow_build_downgrades)
             solve_kwargs.update(sources=sources, platforms=index._subdirs)
         else:
             solve = rattler.solve_with_sparse_repodata
             solve_kwargs.update(
-                sparse_repodata=[info.repo for info in index._index.values()],
+                sparse_repodata=index.solve_sources(sparse=True),
                 package_format_selection=index._package_format,
             )
         if log.isEnabledFor(logging.DEBUG):
@@ -861,12 +858,12 @@ class RattlerSolver(Solver):
         )
         raise exc
 
-    def _export_solved_records(self, records, out_state):
+    def _export_solved_records(self, records, out_state, index):
         out_state.records.clear()
         for rattler_record in records:
             # Repository candidates are patched by py-rattler before solving. Do not
             # patch here because locked records must preserve their installed metadata.
-            conda_record = rattler_record_to_conda_record(rattler_record)
+            conda_record = rattler_record_to_conda_record(rattler_record, index=index)
             out_state.records[conda_record.name] = conda_record
 
     # endregion

@@ -15,6 +15,7 @@ from urllib.request import urlretrieve
 import pytest
 from conda.base.context import reset_context
 from conda.common.compat import on_linux, on_win
+from conda.common.url import path_to_url
 from conda.core.prefix_data import PrefixData
 from conda.exceptions import DryRunExit
 from conda.models.channel import Channel
@@ -26,6 +27,7 @@ from .channel_testing.helpers import (
     http_server_auth_none,  # noqa: F401
     http_server_auth_token,  # noqa: F401
 )
+from .test_solver import _make_noarch_package
 from .utils import conda_subprocess, write_env_config
 
 if TYPE_CHECKING:
@@ -173,20 +175,29 @@ def test_http_server_auth_none(
     )
 
 
+@pytest.mark.parametrize("channel_qualified", [False, True])
 def test_http_server_auth_basic(
     http_server_auth_basic,  # noqa: F811
     conda_cli: CondaCLIFixture,
     path_factory: PathFactoryFixture,
+    channel_qualified: bool,
 ):
+    prefix = path_factory()
+    spec = (
+        f"{Channel(http_server_auth_basic).canonical_name}::test-package"
+        if channel_qualified
+        else "test-package"
+    )
     conda_cli(
         "create",
-        f"--prefix={path_factory()}",
+        f"--prefix={prefix}",
         "--solver=rattler",
         "--json",
         "--override-channels",
         f"--channel={http_server_auth_basic}",
-        "test-package",
+        spec,
     )
+    assert package_is_installed(prefix, spec)
 
 
 def test_http_server_auth_basic_email(
@@ -205,26 +216,31 @@ def test_http_server_auth_basic_email(
     )
 
 
+@pytest.mark.parametrize("channel_qualified", [False, True])
 def test_http_server_auth_token(
     http_server_auth_token,  # noqa: F811
     conda_cli: CondaCLIFixture,
     path_factory: PathFactoryFixture,
+    channel_qualified: bool,
 ):
+    prefix = path_factory()
+    spec = (
+        f"{Channel(http_server_auth_token).canonical_name}::test-package"
+        if channel_qualified
+        else "test-package"
+    )
     conda_cli(
         "create",
-        f"--prefix={path_factory()}",
+        f"--prefix={prefix}",
         "--solver=rattler",
         "--json",
         "--override-channels",
         f"--channel={http_server_auth_token}",
-        "test-package",
+        spec,
     )
+    assert package_is_installed(prefix, spec)
 
 
-@pytest.mark.xfail(
-    reason="multichannels not fully implemented yet: https://github.com/conda/rattler/issues/1327",
-    strict=True,
-)
 def test_http_server_auth_token_in_defaults(
     http_server_auth_token,  # noqa: F811
     path_factory: PathFactoryFixture,
@@ -244,6 +260,8 @@ def test_http_server_auth_token_in_defaults(
             "create",
             f"--prefix={path_factory()}",
             "--solver=rattler",
+            "--override-channels",
+            "--channel=defaults",
             "test-package",
         )
     finally:
@@ -253,10 +271,6 @@ def test_http_server_auth_token_in_defaults(
             condarc.unlink()
 
 
-@pytest.mark.xfail(
-    reason="multichannels not fully implemented yet: https://github.com/conda/rattler/issues/1327",
-    strict=True,
-)
 def test_local_spec() -> None:
     """https://github.com/conda/conda-libmamba-solver/issues/398"""
     env = os.environ.copy()
@@ -279,6 +293,179 @@ def test_local_spec() -> None:
         env=env,
     )
     assert process.returncode == 0
+
+
+@pytest.mark.parametrize("member_first", [False, True])
+@pytest.mark.parametrize(
+    "spec,expected_build",
+    [
+        ("test-package", 1),
+        ("mygroup::test-package", 1),
+        ("mygroup::test-package[build_number=0]", 0),
+    ],
+)
+def test_custom_multichannels(
+    tmp_path: Path,
+    member_first: bool,
+    spec: str,
+    expected_build: int,
+    isolated_condarc_env: dict[str, str],
+) -> None:
+    """
+    condarc 'custom_multichannels' groups several channels under one name.
+    Specs naming the group (e.g. 'mygroup::test-package') must match any member, and
+    the members share the multichannel's priority tier: with strict channel
+    priority the best build wins regardless of which member provides it, while
+    a build that only exists in one member is still selectable through a
+    build-qualified spec.
+    https://github.com/conda/conda-rattler-solver/issues/8
+    """
+    repo_a = tmp_path / "repo_a"
+    repo_b = tmp_path / "repo_b"
+    for repo in (repo_a, repo_b):
+        shutil.copytree(DATA / "mamba_repo", repo)
+    # Move the only build of test-package in repo_b to build 1, so build zero
+    # is only available from repo_a.
+    repodata = repo_b / "noarch" / "repodata.json"
+    repodata_contents = json.loads(repodata.read_text())
+    newer = dict(repodata_contents["packages"].pop("test-package-0.1-0.tar.bz2"), build_number=1)
+    repodata_contents["packages"]["test-package-0.1-1.tar.bz2"] = newer
+    repodata.write_text(json.dumps(repodata_contents))
+    shutil.copy(
+        repo_a / "noarch" / "test-package-0.1-0.tar.bz2",
+        repo_b / "noarch" / "test-package-0.1-1.tar.bz2",
+    )
+
+    write_env_config(
+        tmp_path,
+        force=True,
+        channels=[path_to_url(str(repo_a)), "mygroup"] if member_first else ["mygroup"],
+        channel_priority="strict",
+        custom_multichannels={
+            "mygroup": [path_to_url(str(repo_a)), path_to_url(str(repo_b))],
+        },
+    )
+
+    process = conda_subprocess(
+        "create",
+        "--dry-run",
+        "--json",
+        "--solver=rattler",
+        spec,
+        env=isolated_condarc_env,
+    )
+    result = json.loads(process.stdout)
+    assert result["success"] is True
+    (record,) = (pkg for pkg in result["actions"]["LINK"] if pkg["name"] == "test-package")
+    # The members share the multichannel's tier, so the best build wins; a
+    # build that only exists in one member is still selectable.
+    assert record["build_number"] == expected_build
+
+
+def test_custom_multichannels_member_priority(
+    tmp_path: Path,
+    isolated_condarc_env: dict[str, str],
+) -> None:
+    """
+    Listing a member of a custom multichannel on its own must not pull the
+    whole multichannel to that position: with strict priority and the channel
+    list [hotfix, defaults, internal{approved, hotfix}], 'requests' comes from
+    'defaults' (2.0), not from 'approved' (2.5).
+    https://github.com/conda/conda-rattler-solver/pull/182#issuecomment-6475380055
+    """
+    approved = tmp_path / "approved"
+    hotfix = tmp_path / "hotfix"
+    defaults = tmp_path / "defaults_local"
+    _make_noarch_package(approved, "requests", "2.5")
+    _make_noarch_package(hotfix, "openssl", "3.0.9")
+    _make_noarch_package(defaults, "requests", "2.0")
+
+    write_env_config(
+        tmp_path,
+        force=True,
+        channels=[path_to_url(str(hotfix)), path_to_url(str(defaults)), "internal"],
+        channel_priority="strict",
+        custom_multichannels={
+            "internal": [path_to_url(str(approved)), path_to_url(str(hotfix))],
+        },
+        default_channels=[path_to_url(str(defaults))],
+    )
+
+    process = conda_subprocess(
+        "create",
+        "--dry-run",
+        "--json",
+        "--solver=rattler",
+        "requests",
+        env=isolated_condarc_env,
+    )
+    result = json.loads(process.stdout)
+    assert result["success"] is True
+    (record,) = (pkg for pkg in result["actions"]["LINK"] if pkg["name"] == "requests")
+    assert record["version"] == "2.0"
+    # The channel name is context-dependent (conda resolves nested local
+    # channels relative to registered locations), so assert on the channel
+    # identity rather than an exact string.
+    assert record["channel"].endswith("defaults_local")
+
+    # A group-qualified spec matches the first run the package name is
+    # encountered in, so 'internal::openssl' resolves from the 'hotfix' member.
+    process = conda_subprocess(
+        "create",
+        "--dry-run",
+        "--json",
+        "--solver=rattler",
+        "internal::openssl",
+        env=isolated_condarc_env,
+    )
+    result = json.loads(process.stdout)
+    assert result["success"] is True
+    (record,) = (pkg for pkg in result["actions"]["LINK"] if pkg["name"] == "openssl")
+    assert record["version"] == "3.0.9"
+    assert record["channel"].endswith("hotfix")
+    assert "approved" not in record["channel"]
+
+
+@pytest.mark.parametrize("pin_new_app", [False, True])
+def test_custom_multichannel_update(
+    tmp_path: Path,
+    pin_new_app: bool,
+    isolated_condarc_env: dict[str, str],
+) -> None:
+    """Grouped update sources retain build floors unless a pin requires a downgrade."""
+    dependencies = tmp_path / "dependencies"
+    applications = tmp_path / "applications"
+    _make_noarch_package(dependencies, "dep", "1.0", build="2", build_number=2)
+    _make_noarch_package(applications, "app", "1.0", depends=("dep 1.0 2",))
+
+    write_env_config(
+        tmp_path,
+        force=True,
+        channels=["mygroup"],
+        channel_priority="strict",
+        custom_multichannels={
+            "mygroup": [path_to_url(str(dependencies)), path_to_url(str(applications))],
+        },
+    )
+    prefix = tmp_path / "env"
+    args = (
+        "--solver=rattler",
+        "--override-channels",
+        "--channel=mygroup",
+        f"--prefix={prefix}",
+        "--yes",
+    )
+    conda_subprocess("create", "mygroup::app", *args, env=isolated_condarc_env)
+
+    _make_noarch_package(dependencies, "dep", "1.0", build="0")
+    _make_noarch_package(applications, "app", "2.0", depends=("dep 1.0 0",))
+    if pin_new_app:
+        (prefix / "conda-meta" / "pinned").write_text("app >=2\n")
+    conda_subprocess("update", "--all", *args, env=isolated_condarc_env)
+
+    records = PrefixData(prefix)
+    assert records.get("app").version == ("2.0" if pin_new_app else "1.0")
+    assert records.get("dep").build_number == (0 if pin_new_app else 2)
 
 
 def test_nameless_channel(
