@@ -30,7 +30,7 @@ echo "Clearing base history..."
 echo '' > "$BASE_CONDA/conda-meta/history"
 
 echo "Installing dev & test dependencies..."
-"$BASE_CONDA/bin/conda" install -n base --yes --quiet \
+CONDA_CHANNEL_PRIORITY=flexible "$BASE_CONDA/bin/conda" install -n base --yes --quiet \
     --file="$SRC_CONDA/tests/requirements.txt" \
     --file="$SRC_CONDA/tests/requirements-ci.txt" \
     --file="$SRC_CONDA/tests/requirements-Linux.txt" \

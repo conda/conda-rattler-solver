@@ -164,6 +164,8 @@ jobs:
 
       - name: Conda Install
         working-directory: conda  # CONDA-RATTLER-SOLVER CHANGE
+        env:
+          CONDA_CHANNEL_PRIORITY: flexible
         # CONDA-RATTLER-SOLVER CHANGE: add conda-rattler-solver requirements.txt
         run: >
           conda install
@@ -354,6 +356,8 @@ jobs:
 
       - name: Conda Install
         working-directory: conda
+        env:
+          CONDA_CHANNEL_PRIORITY: flexible
         run: conda install
           --yes
           --quiet
@@ -521,6 +525,8 @@ jobs:
 
       - name: Conda Install
         working-directory: conda # CONDA-RATTLER-SOLVER CHANGE
+        env:
+          CONDA_CHANNEL_PRIORITY: flexible
         # CONDA-RATTLER-SOLVER CHANGE: add conda-rattler-solver requirements.txt
         run: >
           conda install

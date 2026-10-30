@@ -75,6 +75,8 @@ jobs:
 
       - name: Install conda dependencies
         # Install dependencies before the editable project installs below.
+        env:
+          CONDA_CHANNEL_PRIORITY: flexible
         run: >
           conda install
           --yes
@@ -84,6 +86,8 @@ jobs:
           pip
 
       - name: Install pytest-conda-solvers dependencies
+        env:
+          CONDA_CHANNEL_PRIORITY: flexible
         # `conda pypi install -e` does not resolve dependencies, so install
         # pytest-conda-solvers' runtime dependencies and the test requirements
         # from pytest-conda-solvers/tests/requirements.txt explicitly.

@@ -1,31 +1,17 @@
 version: 7
 platforms:
 - name: linux-64
-  virtual-packages:
-  - __unix=0=0
-  - __linux=4.18
-  - __glibc=2.28
-  - __archspec=0=x86_64
 - name: osx-64
-  virtual-packages:
-  - __unix=0=0
-  - __osx=13.0
-  - __archspec=0=x86_64
 - name: osx-arm64
-  virtual-packages:
-  - __unix=0=0
-  - __osx=13.0
-  - __archspec=0=m1
 - name: win-64
-  virtual-packages:
-  - __win=10.0
-  - __archspec=0=x86_64
 environments:
   build:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
+    - url: https://conda.anaconda.org/conda-canary/label/dev/
     packages:
       linux-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/brotli-python-1.2.0-py314hcd2bdb6_4.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-hda65f42_10.conda
@@ -74,7 +60,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/patchelf-0.19.2-hee9eb32_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/psutil-7.2.2-py314hfe1a184_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/py-lief-1.0.0-py314h3d1a7fd_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.27.1-py311hc91d8b8_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.28.1-py311hc91d8b8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-build-0.73.0-py311h30674b1_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pycosat-0.6.6-py314h89acca1_6.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pydantic-core-2.46.5-py314h7e8cd81_2.conda
@@ -114,7 +100,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.14.7-py314hd8ed1ab_106.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distro-1.9.0-pyhd8ed1ab_1.conda
@@ -165,6 +150,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/urllib3-2.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-4.1.1-pyh5ded981_0.conda
       osx-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/annotated-types-0.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anyio-4.15.1-pyh5ded981_1.conda
@@ -187,7 +173,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.14.7-py314hd8ed1ab_106.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distro-1.9.0-pyhd8ed1ab_1.conda
@@ -287,7 +272,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/patchelf-0.19.2-hc569e58_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/psutil-7.2.2-py314h17af80e_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/py-lief-1.0.0-py314h523acd2_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.27.1-py311h85c30bf_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.28.1-py311h85c30bf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-build-0.73.0-py311h7a3dd7d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pycosat-0.6.6-py314hca6f81c_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pydantic-core-2.46.5-py314h3cfb53e_2.conda
@@ -308,6 +293,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/yaml-cpp-0.8.0-h2fb4741_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/zstd-1.5.7-hbc1a06c_7.conda
       osx-arm64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/annotated-types-0.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anyio-4.15.1-pyh5ded981_1.conda
@@ -331,7 +317,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.14.7-py314hd8ed1ab_106.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distro-1.9.0-pyhd8ed1ab_1.conda
@@ -430,7 +415,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/patchelf-0.19.2-hdca3b7d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/psutil-7.2.2-py314hd98292b_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-lief-1.0.0-py314h04a194a_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.27.1-py311h1e0e963_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.28.1-py311h1e0e963_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-build-0.73.0-py311h15292d5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pycosat-0.6.6-py314hcd3153d_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pydantic-core-2.46.5-py314hc05cd11_2.conda
@@ -451,6 +436,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/yaml-cpp-0.8.0-h784d473_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
       win-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/annotated-types-0.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anyio-4.15.1-pyh5ded981_1.conda
@@ -473,7 +459,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.14.7-py314hd8ed1ab_106.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distro-1.9.0-pyhd8ed1ab_1.conda
@@ -563,7 +548,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/openssl-3.6.5-hf411b9b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/psutil-7.2.2-py314hc5dbbe4_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/py-lief-1.0.0-py314h49f6506_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.27.1-py311h66afae6_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.28.1-py311h66afae6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-build-0.73.0-py311hc3dac5c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pycosat-0.6.6-py314h5a2d7ad_6.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pydantic-core-2.46.5-py314h9f07db2_2.conda
@@ -587,8 +572,10 @@ environments:
   default:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
+    - url: https://conda.anaconda.org/conda-canary/label/dev/
     packages:
       linux-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/brotli-python-1.2.0-py314hcd2bdb6_4.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-hda65f42_10.conda
@@ -631,7 +618,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/msgpack-python-1.2.3-py314h5383ef5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ncurses-6.6-hdb14827_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.6.5-h781a0a9_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.27.1-py311hc91d8b8_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.28.1-py311hc91d8b8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pycosat-0.6.6-py314h89acca1_6.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pydantic-core-2.46.5-py314h7e8cd81_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.14.7-hcd007b5_106_cp314.conda
@@ -661,7 +648,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.14.7-py314hd8ed1ab_106.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distro-1.9.0-pyhd8ed1ab_1.conda
@@ -704,6 +690,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/urllib3-2.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-4.1.1-pyh5ded981_0.conda
       osx-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/annotated-types-0.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anyio-4.15.1-pyh5ded981_1.conda
@@ -721,7 +708,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.14.7-py314hd8ed1ab_106.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distro-1.9.0-pyhd8ed1ab_1.conda
@@ -799,7 +785,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/msgpack-python-1.2.3-py314h0ba06c9_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/ncurses-6.6-hcc0dc9a_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/openssl-3.6.5-h332eb6d_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.27.1-py311h85c30bf_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.28.1-py311h85c30bf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pycosat-0.6.6-py314hca6f81c_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pydantic-core-2.46.5-py314h3cfb53e_2.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/python-3.14.7-hafa0b4b_106_cp314.conda
@@ -813,6 +799,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/yaml-cpp-0.8.0-h2fb4741_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/zstd-1.5.7-hbc1a06c_7.conda
       osx-arm64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/annotated-types-0.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anyio-4.15.1-pyh5ded981_1.conda
@@ -831,7 +818,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.14.7-py314hd8ed1ab_106.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distro-1.9.0-pyhd8ed1ab_1.conda
@@ -908,7 +894,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/msgpack-python-1.2.3-py314hb1acb19_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/ncurses-6.6-he64c551_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/openssl-3.6.5-h55eecbc_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.27.1-py311h1e0e963_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.28.1-py311h1e0e963_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pycosat-0.6.6-py314hcd3153d_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pydantic-core-2.46.5-py314hc05cd11_2.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/python-3.14.7-h0ae1c2c_106_cp314.conda
@@ -922,6 +908,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/yaml-cpp-0.8.0-h784d473_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
       win-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/annotated-types-0.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anyio-4.15.1-pyh5ded981_1.conda
@@ -940,7 +927,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.14.7-py314hd8ed1ab_106.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distro-1.9.0-pyhd8ed1ab_1.conda
@@ -1015,7 +1001,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/menuinst-2.5.2-py314hb98de8c_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/msgpack-python-1.2.3-py314hf309875_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/openssl-3.6.5-hf411b9b_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.27.1-py311h66afae6_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.28.1-py311h66afae6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pycosat-0.6.6-py314h5a2d7ad_6.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pydantic-core-2.46.5-py314h9f07db2_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.14.7-h53f6dd8_106_cp314.conda
@@ -1034,8 +1020,10 @@ environments:
   dev:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
+    - url: https://conda.anaconda.org/conda-canary/label/dev/
     packages:
       linux-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/backports.zstd-1.7.0-py311h6f959d0_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/brotli-python-1.2.0-py311heb3be6f_4.conda
@@ -1080,7 +1068,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/msgpack-python-1.2.3-py311h4c6fd42_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ncurses-6.6-hdb14827_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.6.5-h781a0a9_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.27.1-py311hc91d8b8_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.28.1-py311hc91d8b8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pycosat-0.6.6-py311h0d48ccd_6.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pydantic-core-2.46.5-py311ha6e1976_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.11.16-h5f976f7_2_cpython.conda
@@ -1109,7 +1097,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.11.16-py311hd8ed1ab_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distro-1.9.0-pyhd8ed1ab_1.conda
@@ -1160,6 +1147,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/vcs_versioning-2.5.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-4.1.1-pyh5ded981_0.conda
       osx-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/annotated-types-0.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anyio-4.15.1-pyh5ded981_1.conda
@@ -1176,7 +1164,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.11.16-py311hd8ed1ab_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distro-1.9.0-pyhd8ed1ab_1.conda
@@ -1262,7 +1249,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/msgpack-python-1.2.3-py311h34f30e4_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/ncurses-6.6-hcc0dc9a_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/openssl-3.6.5-h332eb6d_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.27.1-py311h85c30bf_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.28.1-py311h85c30bf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pycosat-0.6.6-py311h5e2e7b6_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pydantic-core-2.46.5-py311he180d86_2.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/python-3.11.16-h6907cb8_2_cpython.conda
@@ -1276,6 +1263,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/yaml-cpp-0.8.0-h2fb4741_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/zstd-1.5.7-hbc1a06c_7.conda
       osx-arm64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/annotated-types-0.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anyio-4.15.1-pyh5ded981_1.conda
@@ -1293,7 +1281,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.11.16-py311hd8ed1ab_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distro-1.9.0-pyhd8ed1ab_1.conda
@@ -1378,7 +1365,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/msgpack-python-1.2.3-py311h2f25576_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/ncurses-6.6-he64c551_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/openssl-3.6.5-h55eecbc_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.27.1-py311h1e0e963_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.28.1-py311h1e0e963_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pycosat-0.6.6-py311h5edb25e_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pydantic-core-2.46.5-py311hcfb3d13_2.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/python-3.11.16-hd05a0c4_2_cpython.conda
@@ -1392,6 +1379,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/yaml-cpp-0.8.0-h784d473_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
       win-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/annotated-types-0.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anyio-4.15.1-pyh5ded981_1.conda
@@ -1409,7 +1397,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.11.16-py311hd8ed1ab_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distro-1.9.0-pyhd8ed1ab_1.conda
@@ -1492,7 +1479,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/menuinst-2.5.2-py311h5dfdfe8_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/msgpack-python-1.2.3-py311h275cad7_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/openssl-3.6.5-hf411b9b_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.27.1-py311h66afae6_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.28.1-py311h66afae6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pycosat-0.6.6-py311h3485c13_6.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pydantic-core-2.46.5-py311hf51aa87_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.11.16-hb12b558_2_cpython.conda
@@ -1511,8 +1498,10 @@ environments:
   docs:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
+    - url: https://conda.anaconda.org/conda-canary/label/dev/
     packages:
       linux-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/backports.zstd-1.7.0-py311h6f959d0_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/brotli-python-1.2.0-py311heb3be6f_4.conda
@@ -1557,7 +1546,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/msgpack-python-1.2.3-py311h4c6fd42_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ncurses-6.6-hdb14827_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.6.5-h781a0a9_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.27.1-py311hc91d8b8_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.28.1-py311hc91d8b8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pycosat-0.6.6-py311h0d48ccd_6.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pydantic-core-2.46.5-py311ha6e1976_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.11.16-h5f976f7_2_cpython.conda
@@ -1592,7 +1581,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-sphinx-theme-0.5.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.11.16-py311hd8ed1ab_2.conda
@@ -1663,6 +1651,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/urllib3-2.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-4.1.1-pyh5ded981_0.conda
       osx-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/accessible-pygments-0.0.5-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/alabaster-1.0.0-pyhd8ed1ab_1.conda
@@ -1683,7 +1672,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-sphinx-theme-0.5.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.11.16-py311hd8ed1ab_2.conda
@@ -1789,7 +1777,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/msgpack-python-1.2.3-py311h34f30e4_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/ncurses-6.6-hcc0dc9a_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/openssl-3.6.5-h332eb6d_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.27.1-py311h85c30bf_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.28.1-py311h85c30bf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pycosat-0.6.6-py311h5e2e7b6_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pydantic-core-2.46.5-py311he180d86_2.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/python-3.11.16-h6907cb8_2_cpython.conda
@@ -1805,6 +1793,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/yaml-cpp-0.8.0-h2fb4741_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/zstd-1.5.7-hbc1a06c_7.conda
       osx-arm64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/accessible-pygments-0.0.5-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/alabaster-1.0.0-pyhd8ed1ab_1.conda
@@ -1826,7 +1815,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-sphinx-theme-0.5.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.11.16-py311hd8ed1ab_2.conda
@@ -1931,7 +1919,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/msgpack-python-1.2.3-py311h2f25576_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/ncurses-6.6-he64c551_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/openssl-3.6.5-h55eecbc_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.27.1-py311h1e0e963_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.28.1-py311h1e0e963_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pycosat-0.6.6-py311h5edb25e_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pydantic-core-2.46.5-py311hcfb3d13_2.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/python-3.11.16-hd05a0c4_2_cpython.conda
@@ -1947,6 +1935,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/yaml-cpp-0.8.0-h784d473_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
       win-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/accessible-pygments-0.0.5-pyhd8ed1ab_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/alabaster-1.0.0-pyhd8ed1ab_1.conda
@@ -1968,7 +1957,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-sphinx-theme-0.5.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.11.16-py311hd8ed1ab_2.conda
@@ -2071,7 +2059,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/menuinst-2.5.2-py311h5dfdfe8_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/msgpack-python-1.2.3-py311h275cad7_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/openssl-3.6.5-hf411b9b_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.27.1-py311h66afae6_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.28.1-py311h66afae6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pycosat-0.6.6-py311h3485c13_6.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pydantic-core-2.46.5-py311hf51aa87_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.11.16-hb12b558_2_cpython.conda
@@ -2092,8 +2080,10 @@ environments:
   lint:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
+    - url: https://conda.anaconda.org/conda-canary/label/dev/
     packages:
       linux-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/backports.zstd-1.7.0-py312h3f22e6b_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/brotli-python-1.2.0-py312he9c40d5_4.conda
@@ -2139,7 +2129,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/msgpack-python-1.2.3-py312h9be0db6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/ncurses-6.6-hdb14827_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/openssl-3.6.5-h781a0a9_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.27.1-py311hc91d8b8_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.28.1-py311hc91d8b8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pycosat-0.6.6-py312h5cc1888_6.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pydantic-core-2.46.5-py312hc767a74_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.14-h5f976f7_3_cpython.conda
@@ -2172,7 +2162,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.12.14-py312hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
@@ -2223,6 +2212,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/virtualenv-21.14.5-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-4.1.1-pyh5ded981_0.conda
       osx-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/annotated-types-0.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anyio-4.15.1-pyh5ded981_1.conda
@@ -2240,7 +2230,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.12.14-py312hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
@@ -2327,7 +2316,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/msgpack-python-1.2.3-py312hcba6f97_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/ncurses-6.6-hcc0dc9a_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/openssl-3.6.5-h332eb6d_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.27.1-py311h85c30bf_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.28.1-py311h85c30bf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pycosat-0.6.6-py312h6ea13a3_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pydantic-core-2.46.5-py312h3b11fa5_2.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/python-3.12.14-h6907cb8_3_cpython.conda
@@ -2344,6 +2333,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/yaml-cpp-0.8.0-h2fb4741_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/zstd-1.5.7-hbc1a06c_7.conda
       osx-arm64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/annotated-types-0.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anyio-4.15.1-pyh5ded981_1.conda
@@ -2362,7 +2352,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.12.14-py312hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
@@ -2448,7 +2437,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/msgpack-python-1.2.3-py312h67ba313_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/ncurses-6.6-he64c551_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/openssl-3.6.5-h55eecbc_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.27.1-py311h1e0e963_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.28.1-py311h1e0e963_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pycosat-0.6.6-py312ha053593_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pydantic-core-2.46.5-py312ha80e978_2.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/python-3.12.14-hd05a0c4_3_cpython.conda
@@ -2465,6 +2454,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/yaml-cpp-0.8.0-h784d473_1.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
       win-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/annotated-types-0.8.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anyio-4.15.1-pyh5ded981_1.conda
@@ -2483,7 +2473,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.12.14-py312hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/distlib-0.4.3-pyhcf101f3_0.conda
@@ -2567,7 +2556,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/menuinst-2.5.2-py312ha1a9051_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/msgpack-python-1.2.3-py312h78d62e6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/openssl-3.6.5-hf411b9b_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.27.1-py311h66afae6_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.28.1-py311h66afae6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pycosat-0.6.6-py312he06e257_6.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pydantic-core-2.46.5-py312hdabe01f_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.14-hb12b558_3_cpython.conda
@@ -2589,6 +2578,7 @@ environments:
   release:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
+    - url: https://conda.anaconda.org/conda-canary/label/dev/
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -2974,8 +2964,10 @@ environments:
   test-py311:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
+    - url: https://conda.anaconda.org/conda-canary/label/dev/
     packages:
       linux-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/backports.zstd-1.7.0-py311h6f959d0_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/brotli-python-1.2.0-py311heb3be6f_4.conda
@@ -3051,7 +3043,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/psutil-7.2.2-py311h194be0f_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pthread-stubs-0.4-h7cc23a3_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/py-lief-1.0.0-py311h25b5e19_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.27.1-py311hc91d8b8_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.28.1-py311hc91d8b8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-build-0.73.0-py311h30674b1_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pycosat-0.6.6-py311h0d48ccd_6.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pydantic-core-2.46.5-py311ha6e1976_2.conda
@@ -3105,7 +3097,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.11.16-py311hd8ed1ab_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -3147,6 +3138,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -3215,6 +3207,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/virtualenv-20.39.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-4.1.1-pyh5ded981_0.conda
       osx-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-auth-0.15.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-cli-base-0.8.2-pyhc364b38_0.conda
@@ -3247,7 +3240,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.11.16-py311hd8ed1ab_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -3288,6 +3280,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -3428,7 +3421,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/psutil-7.2.2-py311h72e27ae_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pthread-stubs-0.4-hd115831_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/py-lief-1.0.0-py311hbe756db_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.27.1-py311h85c30bf_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.28.1-py311h85c30bf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-build-0.73.0-py311h7a3dd7d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pycosat-0.6.6-py311h5e2e7b6_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pydantic-core-2.46.5-py311he180d86_2.conda
@@ -3454,6 +3447,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/zstandard-0.25.0-py311h72e27ae_4.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/zstd-1.5.7-hbc1a06c_7.conda
       osx-arm64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-auth-0.15.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-cli-base-0.8.2-pyhc364b38_0.conda
@@ -3487,7 +3481,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.11.16-py311hd8ed1ab_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -3528,6 +3521,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -3667,7 +3661,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/psutil-7.2.2-py311hd322c8c_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pthread-stubs-0.4-hb001647_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-lief-1.0.0-py311h02fe3a5_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.27.1-py311h1e0e963_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.28.1-py311h1e0e963_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-build-0.73.0-py311h15292d5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pycosat-0.6.6-py311h5edb25e_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pydantic-core-2.46.5-py311hcfb3d13_2.conda
@@ -3693,6 +3687,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstandard-0.25.0-py311hd322c8c_4.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
       win-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-auth-0.15.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-cli-base-0.8.2-pyhc364b38_0.conda
@@ -3725,7 +3720,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.11.16-py311hd8ed1ab_2.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -3767,6 +3761,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -3889,7 +3884,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/pillow-12.3.0-py311h36f029a_4.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/psutil-7.2.2-py311hf893f09_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/py-lief-1.0.0-py311haa0f5f9_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.27.1-py311h66afae6_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.28.1-py311h66afae6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-build-0.73.0-py311hc3dac5c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pycosat-0.6.6-py311h3485c13_6.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pydantic-core-2.46.5-py311hf51aa87_2.conda
@@ -3917,8 +3912,10 @@ environments:
   test-py312:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
+    - url: https://conda.anaconda.org/conda-canary/label/dev/
     packages:
       linux-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/backports.zstd-1.7.0-py312h3f22e6b_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/brotli-python-1.2.0-py312he9c40d5_4.conda
@@ -3994,7 +3991,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/psutil-7.2.2-py312h1b36aeb_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pthread-stubs-0.4-h7cc23a3_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/py-lief-1.0.0-py312ha5153dc_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.27.1-py311hc91d8b8_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.28.1-py311hc91d8b8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-build-0.73.0-py311h30674b1_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pycosat-0.6.6-py312h5cc1888_6.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pydantic-core-2.46.5-py312hc767a74_2.conda
@@ -4048,7 +4045,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.12.14-py312hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -4090,6 +4086,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -4158,6 +4155,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/virtualenv-20.39.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-4.1.1-pyh5ded981_0.conda
       osx-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-auth-0.15.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-cli-base-0.8.2-pyhc364b38_0.conda
@@ -4190,7 +4188,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.12.14-py312hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -4231,6 +4228,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -4371,7 +4369,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/psutil-7.2.2-py312hdc27ec5_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pthread-stubs-0.4-hd115831_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/py-lief-1.0.0-py312h9521521_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.27.1-py311h85c30bf_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.28.1-py311h85c30bf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-build-0.73.0-py311h7a3dd7d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pycosat-0.6.6-py312h6ea13a3_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pydantic-core-2.46.5-py312h3b11fa5_2.conda
@@ -4397,6 +4395,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/zstandard-0.25.0-py312hdc27ec5_4.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/zstd-1.5.7-hbc1a06c_7.conda
       osx-arm64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-auth-0.15.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-cli-base-0.8.2-pyhc364b38_0.conda
@@ -4430,7 +4429,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.12.14-py312hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -4471,6 +4469,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -4610,7 +4609,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/psutil-7.2.2-py312hbd136b4_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pthread-stubs-0.4-hb001647_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-lief-1.0.0-py312h5c2cfcd_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.27.1-py311h1e0e963_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.28.1-py311h1e0e963_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-build-0.73.0-py311h15292d5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pycosat-0.6.6-py312ha053593_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pydantic-core-2.46.5-py312ha80e978_2.conda
@@ -4636,6 +4635,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstandard-0.25.0-py312hbd136b4_4.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
       win-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-auth-0.15.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-cli-base-0.8.2-pyhc364b38_0.conda
@@ -4668,7 +4668,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.12.14-py312hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -4710,6 +4709,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -4832,7 +4832,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/pillow-12.3.0-py312h7bb5964_4.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/psutil-7.2.2-py312he5662c2_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/py-lief-1.0.0-py312h4957725_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.27.1-py311h66afae6_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.28.1-py311h66afae6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-build-0.73.0-py311hc3dac5c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pycosat-0.6.6-py312he06e257_6.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pydantic-core-2.46.5-py312hdabe01f_2.conda
@@ -4860,8 +4860,10 @@ environments:
   test-py313:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
+    - url: https://conda.anaconda.org/conda-canary/label/dev/
     packages:
       linux-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/backports.zstd-1.7.0-py313h8f72f4d_1.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/brotli-python-1.2.0-py313h2fc2bef_4.conda
@@ -4937,7 +4939,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/psutil-7.2.2-py313hd42f317_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pthread-stubs-0.4-h7cc23a3_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/py-lief-1.0.0-py313h5964917_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.27.1-py311hc91d8b8_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.28.1-py311hc91d8b8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-build-0.73.0-py311h30674b1_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pycosat-0.6.6-py313h995f894_6.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pydantic-core-2.46.5-py313ha296275_2.conda
@@ -4991,7 +4993,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.13.15-py313hd8ed1ab_103.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -5033,6 +5034,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -5101,6 +5103,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/virtualenv-20.39.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-4.1.1-pyh5ded981_0.conda
       osx-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-auth-0.15.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-cli-base-0.8.2-pyhc364b38_0.conda
@@ -5133,7 +5136,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.13.15-py313hd8ed1ab_103.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -5174,6 +5176,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -5315,7 +5318,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/psutil-7.2.2-py313h4b81b55_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pthread-stubs-0.4-hd115831_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/py-lief-1.0.0-py313h4151499_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.27.1-py311h85c30bf_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.28.1-py311h85c30bf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-build-0.73.0-py311h7a3dd7d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pycosat-0.6.6-py313h71da6e4_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pydantic-core-2.46.5-py313hf695036_2.conda
@@ -5341,6 +5344,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/zstandard-0.25.0-py313h4b81b55_4.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/zstd-1.5.7-hbc1a06c_7.conda
       osx-arm64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-auth-0.15.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-cli-base-0.8.2-pyhc364b38_0.conda
@@ -5374,7 +5378,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.13.15-py313hd8ed1ab_103.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -5415,6 +5418,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -5555,7 +5559,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/psutil-7.2.2-py313h2f871a8_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pthread-stubs-0.4-hb001647_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-lief-1.0.0-py313h5a251ea_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.27.1-py311h1e0e963_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.28.1-py311h1e0e963_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-build-0.73.0-py311h15292d5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pycosat-0.6.6-py313ha083069_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pydantic-core-2.46.5-py313h680bcb3_2.conda
@@ -5581,6 +5585,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstandard-0.25.0-py313h2f871a8_4.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
       win-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-auth-0.15.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-cli-base-0.8.2-pyhc364b38_0.conda
@@ -5613,7 +5618,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.13.15-py313hd8ed1ab_103.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -5655,6 +5659,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -5778,7 +5783,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/pillow-12.3.0-py313h8a2f7de_4.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/psutil-7.2.2-py313h5fd188c_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/py-lief-1.0.0-py313h16ae876_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.27.1-py311h66afae6_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.28.1-py311h66afae6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-build-0.73.0-py311hc3dac5c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pycosat-0.6.6-py313h5ea7bf4_6.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pydantic-core-2.46.5-py313hfbe8231_2.conda
@@ -5806,8 +5811,10 @@ environments:
   test-py314:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
+    - url: https://conda.anaconda.org/conda-canary/label/dev/
     packages:
       linux-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/brotli-python-1.2.0-py314hcd2bdb6_4.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-hda65f42_10.conda
@@ -5881,7 +5888,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/psutil-7.2.2-py314hfe1a184_3.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pthread-stubs-0.4-h7cc23a3_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/py-lief-1.0.0-py314h3d1a7fd_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.27.1-py311hc91d8b8_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.28.1-py311hc91d8b8_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-build-0.73.0-py311h30674b1_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pycosat-0.6.6-py314h89acca1_6.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pydantic-core-2.46.5-py314h7e8cd81_2.conda
@@ -5937,7 +5944,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.14.7-py314hd8ed1ab_106.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -5979,6 +5985,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -6047,6 +6054,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/virtualenv-20.39.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-4.1.1-pyh5ded981_0.conda
       osx-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-auth-0.15.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-cli-base-0.8.2-pyhc364b38_0.conda
@@ -6081,7 +6089,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.14.7-py314hd8ed1ab_106.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -6122,6 +6129,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -6261,7 +6269,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/psutil-7.2.2-py314h17af80e_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pthread-stubs-0.4-hd115831_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/py-lief-1.0.0-py314h523acd2_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.27.1-py311h85c30bf_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.28.1-py311h85c30bf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-build-0.73.0-py311h7a3dd7d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pycosat-0.6.6-py314hca6f81c_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pydantic-core-2.46.5-py314h3cfb53e_2.conda
@@ -6287,6 +6295,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/zstandard-0.25.0-py314h17af80e_4.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/zstd-1.5.7-hbc1a06c_7.conda
       osx-arm64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-auth-0.15.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-cli-base-0.8.2-pyhc364b38_0.conda
@@ -6322,7 +6331,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.14.7-py314hd8ed1ab_106.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -6363,6 +6371,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -6501,7 +6510,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/psutil-7.2.2-py314hd98292b_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pthread-stubs-0.4-hb001647_1004.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-lief-1.0.0-py314h04a194a_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.27.1-py311h1e0e963_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.28.1-py311h1e0e963_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-build-0.73.0-py311h15292d5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pycosat-0.6.6-py314hcd3153d_6.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pydantic-core-2.46.5-py314hc05cd11_2.conda
@@ -6527,6 +6536,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstandard-0.25.0-py314hd98292b_4.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/zstd-1.5.7-hf451053_7.conda
       win-64:
+      - conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/_python_abi3_support-1.0-hd8ed1ab_3.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-auth-0.15.3-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/anaconda-cli-base-0.8.2-pyhc364b38_0.conda
@@ -6561,7 +6571,6 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-handling-2.6.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-package-streaming-0.13.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-pypi-0.13.0-pyh5ded981_0.conda
-      - conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cpython-3.14.7-py314hd8ed1ab_106.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/crashtest-0.4.1-pyhd8ed1ab_1.conda
@@ -6603,6 +6612,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/more-itertools-11.1.0-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nbformat-5.11.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/nlohmann_json-abi-3.12.0-h0f90c79_2.conda
+      - conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pathspec-1.1.1-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/pexpect-4.9.0-pyhd8ed1ab_1.conda
@@ -6724,7 +6734,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/pillow-12.3.0-py314h6acc0e1_4.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/psutil-7.2.2-py314hc5dbbe4_3.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/py-lief-1.0.0-py314h49f6506_6.conda
-      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.27.1-py311h66afae6_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.28.1-py311h66afae6_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-build-0.73.0-py311hc3dac5c_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pycosat-0.6.6-py314h5a2d7ad_6.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/pydantic-core-2.46.5-py314h9f07db2_2.conda
@@ -6750,6 +6760,17 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/zstandard-0.25.0-py314hc5dbbe4_4.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/zstd-1.5.7-h534d264_7.conda
 packages:
+- conda: https://conda.anaconda.org/conda-canary/label/dev/noarch/conda-rattler-solver-0.2.0.22+g37705a0-py_0.conda
+  sha256: 8a20ae1db94bcbc6bb53de08a9a2bba0013079d0851b1259c29983f0bf036e6e
+  md5: 067c5a3fedc9d07c4c52cc8f7fa839bd
+  depends:
+  - conda >=26.7.0
+  - py-rattler >=0.26.0,<0.29.0a0
+  - python >=3.11
+  license: BSD-3-Clause
+  license_family: BSD
+  size: 40337
+  timestamp: 1793185486727
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
   build_number: 20
   sha256: 1dd3fffd892081df9726d7eb7e0dea6198962ba775bd88842135a4ddb4deb3c9
@@ -9149,29 +9170,28 @@ packages:
     - py-lief >=1.0.0,<1.1.0a0
   size: 2018483
   timestamp: 1791062532452
-- conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.27.1-py311hc91d8b8_1.conda
+- conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-0.28.1-py311hc91d8b8_0.conda
   noarch: python
-  sha256: 5e4b45a7eeafd316a68d504fdb9b8f11e48a32ffaaf16a38ceadf1acd738ea40
-  md5: b5c6541d5951053876e6299c3e416988
+  sha256: a205cc0cbdc40f7ca84aec0741ca241a8d007f46130898bfb6b4648769ddb222
+  md5: 5372f7af3bd02484bf49d68f42f1bae6
   depends:
   - python
   - __glibc >=2.17,<3.0.a0
   - libgcc >=15
+  - openssl >=3.5.9,<4.0a0
   - _python_abi3_support 1.*
   - cpython >=3.11
-  - openssl >=3.5.9,<4.0a0
   constrains:
   - __glibc >=2.17
   extra_depends:
     networkx:
     - networkx
   license: BSD-3-Clause
-  license_family: BSD
   purls:
   - pkg:pypi/py-rattler?source=hash-mapping
   run_exports: {}
-  size: 14908706
-  timestamp: 1792604753667
+  size: 15049429
+  timestamp: 1793309611253
 - conda: https://conda.anaconda.org/conda-forge/linux-64/py-rattler-build-0.73.0-py311h30674b1_0.conda
   noarch: python
   sha256: 20d345d91f4b8c22444a5e0cf1f748b6c43ff790537337806f599e5c311b3b7a
@@ -10899,21 +10919,6 @@ packages:
   run_exports: {}
   size: 253235
   timestamp: 1790703648701
-- conda: https://conda.anaconda.org/conda-forge/noarch/conda-rattler-solver-0.2.0-pyh5ded981_1.conda
-  sha256: d276a20648d067dacda146f0fc779721de35c30d140bff6bd0d5d04ffd7e999c
-  md5: 9487c2b4ad6b69bbb1d319fcb1e16d5d
-  depends:
-  - python >=3.11
-  - conda >=26.7.0
-  - py-rattler >=0.26.0,<0.28.0a0
-  - python
-  license: BSD-3-Clause
-  license_family: BSD
-  purls:
-  - pkg:pypi/conda-rattler-solver?source=compressed-mapping
-  run_exports: {}
-  size: 39985
-  timestamp: 1792776185638
 - conda: https://conda.anaconda.org/conda-forge/noarch/conda-self-0.3.0-pyhd8ed1ab_0.conda
   sha256: ba6e0a634471934a5d2e4ef264c0ff012c8be9c4d0e9dafb5ad7abdf57fa199a
   md5: f041b3104d0b01d187d72b1a71af79d3
@@ -11769,6 +11774,20 @@ packages:
   run_exports: {}
   size: 40866
   timestamp: 1766261270149
+- conda: https://conda.anaconda.org/conda-forge/noarch/nvidia-virtual-packages-0.3.0-pyh5ded981_0.conda
+  sha256: 2f8c7636048aec2b3e879654c71741283e46d4db095166d5594671e6bd504f44
+  md5: 0278f6f2f8d4fd84d5d61323ebcffcdf
+  depends:
+  - python >=3.11
+  - conda >=25.11
+  - python
+  license: BSD-3-Clause
+  license_family: BSD
+  purls:
+  - pkg:pypi/nvidia-virtual-packages?source=hash-mapping
+  run_exports: {}
+  size: 21986
+  timestamp: 1792790534632
 - conda: https://conda.anaconda.org/conda-forge/noarch/packaging-26.3-pyhc364b38_0.conda
   sha256: c432626b16768b8dab228bfb706f7060c2d462a21c516d240f68f2f902b5a044
   md5: 936687ed80f295a1f5dbcf8bd34c252c
@@ -15544,10 +15563,10 @@ packages:
     - py-lief >=1.0.0,<1.1.0a0
   size: 1598599
   timestamp: 1791062711374
-- conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.27.1-py311h85c30bf_1.conda
+- conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-0.28.1-py311h85c30bf_0.conda
   noarch: python
-  sha256: 25b281ec1647c63e8458f5ba9d50ffdcec584f9d869b7d9c68c22e79d1e39c14
-  md5: 2d4085ffe728d87282b47982106c5786
+  sha256: 20e3660e16ad7994a8a69bf3e67bf3495b27b949cebb921a227cdfb47f123ba6
+  md5: 0e2ba8eb0a436efb8af0628aae74f49b
   depends:
   - python
   - __osx >=11.0
@@ -15559,12 +15578,11 @@ packages:
     networkx:
     - networkx
   license: BSD-3-Clause
-  license_family: BSD
   purls:
   - pkg:pypi/py-rattler?source=hash-mapping
   run_exports: {}
-  size: 14589223
-  timestamp: 1792604847429
+  size: 14590908
+  timestamp: 1793309708900
 - conda: https://conda.anaconda.org/conda-forge/osx-64/py-rattler-build-0.73.0-py311h7a3dd7d_0.conda
   noarch: python
   sha256: 3b0f095818fd085d0fe4ff32ecd865c85be10061a64715118f9180f6b72ee034
@@ -18693,10 +18711,10 @@ packages:
     - py-lief >=1.0.0,<1.1.0a0
   size: 1610885
   timestamp: 1791062593779
-- conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.27.1-py311h1e0e963_1.conda
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-0.28.1-py311h1e0e963_0.conda
   noarch: python
-  sha256: 5f2453660b8d672847143f26075a2cd3b53ef73f8ca901c57b899fb2197ddfc1
-  md5: def753839713dac73555f5c3db3d4390
+  sha256: 32239dd953c2e6ecce9d1d79cd1ca145c0088a7261ba703c181adc88891d88c3
+  md5: 8f5df37090edaca13f6cf60fbf2d8ff5
   depends:
   - python
   - __osx >=11.0
@@ -18708,12 +18726,11 @@ packages:
     networkx:
     - networkx
   license: BSD-3-Clause
-  license_family: BSD
   purls:
   - pkg:pypi/py-rattler?source=hash-mapping
   run_exports: {}
-  size: 13235287
-  timestamp: 1792604789234
+  size: 13242554
+  timestamp: 1793309637666
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/py-rattler-build-0.73.0-py311h15292d5_0.conda
   noarch: python
   sha256: 97d510e2b5bef563fb5f1a9875dc24b9e7285cf781ae974b44bd698ac7bd10de
@@ -21547,10 +21564,10 @@ packages:
     - py-lief >=1.0.0,<1.1.0a0
   size: 1933472
   timestamp: 1791062552961
-- conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.27.1-py311h66afae6_1.conda
+- conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-0.28.1-py311h66afae6_0.conda
   noarch: python
-  sha256: 98a2167d56ebd2e0f3e276bfa4a585074d6201c055db19b007abafaec78e062b
-  md5: 15c004c22e31cdc0662523bdb8039ee9
+  sha256: 3e15f8f31d02178aeaba8c6250f832fa82eac1f2c5e762130084c36b9c8bc6ac
+  md5: 927cbf1a57f34b7693a6f05f845b8532
   depends:
   - python
   - vc >=14.3,<15
@@ -21562,12 +21579,11 @@ packages:
     networkx:
     - networkx
   license: BSD-3-Clause
-  license_family: BSD
   purls:
   - pkg:pypi/py-rattler?source=hash-mapping
   run_exports: {}
-  size: 16322545
-  timestamp: 1792604761543
+  size: 16468002
+  timestamp: 1793309604859
 - conda: https://conda.anaconda.org/conda-forge/win-64/py-rattler-build-0.73.0-py311hc3dac5c_0.conda
   noarch: python
   sha256: 91b97048d1c59a80ce635f9d47dfef9bb7540ffa3bd97f83cd225876ebfbb8bc
