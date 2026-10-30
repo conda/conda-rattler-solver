@@ -20,6 +20,8 @@ cd conda-rattler-solver
 
 The tasks expect conda's test data at `../conda/tests/data`. Pixi installs the
 locked dependencies and an editable copy of this repository when you run them.
+The development dependencies bootstrap conda with a compatible solver from
+`conda-canary/label/dev`, then replace it with this checkout for tests and benchmarks.
 
 ## Tests and formatting
 
