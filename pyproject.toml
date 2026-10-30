@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "conda-rattler-solver"
-description = "The fast pixi solver, now in conda"
+description = "The fast, Rust-based solver for conda"
 readme = { file = "README.md", content-type = "text/markdown" }
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
 keywords = ["conda", "dependency-solving", "plugin", "rattler", "solver"]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
