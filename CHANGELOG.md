@@ -7,6 +7,18 @@ All notable changes to this project will be documented in this file.
 
 [//]: # (current developments)
 
+## 26.10.1 (2026-11-02)
+
+### Other
+
+* Re-release the `26.10.0` changes as `26.10.1`, because the `26.10.0` GitHub release was published before its release workflow could attach the distributions. Published releases are immutable, so `26.10.0` could not be completed and never reached PyPI. (#206)
+* Add the `conda-canary/label/dev` channel to canary builds so run dependencies can be pinned against the newest `conda-rattler-solver` canary. (#206)
+
+### Contributors
+
+* @danyeaw
+
+
 ## 26.10.0 (2026-11-02)
 
 ### Enhancements
