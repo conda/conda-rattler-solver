@@ -938,7 +938,10 @@ def test_install_keeps_unrequested_history_packages(
     _make_noarch_package(high, "ca-certificates", available_version)
     _make_noarch_package(high, "ca-certificates", "4.0", depends=("__unavailable",))
     _make_noarch_package(high, "app", "1.0", build="high", depends=("ca-certificates >=1",))
+    # Override host channel priority to flexible
+    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", "flexible")
     monkeypatch.setenv("CONDA_AGGRESSIVE_UPDATE_PACKAGES", "")
+    reset_context()
     args = ("--override-channels", f"--solver={solver}")
     with tmp_env("app", f"--channel={low}", *args) as prefix:
         channels = [f"--channel={high}"]
