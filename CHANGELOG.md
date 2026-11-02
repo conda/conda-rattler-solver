@@ -7,6 +7,56 @@ All notable changes to this project will be documented in this file.
 
 [//]: # (current developments)
 
+## 26.10.0 (2026-11-02)
+
+### Enhancements
+
+
+* Pass `root_extras` to conda's `build_repodata_subset` so sharded repodata fetching retrieves only the root-level extras (`extra_depends` groups) requested by the user both now and in the past. Extras of dependencies are not traversed. Requires conda>=26.10 and py-rattler>=0.27 to take effect; with older versions extras are not fetched. (#155)
+* Additional test cases to address cases cited in issue #149. (Done via PR #175)
+* Support py-rattler 0.27 alongside 0.26 in Python and conda packages. (#180)
+* Raise the minimum supported `py-rattler` version to 0.27.1 in the Python package, conda recipe, and Pixi workspace. (#198)
+* Add multichannel support: conda's `defaults`, conda-build's `local` and condarc's `custom_multichannels` are passed to the solver as `rattler.MultiSource` groups, so their members share a channel priority tier and specs naming the multichannel (e.g. `defaults::python`) can match any member. (#8 via #182)
+
+### Bug fixes
+
+* Avoid unnecessary build downgrades during updates while allowing dependency downgrades required to satisfy pins or package requirements. Newer versions can still reset their build numbers to zero. (#126)
+* Retry solves with looser constraints on package dependencies when updating an environment. In order to avoid unsatisfiable errors during environment updates, for example, after changing channel configuration. (#135 via #165)
+* Keep dependencies of explicitly requested extras (e.g. `pkg[extras=cli]`) when pruning. (#184)
+* Preserve downgrade protections during the second solve for `conda update --update-deps`. (#185)
+* Support py-rattler 0.28.0, including its new build-string API, while retaining support for 0.26 and 0.27.
+* Preserve packages from environment history during frozen installs and retain compatible installed records when channel candidates have unsatisfied dependencies.
+
+### Deprecations
+
+
+
+### Docs
+
+
+
+### Other
+
+* Add pytest-conda-solvers GitHub Actions workflow (#103)
+
+* Fix `test_pytorch_gpu` by installing the `nvidia-virtual-packages` conda plugin and setting `CONDA_OVERRIDE_CUDA_ARCH`, since recent conda-forge CUDA builds require the `__cuda_arch` virtual package. (#176)
+* Require `py-rattler >=0.28.1,<0.29.0a0` to include its updated ZIP dependency.
+
+### Contributors
+
+* @agriyakhetarpal
+* @dholth
+* @jezdez
+* @kenodegard
+* @ryanskeith
+* @soapy1
+* @travishathaway
+* @conda-bot
+* @dependabot[bot]
+* @h-vetinari
+
+
+
 ## 0.2.0 (2026-09-16)
 
 ### Enhancements
