@@ -153,6 +153,8 @@ jobs:
           subdir: ${{ matrix.subdir }}
           base-architecture: ${{ matrix.subdir == 'win-arm64' && 'x64' || '' }}
           # template-files-if
+          conda-build-arguments: >-
+            --override-channels -c defaults -c conda-canary/label/dev
           anaconda-org-channel: conda-canary
           anaconda-org-label: ${{ env.ANACONDA_ORG_LABEL }}
           anaconda-org-token: ${{ secrets.ANACONDA_ORG_CONDA_CANARY_TOKEN }}

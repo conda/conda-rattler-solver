@@ -22,6 +22,10 @@ conda/infrastructure:
   # For noarch packages, add:
     with:
       noarch: true
+      # Keep defaults first so the canary package is tested against the
+      # released conda. conda-rattler-solver canaries are the only builds
+      # whose py-rattler range is new enough for the current recipe pins.
+      conda_build_arguments: --override-channels -c defaults -c conda-canary/label/dev
   # For repos whose test workflow is not named "Tests", add:
   #   with:
   #     tests_workflow: Test
