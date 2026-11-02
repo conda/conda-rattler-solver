@@ -88,43 +88,37 @@ jobs:
             default-channel: 'conda-forge'
             test-type: conda-rattler-solver
             test-group: 1
-            py-rattler-version: '0.27.1'
-          - runs-on: windows-latest
-            python-version: '3.11'
-            default-channel: 'conda-forge'
-            test-type: conda-rattler-solver
-            test-group: 1
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: windows-latest
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 1
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: windows-latest
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 2
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: windows-latest
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 3
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: windows-latest
             python-version: '3.13'
             default-channel: 'conda-forge'
             test-type: unit
             test-group: 1
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: windows-latest
             python-version: '3.13'
             default-channel: 'conda-forge'
             test-type: unit
             test-group: 2
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
     env:
       ErrorActionPreference: Stop  # powershell exit immediately on error
       PYTEST_MARKER: ${{ matrix.test-type == 'unit' && 'not integration and not benchmark' || 'integration and not benchmark' }}
@@ -170,6 +164,8 @@ jobs:
 
       - name: Conda Install
         working-directory: conda  # CONDA-RATTLER-SOLVER CHANGE
+        env:
+          CONDA_CHANNEL_PRIORITY: flexible
         # CONDA-RATTLER-SOLVER CHANGE: add conda-rattler-solver requirements.txt
         run: >
           conda install
@@ -289,43 +285,37 @@ jobs:
             default-channel: 'conda-forge'
             test-type: conda-rattler-solver
             test-group: 1
-            py-rattler-version: '0.27.1'
-          - runs-on: ubuntu-latest # linux-64
-            python-version: '3.11'
-            default-channel: 'conda-forge'
-            test-type: conda-rattler-solver
-            test-group: 1
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: ubuntu-latest # linux-64
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 1
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: ubuntu-latest # linux-64
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 2
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: ubuntu-latest # linux-64
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 3
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: ubuntu-24.04-arm # linux-aarch64
             python-version: '3.13'
             default-channel: 'conda-forge'
             test-type: unit
             test-group: 1
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: ubuntu-24.04-arm # linux-aarch64
             python-version: '3.13'
             default-channel: 'conda-forge'
             test-type: unit
             test-group: 2
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
     env:
       PYTEST_MARKER: ${{ matrix.test-type == 'unit' && 'not integration and not benchmark' || 'integration and not benchmark' }}
       PYTEST_SPLITS: ${{ matrix.test-type == 'unit' && '2' || '3' }}
@@ -366,6 +356,8 @@ jobs:
 
       - name: Conda Install
         working-directory: conda
+        env:
+          CONDA_CHANNEL_PRIORITY: flexible
         run: conda install
           --yes
           --quiet
@@ -462,43 +454,37 @@ jobs:
             default-channel: 'conda-forge'
             test-type: conda-rattler-solver
             test-group: 1
-            py-rattler-version: '0.27.1'
-          - runs-on: macos-latest # osx-arm64
-            python-version: '3.11'
-            default-channel: 'conda-forge'
-            test-type: conda-rattler-solver
-            test-group: 1
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: macos-latest # osx-arm64
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 1
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: macos-latest # osx-arm64
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 2
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: macos-latest # osx-arm64
             python-version: '3.11'
             default-channel: 'conda-forge'
             test-type: integration
             test-group: 3
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: macos-latest # osx-arm64
             python-version: '3.14'
             default-channel: 'conda-forge'
             test-type: unit
             test-group: 1
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
           - runs-on: macos-latest # osx-arm64
             python-version: '3.14'
             default-channel: 'conda-forge'
             test-type: unit
             test-group: 2
-            py-rattler-version: '0.28.0'
+            py-rattler-version: '0.28.1'
     env:
       PYTEST_MARKER: ${{ matrix.test-type == 'unit' && 'not integration and not benchmark' || 'integration and not benchmark' }}
       PYTEST_SPLITS: ${{ matrix.test-type == 'unit' && '2' || '3' }}
@@ -539,6 +525,8 @@ jobs:
 
       - name: Conda Install
         working-directory: conda # CONDA-RATTLER-SOLVER CHANGE
+        env:
+          CONDA_CHANNEL_PRIORITY: flexible
         # CONDA-RATTLER-SOLVER CHANGE: add conda-rattler-solver requirements.txt
         run: >
           conda install

@@ -27,7 +27,7 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = [
   # "conda >=26.7.0",
-  "py-rattler >=0.27.1,<0.29.0a0",
+  "py-rattler >=0.28.1,<0.29.0a0",
 ]
 dynamic = ["version"]
 
@@ -45,12 +45,19 @@ conda-rattler-solver = "conda_rattler_solver.plugin"
 source = "vcs"
 
 [tool.pixi.workspace]
-channels = ["conda-forge"]
+channels = ["conda-forge", "conda-canary/label/dev"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 
 [tool.pixi.dependencies]
 conda = ">=26.7.0"
-py-rattler = ">=0.27.1,<0.29.0a0"
+py-rattler = ">=0.28.1,<0.29.0a0"
+
+# Remove this bootstrap pin once a compatible conda-forge release is available.
+[tool.pixi.dependencies.conda-rattler-solver]
+version = "==0.2.0.22+g37705a0"
+build = "py_0"
+channel = "conda-canary/label/dev"
+sha256 = "8a20ae1db94bcbc6bb53de08a9a2bba0013079d0851b1259c29983f0bf036e6e"
 
 [tool.pixi.feature.self.tasks]
 # Replace the bootstrap package with the local editable install.
@@ -125,6 +132,7 @@ conda-lock = "*"
 coverage = "*"
 git = "*"
 importlib_resources = ">=5.10" # only necessary for Python < 3.12
+nvidia-virtual-packages = "*"
 pexpect = "*"
 pytest = "*"
 pytest-benchmark = "*"
