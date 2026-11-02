@@ -16,20 +16,6 @@ packages, is not supported. This limitation is shared with `libmamba`. If you
 depend on packages that select variants through `features`, use the `classic`
 solver for those environments.
 
-## Custom multichannels
-
-A multichannel is a single channel name that conda expands to several real
-channels, as configured through the `custom_multichannels` and
-`default_channels` settings. conda-rattler-solver does not yet fully support
-them, so the following do not work as expected:
-
-* Specs that pin a package to a multichannel, such as `<multichannel>::<package>`.
-* The `local` channel, which points at `conda-build`'s output directory.
-* Custom `default_channels` entries, for example channels that carry an
-  authentication token.
-
-% TODO: update this after conda/conda-rattler-solver#182 is merged
-
 ## Channel priority
 
 With `channel_priority: disabled`, `classic` prefers the higher-priority
