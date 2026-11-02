@@ -7,6 +7,49 @@ All notable changes to this project will be documented in this file.
 
 [//]: # (current developments)
 
+## 26.10.0 (2026-11-02)
+
+### Enhancements
+
+* Pass `root_extras` to conda's `build_repodata_subset` so sharded repodata fetching retrieves only the root-level extras (`extra_depends` groups) requested by the user, whether in the current request or recorded in the environment history. Extras of dependencies are not traversed, and history is ignored when pruning. Requires conda>=26.10 and py-rattler>=0.27; older versions do not fetch extras. (#155)
+* Add multichannel support. conda's `defaults`, conda-build's `local`, and condarc's `custom_multichannels` are passed to the solver as `rattler.MultiSource` groups. Members of a group share a channel priority tier, and specs naming the multichannel (e.g. `defaults::python`) can match any member. (#8 via #182)
+
+### Bug fixes
+
+* Avoid unnecessary build downgrades during updates while allowing dependency downgrades required to satisfy pins or package requirements. Newer versions can still reset their build numbers to zero. (#126)
+* When updating an environment, retry solves with looser constraints on package dependencies to avoid unsatisfiable errors, for example after changing channel configuration. (#135 via #165)
+* Keep dependencies of explicitly requested extras (e.g. `pkg[extras=cli]`) when pruning. (#184)
+* Preserve downgrade protections during the second solve for `conda update --update-deps`. (#185)
+* Preserve packages from environment history during frozen installs. Keep compatible installed records when channel candidates have unsatisfied dependencies. (#187)
+
+### Docs
+
+* Set up the documentation website. (#161 via #196)
+
+### Other
+
+* Add a pytest-conda-solvers GitHub Actions workflow. (#103)
+* Fix `test_pytorch_gpu` by installing the `nvidia-virtual-packages` conda plugin and setting `CONDA_OVERRIDE_CUDA_ARCH`, because recent conda-forge CUDA builds require the `__cuda_arch` virtual package. (#176)
+* Support `py-rattler` 0.27 alongside 0.26. (#180)
+* Raise the minimum supported `py-rattler` version to 0.27.1 in the Python package, conda recipe, and Pixi workspace. (#198 via #199)
+* Support `py-rattler` 0.28.0 and its new build-string API, while retaining support for 0.26 and 0.27. (#187)
+* Require `py-rattler >=0.28.1,<0.29.0a0` in the Python package, conda recipe, and Pixi workspace, which raises the minimum above 0.27.1 and includes py-rattler's updated ZIP dependency. (#201)
+* Add tests covering specs combining versions with extras. (#175)
+
+### Contributors
+
+* @agriyakhetarpal
+* @dholth
+* @jezdez
+* @kenodegard
+* @ryanskeith
+* @soapy1
+* @travishathaway
+* @conda-bot
+* @dependabot[bot]
+* @h-vetinari made their first contribution in https://github.com/conda/conda-rattler-solver/pull/180
+
+
 ## 0.2.0 (2026-09-16)
 
 ### Enhancements
