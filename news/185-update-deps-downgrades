@@ -1,3 +1,0 @@
-### Bug fixes
-
-* Preserve downgrade protections during the second solve for `conda update --update-deps`. (#185)

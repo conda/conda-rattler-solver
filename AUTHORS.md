@@ -13,4 +13,5 @@ Authors are sorted alphabetically.
 * Travis Hathaway
 * conda-bot
 * dependabot[bot]
+* h-vetinari
 * jaimergp
