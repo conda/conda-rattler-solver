@@ -7,6 +7,18 @@ All notable changes to this project will be documented in this file.
 
 [//]: # (current developments)
 
+## 26.10.1 (2026-11-02)
+
+### Other
+
+* Add the `conda-canary/label/dev` channel to canary builds so run dependencies can be pinned against the newest `conda-rattler-solver` canary. (#206)
+
+### Contributors
+
+* @danyeaw
+
+
+
 ## 26.10.0 (2026-11-02)
 
 ### Enhancements
