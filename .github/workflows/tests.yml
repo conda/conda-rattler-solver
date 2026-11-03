@@ -608,10 +608,81 @@ jobs:
             conda/test-report.xml
           retention-days: 1  # temporary, combined in aggregate below
 
+  # The original pip interoperability regression is skipped with conda-forge.
+  pip-interop:
+    needs: changes
+    if: github.event_name == 'schedule' || needs.changes.outputs.code == 'true'
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash -el {0}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.14']
+        py-rattler-version: ['0.28.1']
+    env:
+      CONDA_CHANNELS: defaults
+      CONDA_CHANNEL_PRIORITY: flexible
+
+    steps:
+      - name: Checkout conda/conda
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          repository: conda/conda
+          path: conda
+          ref: 26.10.x
+
+      - name: Checkout conda-rattler-solver
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          path: conda-rattler-solver
+
+      - name: Setup Miniconda
+        uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
+        with:
+          miniconda-version: latest
+          condarc-file: conda/.github/condarc-defaults
+          run-post: false
+
+      - name: Install conda test dependencies
+        working-directory: conda
+        run: >
+          conda install --yes
+          --file tests/requirements.txt
+          --file tests/requirements-${{ runner.os }}.txt
+          --file tests/requirements-ci.txt
+          python=${{ matrix.python-version }}
+
+      - name: Install conda and conda-rattler-solver
+        run: |
+          python -m pip install --no-deps -e conda/ -e conda-rattler-solver/
+          python -m pip install --no-deps "py-rattler==${{ matrix.py-rattler-version }}"
+
+      - name: Run original pip interoperability test
+        working-directory: conda
+        run: >
+          python -m pytest
+          "tests/test_create.py::test_conda_pip_interop_compatible_release_operator[rattler]"
+          --runxfail
+          --basetemp="${{ runner.temp }}/pip-interop"
+          --junitxml=test-report.xml
+
+      - name: Upload Test Results
+        if: '!cancelled()'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-results-pip-interop-${{ runner.os }}
+          path: conda/test-report.xml
+          retention-days: 1
+
   # aggregate and upload
   aggregate:
     # only aggregate test suite if there are code changes
-    needs: [changes, windows, linux, macos]
+    needs: [changes, windows, linux, macos, pip-interop]
     if: >-
       !cancelled()
       && (
@@ -640,7 +711,7 @@ jobs:
 
   # required check
   analyze:
-    needs: [windows, linux, macos, aggregate]
+    needs: [windows, linux, macos, pip-interop, aggregate]
     if: '!cancelled()'
 
     runs-on: ubuntu-latest
