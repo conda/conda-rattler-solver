@@ -5,7 +5,6 @@ import os
 import re
 import sys
 from contextlib import suppress
-from enum import Enum
 from logging import getLogger
 from textwrap import dedent
 from typing import TYPE_CHECKING
@@ -23,6 +22,7 @@ from conda.models.version import VersionOrder
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from enum import Enum
     from typing import Any
 
     from conda.common.path import PathType
@@ -141,18 +141,8 @@ def rattler_record_to_conda_record(
     return conda_record
 
 
-class FakeRattlerLinkType(Enum):
-    # directory is not a link type, and copy is not a path type
-    # LinkType is still probably the best name here
-    hardlink = "hardlink"
-    softlink = "softlink"
-    copy = "copy"
-    directory = "directory"
-
-
-def conda_prefix_record_to_rattler_prefix_record(
-    record: PrefixRecord,
-) -> rattler.PrefixRecord:
+def conda_record_to_rattler_record(record: PackageRecord) -> rattler.RepoDataRecord:
+    """Convert an installed record to rattler's solver input."""
     if platform := record.get("platform"):
         platform = platform.value
     if noarch := record.get("noarch"):
@@ -178,42 +168,16 @@ def conda_prefix_record_to_rattler_prefix_record(
         license_family=record.get("license_family"),
         python_site_packages_path=record.get("python_site_packages_path"),
     )
-    repodata_record = rattler.RepoDataRecord(
+    file_name, url = record.fn, record.url
+    if record.subdir == "pypi":
+        # Pip metadata has no conda archive. Restore the original record after solving.
+        file_name = f"{record.name}-{record.version}-{record.build}.conda"
+        url = f"https://pypi.invalid/{file_name}"
+    return rattler.RepoDataRecord(
         package_record=package_record,
-        file_name=record.fn,
-        url=record.url,
+        file_name=file_name,
+        url=url,
         channel=record.channel.base_url,
-    )
-    paths_data = rattler.PrefixPaths()
-    if conda_paths_data := record.get("paths_data"):
-        path_entries = []
-        for path in conda_paths_data.paths:
-            path_type = str(path.path_type)
-            kwargs = {
-                "relative_path": path.path,
-                "path_type": rattler.PrefixPathType(path_type),
-                "prefix_placeholder": getattr(path, "prefix_placeholder", None),
-                "sha256": bytes.fromhex(getattr(path, "sha256", "")) or None,
-                "sha256_in_prefix": bytes.fromhex(getattr(path, "sha256_in_prefix", "")) or None,
-                "size_in_bytes": getattr(path, "size_in_bytes", None),
-            }
-            if file_mode := str(getattr(path, "file_mode", "")):
-                kwargs["file_mode"] = rattler.FileMode(file_mode)
-                path_entries.append(rattler.PrefixPathsEntry(**kwargs))
-        paths_data.paths = path_entries
-    if conda_link := record.get("link"):
-        link_type = FakeRattlerLinkType(str(conda_link.type))
-        link = rattler.Link(path=conda_link.source, type=link_type)
-    else:
-        link = None
-    return rattler.PrefixRecord(
-        repodata_record=repodata_record,
-        paths_data=paths_data,
-        link=link,
-        package_tarball_full_path=record.get("package_tarball_full_path"),
-        extracted_package_dir=record.get("extracted_package_dir"),
-        requested_spec=record.get("requested_spec"),
-        files=record.files,
     )
 
 

@@ -30,7 +30,7 @@ from .index import RattlerIndexHelper
 from .state import SolverInputState, SolverOutputState
 from .utils import (
     conda_match_spec_to_rattler_match_spec,
-    conda_prefix_record_to_rattler_prefix_record,
+    conda_record_to_rattler_record,
     fix_version_field_for_conda_build,
     matchspec_from_solver_diagnostic,
     maybe_ignore_current_repodata,
@@ -642,10 +642,10 @@ class RattlerSolver(Solver):
             "specs": [conda_match_spec_to_rattler_match_spec(spec) for spec in specs],
             "constraints": [conda_match_spec_to_rattler_match_spec(spec) for spec in constraints],
             "locked_packages": [
-                conda_prefix_record_to_rattler_prefix_record(record) for record in locked_packages
+                conda_record_to_rattler_record(record) for record in locked_packages
             ],
             "pinned_packages": [
-                conda_prefix_record_to_rattler_prefix_record(record) for record in pinned_packages
+                conda_record_to_rattler_record(record) for record in pinned_packages
             ],
         }
 
@@ -700,18 +700,18 @@ class RattlerSolver(Solver):
                     specs.append(name)
                 elif not conflicting:
                     # TODO: Do this even if not installed (e.g. force removed previously?)
-                    if history:
-                        specs.append(history)
+                    if history or installed.subdir == "pypi":
+                        specs.append(history or name)
                     locked_packages.append(installed)
 
         return {
             "specs": [conda_match_spec_to_rattler_match_spec(spec) for spec in specs],
             "constraints": [conda_match_spec_to_rattler_match_spec(spec) for spec in constraints],
             "locked_packages": [
-                conda_prefix_record_to_rattler_prefix_record(record) for record in locked_packages
+                conda_record_to_rattler_record(record) for record in locked_packages
             ],
             "pinned_packages": [
-                conda_prefix_record_to_rattler_prefix_record(record) for record in pinned_packages
+                conda_record_to_rattler_record(record) for record in pinned_packages
             ],
         }
 
@@ -859,8 +859,19 @@ class RattlerSolver(Solver):
         raise exc
 
     def _export_solved_records(self, records, out_state, index):
+        installed_records = out_state.solver_input_state.installed
         out_state.records.clear()
         for rattler_record in records:
+            name = rattler_record.name.normalized
+            installed = installed_records.get(name)
+            if installed is not None and installed.subdir == "pypi":
+                original = conda_record_to_rattler_record(installed)
+                if (rattler_record.url, rattler_record.file_name) == (
+                    original.url,
+                    original.file_name,
+                ):
+                    out_state.records[name] = installed
+                    continue
             # Repository candidates are patched by py-rattler before solving. Do not
             # patch here because locked records must preserve their installed metadata.
             conda_record = rattler_record_to_conda_record(rattler_record, index=index)
