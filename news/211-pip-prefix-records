@@ -1,3 +1,0 @@
-### Bug fixes
-
-* Handle pip-installed package records without download URLs and retain them when removing unrelated packages with pip interoperability enabled. (#211)
