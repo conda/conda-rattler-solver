@@ -13,6 +13,10 @@ All notable changes to this project will be documented in this file.
 
 * Handle pip-installed package records without download URLs and retain them when removing unrelated packages with pip interoperability enabled. (#211)
 
+### Docs
+
+* Remove custom multichannels from the known limitations documentation now that multichannel support landed in #182. (#209)
+
 ### Other
 
 * Run `test_install_keeps_unrequested_history_packages` with `CONDA_CHANNEL_PRIORITY=flexible` so it also passes on hosts configured with strict channel priority. (#207)
@@ -22,7 +26,6 @@ All notable changes to this project will be documented in this file.
 * @danyeaw
 * @jezdez
 * @dependabot[bot]
-
 
 
 ## 26.10.1 (2026-11-02)
