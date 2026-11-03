@@ -7,6 +7,24 @@ All notable changes to this project will be documented in this file.
 
 [//]: # (current developments)
 
+## 26.10.2 (2026-11-03)
+
+### Bug fixes
+
+* Handle pip-installed package records without download URLs and retain them when removing unrelated packages with pip interoperability enabled. (#211)
+
+### Other
+
+* Run `test_install_keeps_unrequested_history_packages` with `CONDA_CHANNEL_PRIORITY=flexible` so it also passes on hosts configured with strict channel priority. (#207)
+
+### Contributors
+
+* @danyeaw
+* @jezdez
+* @dependabot[bot]
+
+
+
 ## 26.10.1 (2026-11-02)
 
 ### Other
