@@ -12,6 +12,7 @@ import rattler
 from conda import __version__ as _conda_version
 from conda.base.context import reset_context
 from conda.models.channel import Channel
+from conda.models.enums import PackageType
 from conda.models.records import PackageRecord, PrefixRecord
 
 import conda_rattler_solver.utils as utils_module
@@ -287,11 +288,51 @@ def test_prefix_record_roundtrip_preserves_build(build: str) -> None:
         url=f"https://conda.anaconda.org/conda-forge/noarch/example-1.0-{build}.conda",
     )
 
-    rattler_record = utils_module.conda_prefix_record_to_rattler_prefix_record(record)
+    rattler_record = utils_module.conda_record_to_rattler_record(record)
     result = utils_module.rattler_record_to_conda_record(rattler_record)
 
     assert result.build == build
     assert (result.name, result.version, result.build_number) == ("example", "1.0", 0)
+
+
+@pytest.mark.parametrize(
+    "package_type,filename",
+    [
+        (PackageType.VIRTUAL_PYTHON_WHEEL, "example-1.0.dist-info"),
+        (PackageType.VIRTUAL_PYTHON_EGG_MANAGEABLE, "example-1.0.egg-info"),
+        (PackageType.VIRTUAL_PYTHON_EGG_UNMANAGEABLE, "example-1.0.egg-info"),
+        (PackageType.VIRTUAL_PYTHON_EGG_LINK, "example.egg-link"),
+    ],
+)
+def test_pip_record_conversion_preserves_solver_metadata(package_type, filename):
+    editable = package_type == PackageType.VIRTUAL_PYTHON_EGG_LINK
+    record = PrefixRecord(
+        name="example",
+        version="1.0",
+        build="pypi_0",
+        build_number=0,
+        channel="<develop>" if editable else "pypi",
+        subdir="pypi",
+        fn=filename,
+        package_type=package_type,
+        depends=("python >=3.13",),
+        constrains=("optional >=2",),
+        files=("example.py",),
+        paths_data={
+            "paths_version": 1,
+            "paths": [{"_path": "example.py", "path_type": "hardlink", "sha256": None}],
+        },
+    )
+    original = record.dump()
+
+    converted = utils_module.conda_record_to_rattler_record(record)
+
+    assert converted.name.normalized == "example"
+    assert str(converted.version) == "1.0"
+    assert str(converted.build) == "pypi_0"
+    assert converted.depends == ["python >=3.13"]
+    assert converted.constrains == ["optional >=2"]
+    assert record.dump() == original
 
 
 def test_rattler_record_to_conda_record_restores_channel_from_cdn_url() -> None:
