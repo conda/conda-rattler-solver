@@ -1,0 +1,3 @@
+### Enhancements
+
+* Speed up spec collection and `--only-deps` handling on large environments by no longer rebuilding the installed-package and spec mappings for every package. (#216)
