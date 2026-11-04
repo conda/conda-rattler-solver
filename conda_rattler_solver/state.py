@@ -691,24 +691,26 @@ class SolverOutputState:
             would_remove = graph.remove_youngest_descendant_nodes_with_specs()
 
             # We need to distinguish the behavior between `conda remove` and the rest
+            installed_map = sis.installed
             to_remove = []
             if sis.is_removing:
                 for record in would_remove:
                     # do not remove records that were not requested but were installed
-                    if record.name not in sis.requested and record.name in sis.installed:
+                    if record.name not in sis.requested and record.name in installed_map:
                         continue
                     to_remove.append(record.name)
             else:
+                specs_map = self.specs
                 for record in would_remove:
                     for dependency in record.depends:
                         spec = MatchSpec(dependency)
-                        if spec.name not in self.specs:
+                        if spec.name not in specs_map:
                             # following https://github.com/conda/conda/pull/8766
                             self.for_history[spec.name] = spec
                     to_remove.append(record.name)
 
             for name in to_remove:
-                installed = sis.installed.get(name)
+                installed = installed_map.get(name)
                 if installed:
                     self.records[name] = installed
                 else:
