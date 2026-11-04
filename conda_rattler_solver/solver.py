@@ -447,11 +447,24 @@ class RattlerSolver(Solver):
         locked_packages: list[rattler.PackageRecord] = []
         pinned_packages: list[rattler.PackageRecord] = []
 
+        # Several of these properties rebuild their mappings on every access (`specs` merges
+        # every input source, `installed` sorts the prefix records, and `always_update` builds
+        # a MatchSpec per installed package under --update-all). Hoist them out of the
+        # per-package loop below.
+        installed_map = in_state.installed
+        history_map = in_state.history
+        pinned_map = in_state.pinned
+        always_update = in_state.always_update
+        do_not_remove = in_state.do_not_remove
+        update_modifier = in_state.update_modifier
+        specs_map = out_state.specs
+        conflicts_map = out_state.conflicts
+
         protected: set[str] = {
             # we do not include history on purpose (but history is "protected" too)
             *in_state.aggressive_updates,
-            *in_state.pinned,
-            *in_state.do_not_remove,
+            *pinned_map,
+            *do_not_remove,
         }
         # When the Python version changes, this implies all packages depending on
         # python will be reinstalled too. This can mean that we'll have to try for every
@@ -459,8 +472,8 @@ class RattlerSolver(Solver):
         # A workaround is to let all non-noarch python-depending specs to "float" by marking
         # them as a conflict preemptively.
         python_version_might_change = False
-        installed_python = in_state.installed.get("python")
-        to_be_installed_python = out_state.specs.get("python")
+        installed_python = installed_map.get("python")
+        to_be_installed_python = specs_map.get("python")
         if installed_python and to_be_installed_python:
             python_version_might_change = not to_be_installed_python.match(installed_python)
 
@@ -479,15 +492,15 @@ class RattlerSolver(Solver):
             and all(spec.is_name_only_spec for spec in python_requested)
         )
 
-        for name in out_state.specs:
+        for name in specs_map:
             if "*" in name:
                 continue
 
-            installed: PackageRecord = in_state.installed.get(name)
+            installed: PackageRecord = installed_map.get(name)
             requested: list[MatchSpec] = requested_specs.get(name)
-            history: MatchSpec = in_state.history.get(name)
-            pinned: MatchSpec = in_state.pinned.get(name)
-            conflicting: MatchSpec = out_state.conflicts.get(name)
+            history: MatchSpec = history_map.get(name)
+            pinned: MatchSpec = pinned_map.get(name)
+            conflicting: MatchSpec = conflicts_map.get(name)
             depends_on_changing_python = False
             if python_version_might_change and installed and installed.noarch is None:
                 for dep in installed.depends:
@@ -523,8 +536,8 @@ class RattlerSolver(Solver):
             # Block B: main logic for user requests and installed packages
             if requested:
                 specs.extend(requested)
-            elif name in in_state.always_update:
-                if in_state.update_modifier.UPDATE_ALL and conflicting and not history:
+            elif name in always_update:
+                if update_modifier.UPDATE_ALL and conflicting and not history:
                     # with --update-all, all packages will be requested, but sometimes
                     # an update needs to drop a dependency. If there are conflicts
                     # and the dep was not in history, we do NOT add it
@@ -540,7 +553,7 @@ class RattlerSolver(Solver):
             elif (
                 keep_python_dependencies
                 and installed
-                and name in in_state.do_not_remove
+                and name in do_not_remove
                 and not conflicting
             ):
                 # Retain the installed package and its actual dependency requirements.
@@ -565,7 +578,7 @@ class RattlerSolver(Solver):
                 else:
                     specs.append(history)
                     if (
-                        in_state.update_modifier.FREEZE_INSTALLED
+                        update_modifier.FREEZE_INSTALLED
                         and not conflicting
                         and not depends_on_changing_python
                     ):
@@ -589,7 +602,7 @@ class RattlerSolver(Solver):
                 # TODO: Study whether we want to keep all not conflicting installed packages around
                 # This may prevent environments from dropping transitive deps they no longer need.
                 keep: bool = not conflicting or (
-                    keep_python_dependencies and name in in_state.do_not_remove
+                    keep_python_dependencies and name in do_not_remove
                 )
 
                 # Name-only user pins act as freezing pins (instead of a constraint)
@@ -600,7 +613,7 @@ class RattlerSolver(Solver):
                     action = None
                 elif name in protected:
                     action = "lock"
-                elif in_state.update_modifier.FREEZE_INSTALLED and not conflicting:
+                elif update_modifier.FREEZE_INSTALLED and not conflicting:
                     # the value provided by the CLI option
                     action = "freeze"
                 else:
@@ -620,7 +633,7 @@ class RattlerSolver(Solver):
             for name in out_state.installed_without_candidates:
                 if name in already_locked:
                     continue
-                if installed := in_state.installed.get(name):
+                if installed := installed_map.get(name):
                     locked_packages.append(installed)
 
         if in_state.is_updating:
@@ -668,24 +681,31 @@ class RattlerSolver(Solver):
         locked_packages: list[rattler.PackageRecord] = []
         pinned_packages: list[rattler.PackageRecord] = []
 
+        installed_map = in_state.installed
+        history_map = in_state.history
+        pinned_map = in_state.pinned
+        aggressive_updates = in_state.aggressive_updates
+        specs_map = out_state.specs
+        conflicts_map = out_state.conflicts
+
         # conda remove allows globbed names; make sure we don't install those!
         remove = set()
         for requested_name, requested_spec in in_state.requested.items():
             if "*" in requested_name:
-                for installed_name, installed_record in in_state.installed.items():
+                for installed_name, installed_record in installed_map.items():
                     if requested_spec.match(installed_record):
                         remove.add(installed_name)
             else:
                 remove.add(requested_name)
 
-        for name in out_state.specs:
+        for name in specs_map:
             if "*" in name:
                 continue
 
-            installed: PackageRecord = in_state.installed.get(name)
-            history: MatchSpec = in_state.history.get(name)
-            pinned: MatchSpec = in_state.pinned.get(name)
-            conflicting: MatchSpec = out_state.conflicts.get(name)
+            installed: PackageRecord = installed_map.get(name)
+            history: MatchSpec = history_map.get(name)
+            pinned: MatchSpec = pinned_map.get(name)
+            conflicting: MatchSpec = conflicts_map.get(name)
 
             if name in remove:
                 constraints.append(f"{name}<0.0.0dev0")
@@ -696,7 +716,7 @@ class RattlerSolver(Solver):
                 else:
                     constraints.append(pinned)
             if installed:
-                if name in in_state.aggressive_updates:
+                if name in aggressive_updates:
                     specs.append(name)
                 elif not conflicting:
                     # TODO: Do this even if not installed (e.g. force removed previously?)
@@ -737,6 +757,7 @@ class RattlerSolver(Solver):
         """
         unsatisfiable = {}
         not_found = {}
+        installed_map = in_state.installed
         for line in problems.splitlines():
             for char in "─│└├":
                 line = line.replace(char, "")
@@ -751,7 +772,7 @@ class RattlerSolver(Solver):
             elif "cannot be installed because there are no viable options" in line:
                 spec = matchspec_from_solver_diagnostic(f"{words[0]} {words[1].rstrip(',')}")
                 unsatisfiable[spec.name] = spec
-                if (installed := in_state.installed.get(spec.name)) and spec.match(installed):
+                if (installed := installed_map.get(spec.name)) and spec.match(installed):
                     # Repository candidates may all have unavailable dependencies.
                     out_state.installed_without_candidates.add(spec.name)
             elif "the constraint" in line and "cannot be fulfilled" in line:
@@ -770,7 +791,7 @@ class RattlerSolver(Solver):
                 # Do not consider "not found" if it's already installed; this happens
                 # when user requested a package from a channel that is no longer in the
                 # list. e.g. `conda create main::psutil` + `conda install -c conda-forge python`
-                if any(spec.match(record) for record in in_state.installed.values()):
+                if any(spec.match(record) for record in installed_map.values()):
                     unsatisfiable[spec.name] = spec
                     out_state.installed_without_candidates.add(spec.name)
                 else:
@@ -783,7 +804,7 @@ class RattlerSolver(Solver):
                 # satisfy the requested version (as opposed to being fully absent from it).
                 spec = line.split(", for which no candidates were found", 1)[0].strip()
                 spec = matchspec_from_solver_diagnostic(spec)
-                if any(spec.match(record) for record in in_state.installed.values()):
+                if any(spec.match(record) for record in installed_map.values()):
                     unsatisfiable[spec.name] = spec
                     out_state.installed_without_candidates.add(spec.name)
                 else:
