@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 import rattler
 from conda.models.channel import Channel
@@ -33,8 +33,19 @@ class ShardedRepoData:
         self.subdir = channel.subdir
         noauth_url = channel.urls(with_credentials=False, subdirs=(self.subdir,))[0]
         self._channel = noauth_url.rsplit("/", 1)[0] + "/"
-        self._url = url.rstrip("/") + "/"
+        parsed = urlsplit(url)
+        self._url = parsed._replace(path=parsed.path.rstrip("/") + "/").geturl()
         self._archive_url = urljoin(self._url, "./")
+        self._url_scheme = ""
+        if not urlsplit(self._archive_url).scheme:
+            # urllib does not resolve relative paths for schemes such as s3.
+            # Resolve against the authority/path and restore the scheme afterward.
+            parsed = urlsplit(self._url)
+            self._url_scheme = parsed.scheme
+            self._url = parsed._replace(scheme="").geturl()
+            self._archive_url = (
+                urlsplit(urljoin(self._url, "./"))._replace(scheme=self._url_scheme).geturl()
+            )
         self._records = {}
         self._names = {}
         for (key, section), record in shards.iter_records_v3():
@@ -199,13 +210,14 @@ class ShardedRepoData:
                 if field == "indexed_timestamp" or value > 253_402_300_799:
                     value /= 1000
                 setattr(record, field, datetime.fromtimestamp(value, timezone.utc))
-        if filename.endswith(".whl"):
-            package_url = urljoin(self._url, raw["url"])
-        elif _ARCHIVE_BASENAME.fullmatch(filename):
+        if not filename.endswith(".whl") and _ARCHIVE_BASENAME.fullmatch(filename):
             # Ordinary archive names only need the already-resolved channel prefix.
             package_url = self._archive_url + filename
         else:
-            package_url = urljoin(self._url, filename)
+            package_url = urljoin(self._url, raw["url"] if filename.endswith(".whl") else filename)
+            if self._url_scheme:
+                parsed = urlsplit(package_url)
+                package_url = parsed._replace(scheme=parsed.scheme or self._url_scheme).geturl()
         return rattler.RepoDataRecord(record, filename, package_url, self._channel)
 
     def close(self) -> None:

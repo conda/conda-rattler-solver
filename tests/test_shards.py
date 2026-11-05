@@ -181,12 +181,12 @@ def test_authenticated_source_preserves_package_url():
         (
             URL + "?ignored=query",
             "example-1.0-0.conda",
-            "https://example.org/channel/example-1.0-0.conda",
+            URL + "/example-1.0-0.conda",
         ),
         (
             URL + "#ignored-fragment",
             "example-1.0-0.conda",
-            "https://example.org/channel/example-1.0-0.conda",
+            URL + "/example-1.0-0.conda",
         ),
         (URL, "example-1.0-0%20build.conda", URL + "/example-1.0-0%20build.conda"),
         (URL, "../example-1.0-0.conda", "https://example.org/channel/example-1.0-0.conda"),
@@ -195,6 +195,34 @@ def test_authenticated_source_preserves_package_url():
 def test_archive_url_resolution(url, filename, expected):
     source = shard_source([((filename, "packages.conda"), record())], url)
     assert source.load_all_records()[0].url == expected
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "s3://bucket/channel/linux-64",
+        URL + "?ignored=query",
+        URL + "#ignored-fragment",
+    ],
+)
+@pytest.mark.parametrize(
+    "section,key,metadata",
+    [
+        ("packages.conda", "example-1.0-0.conda", {}),
+        ("packages", "example-1.0-0.tar.bz2", {}),
+        ("v3.whl", "example-1.0-0", {"url": "../wheels/example.whl"}),
+        ("v3.whl", "example-1.0-0", {"url": "https://cdn.example.org/example.whl"}),
+        ("v3.whl", "example-1.0-0", {"url": "//other-bucket/wheels/example.whl"}),
+    ],
+)
+def test_custom_base_urls_match_sparse(tmp_path, url, section, key, metadata):
+    entries = [((key, section), record(**metadata))]
+    formats = rattler.PackageFormatSelection.PREFER_CONDA_WITH_WHL
+    with sparse_source(tmp_path, entries, url) as sparse:
+        expected = [(item.file_name, item.url) for item in sparse.load_all_records(formats)]
+    assert [
+        (item.file_name, item.url) for item in shard_source(entries, url).load_all_records(formats)
+    ] == expected
 
 
 @pytest.mark.parametrize("operation", ["name", "all", "matching"])
