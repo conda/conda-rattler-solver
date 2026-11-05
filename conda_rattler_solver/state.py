@@ -33,8 +33,9 @@ in addition the _input_ state, the Solver itself can store additional state
 in a separate helper: the ``SolverOutputState`` object. This is meant to help
 accumulate the following pieces of data:
 
-- ``specs``: a read-only view of the input state's merged ``MatchSpec`` objects.
-  Each solve attempt derives its requests from these inputs and the current conflicts.
+- ``specs``: a mapping of package names to its corresponding ``MatchSpec``
+  objects. These objects are passed to the actual Solver, hoping it will return
+  a solution.
 - ``records``: a mapping of package names to ``PackageRecord`` objects. It will
   end up containing the list of package records that will compose the final state
   of the prefix (the _solution_). Its default value is set to the currently installed
@@ -55,15 +56,15 @@ which will determine which ``specs`` are relaxed in the next attempt. Additional
 - ``neutered``: Pieces of history that were found to be conflicting in the future and
   were annotated as such to avoid falling in the same conflict again.
 
-The input views are shared across attempts. Results, conflicts, and history updates
-remain mutable in ``SolverOutputState``.
+The mappings stored in ``SolverOutputState`` are backed by ``TrackedMap`` objects,
+which allow to keep the reasons _why_ those specs or records were added to the mappings,
+as well as richer logging for each action.
 """
 # TODO: This module could be part of conda-core once if we refactor the classic logic
 
 from __future__ import annotations
 
 import logging
-from functools import cached_property
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -82,7 +83,7 @@ from conda.models.match_spec import MatchSpec
 from conda.models.prefix_graph import PrefixGraph
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable
     from os import PathLike
     from typing import Any
 
@@ -100,11 +101,6 @@ class SolverInputState:
     """
     Helper object to provide the input data needed to compute the state that will be
     exposed to the solver.
-
-    Input mappings and update policy are fixed during a solve. Their read-only views
-    are computed on first access and reused through conflict retries. Create a new
-    input state to observe changes to the prefix, pins, requests, or configuration.
-    Package records themselves are shared with PrefixData, not copied.
 
     Parameters
     ----------
@@ -222,25 +218,25 @@ class SolverInputState:
 
     # Prefix state pools
 
-    @cached_property
-    def installed(self) -> Mapping[str, PackageRecord]:
+    @property
+    def installed(self) -> dict[str, PackageRecord]:
         """
         This exposes the installed packages in the prefix. Note that a ``PackageRecord``
         can generate an equivalent ``MatchSpec`` object with ``.to_match_spec()``.
-        Records are sorted by name and captured on first access.
+        Records are toposorted.
         """
         return MappingProxyType(dict(sorted(self.prefix_data._prefix_records.items())))
 
-    @cached_property
-    def history(self) -> Mapping[str, MatchSpec]:
+    @property
+    def history(self) -> dict[str, MatchSpec]:
         """
         These are the specs that the user explicitly asked for in previous operations
         on the prefix. See :class:`History` for more details.
         """
         return MappingProxyType(self._history)
 
-    @cached_property
-    def pinned(self) -> Mapping[str, MatchSpec]:
+    @property
+    def pinned(self) -> dict[str, MatchSpec]:
         """
         These specs represent hard constrains on what package versions can be installed
         on the environment. The packages here returned don't need to be already installed.
@@ -251,8 +247,8 @@ class SolverInputState:
             return MappingProxyType({})
         return MappingProxyType(self._pinned)
 
-    @cached_property
-    def virtual(self) -> Mapping[str, PackageRecord]:
+    @property
+    def virtual(self) -> dict[str, MatchSpec]:
         """
         System properties exposed as virtual packages (e.g. ``__glibc=2.17``). These packages
         cannot be (un)installed, they only represent constrains for other packages. By convention,
@@ -260,8 +256,8 @@ class SolverInputState:
         """
         return MappingProxyType(dict(sorted(self._virtual.items())))
 
-    @cached_property
-    def aggressive_updates(self) -> Mapping[str, MatchSpec]:
+    @property
+    def aggressive_updates(self) -> dict[str, MatchSpec]:
         """
         Packages that the solver will always try to update. As such, they will never have an
         associated version or build constrain. Note that the packages here returned do not need to
@@ -269,8 +265,8 @@ class SolverInputState:
         """
         return MappingProxyType(self._aggressive_updates)
 
-    @cached_property
-    def always_update(self) -> Mapping[str, MatchSpec]:
+    @property
+    def always_update(self) -> dict[str, MatchSpec]:
         """
         Merged lists of packages that should always be updated, depending on the flags, including:
         - aggressive_updates
@@ -292,45 +288,20 @@ class SolverInputState:
                     pkgs.setdefault(pkg, MatchSpec(pkg))
         return MappingProxyType(pkgs)
 
-    @cached_property
-    def do_not_remove(self) -> Mapping[str, MatchSpec]:
+    @property
+    def do_not_remove(self) -> dict[str, MatchSpec]:
         """
         Packages that are protected by the solver so they are not accidentally removed. This list
         is not configurable, but hardcoded for legacy reasons.
         """
         return MappingProxyType(self._do_not_remove)
 
-    @cached_property
-    def requested(self) -> Mapping[str, MatchSpec]:
+    @property
+    def requested(self) -> dict[str, MatchSpec]:
         """
         Packages that the user has explicitly asked for in this operation.
         """
         return MappingProxyType(self._requested)
-
-    @cached_property
-    def specs(self) -> Mapping[str, MatchSpec]:
-        """Merge input specs once, preserving source precedence and strictness order.
-
-        This enumerates possible inputs, not the requests for an individual solve
-        attempt. Conflicts and other output state do not affect this mapping.
-        """
-        specs_by_strictness = {}
-        for group in (
-            "requested",
-            "pinned",
-            "history",
-            "aggressive_updates",
-        ):
-            for name, spec in sorted(
-                getattr(self, group).items(),
-                key=sort_by_spec_strictness,
-                reverse=True,
-            ):
-                specs_by_strictness.setdefault(name, spec)
-        for record_group in ("installed", "virtual"):
-            for name, record in getattr(self, record_group).items():
-                specs_by_strictness.setdefault(name, record.to_match_spec())
-        return MappingProxyType(specs_by_strictness)
 
     # Types of commands
 
@@ -364,7 +335,7 @@ class SolverInputState:
 
     # modifiers
 
-    @cached_property
+    @property
     def update_modifier(self) -> EnumAsBools:
         """
         Use attribute access to test whether the modifier is set to that value
@@ -377,7 +348,7 @@ class SolverInputState:
         """
         return EnumAsBools(self._update_modifier)
 
-    @cached_property
+    @property
     def deps_modifier(self) -> EnumAsBools:
         """
         Use attribute access to test whether the modifier is set to that value
@@ -522,9 +493,30 @@ class SolverOutputState:
         return IndexedSet(PrefixGraph(self.records.values()).graph)
 
     @property
-    def specs(self) -> Mapping[str, MatchSpec]:
-        """The input specs shared by all solve attempts for this input state."""
-        return self.solver_input_state.specs
+    def specs(self) -> dict[str, MatchSpec]:
+        """
+        Merge all possible sources of input package specs, sorted by their input category and
+        strictness. It's just meant to be an enumeration of all possible inputs, not a ready-to-use
+        list of specs for a solver.
+        """
+        sis = self.solver_input_state
+        specs_by_strictness = {}
+        for group in (
+            "requested",
+            "pinned",
+            "history",
+            "aggressive_updates",
+        ):
+            for name, spec in sorted(
+                getattr(sis, group).items(),
+                key=sort_by_spec_strictness,
+                reverse=True,
+            ):
+                specs_by_strictness.setdefault(name, spec)
+        for record_group in ("installed", "virtual"):
+            for name, record in getattr(sis, record_group).items():
+                specs_by_strictness.setdefault(name, record.to_match_spec())
+        return specs_by_strictness
 
     @property
     def real_specs(self) -> dict[str, MatchSpec]:
