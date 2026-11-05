@@ -23,7 +23,6 @@ from conda.core.package_cache_data import PackageCacheData
 from conda.core.subdir_data import SubdirData
 from conda.models.channel import Channel, MultiChannel
 
-from .shards import ShardedRepoData
 from .utils import empty_repodata_dict, rattler_record_to_conda_record
 
 if TYPE_CHECKING:
@@ -84,10 +83,10 @@ def _root_extras_kwargs(
 
 @dataclass
 class _ChannelRepoInfo:
-    """Channel metadata and a record source for solves."""
+    """Channel metadata and a record source for update solves."""
 
     channel: Channel | None
-    repo: rattler.SparseRepoData | ShardedRepoData
+    repo: rattler.SparseRepoData
     full_url: str
     noauth_url: str
     local_json: str | None
@@ -113,21 +112,12 @@ class _ChannelRepoInfo:
         """
         if str(platform) != self.repo.subdir:
             return []
-        shared = isinstance(self.repo, ShardedRepoData)
-        records = (
-            self.repo.records_for_solve(name, self.package_format)
-            if shared
-            else self.repo.load_records(name, self.package_format)
-        )
+        records = self.repo.load_records(name, self.package_format)
         installed = self.installed.get(name.normalized)
         if installed and not installed.is_unmanageable:
             version = rattler.Version(installed.version)
-            for i, record in enumerate(records):
+            for record in records:
                 if record.version == version and record.build_number < installed.build_number:
-                    if shared:
-                        record = records[i] = rattler.RepoDataRecord(
-                            record, record.file_name, record.url, record.channel
-                        )
                     # Keep the candidate visible to strict channel priority, but make
                     # its own build number incompatible with the installed build floor.
                     record.depends = [
@@ -187,10 +177,6 @@ class RattlerIndexHelper:
     @property
     def channels(self) -> list[Channel]:
         return [Channel(c) for c in self._channels]
-
-    @property
-    def uses_sparse_repodata(self) -> bool:
-        return all(isinstance(info.repo, rattler.SparseRepoData) for info in self._index.values())
 
     def reload_channel(self, channel: Channel) -> None:
         urls = {}
@@ -434,13 +420,25 @@ class RattlerIndexHelper:
     def _load_repo_info_from_shards(
         self, channel_data: dict[str, Shards]
     ) -> dict[str, _ChannelRepoInfo]:
-        """Keep the records returned by build_repodata_subset in memory."""
+        """Load the shard subset into native sparse repodata without a temporary file."""
         index = {}
         for url, shards in channel_data.items():
             channel = Channel.from_url(url)
-            noauth_url = channel.urls(with_credentials=False, subdirs=(channel.subdir,))[0]
+            subdir = channel.subdir
+            noauth_url = channel.urls(with_credentials=False, subdirs=(subdir,))[0]
+            repodata = empty_repodata_dict(subdir, base_url=url)
+            for (key, section), record in shards.iter_records_v3():
+                if section in ("packages", "packages.conda"):
+                    repodata[section][key] = record
+                elif section.startswith("v3."):
+                    repodata["v3"][section[3:]][key] = record
+            repo = rattler.SparseRepoData.from_bytes(
+                rattler.Channel(noauth_url.rsplit("/", 1)[0]),
+                subdir,
+                json_dump(repodata, indent=None, separators=(",", ":")).encode(),
+            )
             index[noauth_url] = _ChannelRepoInfo(
-                repo=ShardedRepoData(url, shards),
+                repo=repo,
                 channel=channel,
                 full_url=url,
                 noauth_url=noauth_url,

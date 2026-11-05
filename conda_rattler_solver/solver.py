@@ -382,15 +382,12 @@ class RattlerSolver(Solver):
             "strategy": "highest",
             "add_pip_as_python_dependency": context.add_pip_as_python_dependency,
         }
-        if in_state.is_updating or not index.uses_sparse_repodata:
-            # Shard records use the sources API. Updates also use it to apply build floors.
+        if in_state.is_updating:
             # MatchSpec fields are combined with AND, so a build-number constraint
             # would also reject newer versions whose build numbers start over at zero.
             # Reject only lower builds of the installed version as records are loaded.
             solve = rattler.solve
-            sources = index.solve_sources(
-                allow_build_downgrades=allow_build_downgrades or not in_state.is_updating
-            )
+            sources = index.solve_sources(allow_build_downgrades=allow_build_downgrades)
             solve_kwargs.update(sources=sources, platforms=index._subdirs)
         else:
             solve = rattler.solve_with_sparse_repodata

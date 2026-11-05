@@ -129,8 +129,8 @@ def test_temporary_repodata_preserves_metadata(temporary_repos):
 
 @pytest.mark.parametrize(
     "temporary_repos,sparse",
-    (("cache", True), ("cache", False), ("shards", False)),
-    ids=("cache-sparse", "cache-gateway", "shards-gateway"),
+    (("cache", True), ("cache", False), ("shards", True), ("shards", False)),
+    ids=("cache-sparse", "cache-gateway", "shards-sparse", "shards-gateway"),
     indirect=("temporary_repos",),
 )
 def test_temporary_repodata_solves_dependencies(temporary_repos, sparse):
@@ -158,7 +158,8 @@ def test_temporary_repodata_solves_dependencies(temporary_repos, sparse):
 
 
 @pytest.mark.parametrize("section", ("conda", "tar.bz2"))
-def test_temporary_repodata_preserves_v3_extras(section):
+@pytest.mark.parametrize("sparse", (True, False), ids=("sparse", "gateway"))
+def test_temporary_repodata_preserves_v3_extras(section, sparse):
     url = "https://example.invalid/channel/noarch"
     filename, app = _record("v3-app", subdir="noarch", extension=f".{section}")
     app["fn"] = filename
@@ -178,9 +179,18 @@ def test_temporary_repodata_preserves_v3_extras(section):
         info = next(iter(index._index.values()))
         (record,) = info.repo.load_records("v3-app")
         assert record.extra_depends == app["extra_depends"]
-        solution = asyncio.run(
-            rattler.solve(specs=["v3-app[extras=feature]"], sources=[info], platforms=["noarch"])
-        )
+        if sparse:
+            solution = asyncio.run(
+                rattler.solve_with_sparse_repodata(
+                    specs=["v3-app[extras=feature]"], sparse_repodata=[info.repo]
+                )
+            )
+        else:
+            solution = asyncio.run(
+                rattler.solve(
+                    specs=["v3-app[extras=feature]"], sources=[info], platforms=["noarch"]
+                )
+            )
         assert {record.name.normalized for record in solution} == {"v3-app", "optional"}
         solved_app = next(record for record in solution if record.name.normalized == "v3-app")
         assert solved_app.file_name == filename
@@ -231,21 +241,12 @@ def test_temporary_repodata_benchmark(
         else:
             repos = index._load_pkgs_cache((str(cache),))
         try:
-            if all(isinstance(info.repo, rattler.SparseRepoData) for info in repos):
-                solution = asyncio.run(
-                    rattler.solve_with_sparse_repodata(
-                        specs=[f"package-{record_count - 1}"],
-                        sparse_repodata=[info.repo for info in repos],
-                    )
+            solution = asyncio.run(
+                rattler.solve_with_sparse_repodata(
+                    specs=[f"package-{record_count - 1}"],
+                    sparse_repodata=[info.repo for info in repos],
                 )
-            else:
-                solution = asyncio.run(
-                    rattler.solve(
-                        specs=[f"package-{record_count - 1}"],
-                        sources=repos,
-                        platforms=["linux-64", "noarch"],
-                    )
-                )
+            )
             emitted_bytes = sum(
                 Path(info.local_json).stat().st_size for info in repos if info.local_json
             )

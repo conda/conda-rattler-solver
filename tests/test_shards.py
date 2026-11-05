@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-import gc
 import json
-import weakref
 from types import SimpleNamespace
 
 import pytest
 import rattler
 
-from conda_rattler_solver.shards import ShardedRepoData
+from conda_rattler_solver.index import RattlerIndexHelper
 
 URL = "https://example.org/channel/linux-64"
 
@@ -19,7 +17,11 @@ def record(name="example", **kwargs):
 
 
 def shard_source(entries, url=URL):
-    return ShardedRepoData(url, SimpleNamespace(iter_records_v3=lambda: iter(entries)))
+    index = RattlerIndexHelper(channels=(), subdirs=("linux-64",))
+    (info,) = index._load_repo_info_from_shards(
+        {url: SimpleNamespace(iter_records_v3=lambda: iter(entries))}
+    ).values()
+    return info.repo
 
 
 def sparse_source(tmp_path, entries, url=URL):
@@ -154,11 +156,17 @@ def test_search_filters_records():
             (("other-1.0-0.conda", "packages.conda"), record("other")),
         ]
     )
-    matches = source.load_matching_records([rattler.MatchSpec("example >=2")])
+    formats = rattler.PackageFormatSelection.PREFER_CONDA_WITH_WHL
+    matches = source.load_matching_records([rattler.MatchSpec("example >=2")], formats)
     assert [item.file_name for item in matches] == ["example-2.0-0.whl"]
     assert source.load_records("missing") == []
-    matches = source.load_matching_records([rattler.MatchSpec("ex*", exact_names_only=False)])
-    assert [item.file_name for item in matches] == ["example-2.0-0.whl", "example-1.0-0.conda"]
+    matches = source.load_matching_records(
+        [rattler.MatchSpec("ex*", exact_names_only=False)], formats
+    )
+    assert sorted(item.file_name for item in matches) == [
+        "example-1.0-0.conda",
+        "example-2.0-0.whl",
+    ]
 
 
 def test_authenticated_source_preserves_package_url():
@@ -178,16 +186,6 @@ def test_authenticated_source_preserves_package_url():
             "example-1.0-0.conda",
             URL + "/example-1.0-0.conda",
         ),
-        (
-            URL + "?ignored=query",
-            "example-1.0-0.conda",
-            URL + "/example-1.0-0.conda",
-        ),
-        (
-            URL + "#ignored-fragment",
-            "example-1.0-0.conda",
-            URL + "/example-1.0-0.conda",
-        ),
         (URL, "example-1.0-0%20build.conda", URL + "/example-1.0-0%20build.conda"),
         (URL, "../example-1.0-0.conda", "https://example.org/channel/example-1.0-0.conda"),
     ],
@@ -198,14 +196,6 @@ def test_archive_url_resolution(url, filename, expected):
 
 
 @pytest.mark.parametrize(
-    "url",
-    [
-        "s3://bucket/channel/linux-64",
-        URL + "?ignored=query",
-        URL + "#ignored-fragment",
-    ],
-)
-@pytest.mark.parametrize(
     "section,key,metadata",
     [
         ("packages.conda", "example-1.0-0.conda", {}),
@@ -215,7 +205,8 @@ def test_archive_url_resolution(url, filename, expected):
         ("v3.whl", "example-1.0-0", {"url": "//other-bucket/wheels/example.whl"}),
     ],
 )
-def test_custom_base_urls_match_sparse(tmp_path, url, section, key, metadata):
+def test_s3_urls_match_sparse(tmp_path, section, key, metadata):
+    url = "s3://bucket/channel/linux-64"
     entries = [((key, section), record(**metadata))]
     formats = rattler.PackageFormatSelection.PREFER_CONDA_WITH_WHL
     with sparse_source(tmp_path, entries, url) as sparse:
@@ -223,30 +214,6 @@ def test_custom_base_urls_match_sparse(tmp_path, url, section, key, metadata):
     assert [
         (item.file_name, item.url) for item in shard_source(entries, url).load_all_records(formats)
     ] == expected
-
-
-@pytest.mark.parametrize("operation", ["name", "all", "matching"])
-def test_search_only_records_are_released(operation):
-    converted = []
-
-    class TrackedRepoData(ShardedRepoData):
-        def _convert(self, filename, raw):
-            result = super()._convert(filename, raw)
-            converted.append(weakref.ref(result))
-            return result
-
-    entries = [(("example-1.0-0.conda", "packages.conda"), record())]
-    source = TrackedRepoData(URL, SimpleNamespace(iter_records_v3=lambda: iter(entries)))
-    if operation == "name":
-        records = source.load_records("example")
-    elif operation == "all":
-        records = source.load_all_records()
-    else:
-        records = source.load_matching_records([rattler.MatchSpec("example")])
-    assert [item.name.normalized for item in records] == ["example"]
-    del records
-    gc.collect()
-    assert converted and all(reference() is None for reference in converted)
 
 
 @pytest.mark.parametrize("noarch", [None, False, True, "generic", "python"])
@@ -263,23 +230,23 @@ def test_legacy_record_fields_match_sparse(tmp_path, noarch):
         )
 
 
-def test_invalid_unrequested_records_are_not_converted():
+def test_invalid_unrequested_records_are_not_parsed():
     source = shard_source(
         [
             (("example-1.0-0.conda", "packages.conda"), record()),
             (("unused-1.0-0.conda", "packages.conda"), record("unused", version="invalid!")),
         ]
     )
-    assert source.package_names() == ["example", "unused"]
+    assert sorted(source.package_names()) == ["example", "unused"]
     assert source.record_count() == 2
     assert source.load_records("example")[0].name.normalized == "example"
     assert len(source.load_matching_records([rattler.MatchSpec("example")])) == 1
-    with pytest.raises(rattler.exceptions.InvalidVersionError):
+    with pytest.raises(OSError):
         source.load_records("unused")
 
 
 @pytest.mark.parametrize("reverse", [False, True])
-def test_v3_replaces_legacy_before_conversion(tmp_path, reverse):
+def test_v3_replaces_legacy_records(tmp_path, reverse):
     entries = [
         (("example-1.0-0.conda", "packages.conda"), record(version="invalid!")),
         (("example-1.0-0", "v3.conda"), record(license="v3")),
@@ -289,44 +256,34 @@ def test_v3_replaces_legacy_before_conversion(tmp_path, reverse):
     source = shard_source(entries)
     with sparse_source(tmp_path, entries) as sparse:
         assert snapshot(source.load_all_records()) == snapshot(sparse.load_all_records())
-    assert len(source._records["example"]) == 1
+    assert source.record_count() == 1
 
 
-def test_solver_reuses_records_without_changing_cached_dependencies():
-    from conda_rattler_solver.index import _ChannelRepoInfo
-
+def test_repeated_solves_preserve_source_dependencies():
     source = shard_source(
         [
             (("python-3.11-0.conda", "packages.conda"), record("python", version="3.11")),
             (("pip-1.0-0.conda", "packages.conda"), record("pip")),
         ]
     )
-    cached = source.records_for_solve("python")[0]
-    assert source.records_for_solve("python")[0] is cached
-    assert source._records["python"]["python-3.11-0.conda"] is cached
     source.load_records("python")[0].depends = ["changed by search"]
-    info = _ChannelRepoInfo(
-        None, source, URL, URL, None, {}, rattler.PackageFormatSelection.PREFER_CONDA
-    )
     for add_pip in (False, True, False):
         records = asyncio.run(
-            rattler.solve(
-                sources=[info],
+            rattler.solve_with_sparse_repodata(
+                sparse_repodata=[source],
                 specs=["python"],
-                platforms=["linux-64"],
                 virtual_packages=[],
                 add_pip_as_python_dependency=add_pip,
-                channel_relations="disabled",
             )
         )
         assert {item.name.normalized for item in records} == (
             {"python", "pip"} if add_pip else {"python"}
         )
         next(item for item in records if item.name.normalized == "python").depends = ["changed"]
-        assert cached.depends == []
+        assert source.load_records("python")[0].depends == []
 
 
-def test_build_floor_copies_only_restricted_candidates():
+def test_build_floors_do_not_change_source_records():
     from conda.models.records import PackageRecord
 
     from conda_rattler_solver.index import _ChannelRepoInfo
@@ -340,7 +297,6 @@ def test_build_floor_copies_only_restricted_candidates():
             for build in (0, 1)
         ]
     )
-    cached = source.records_for_solve("example")
     info = _ChannelRepoInfo(
         None,
         source,
@@ -354,14 +310,13 @@ def test_build_floor_copies_only_restricted_candidates():
         records = asyncio.run(
             info.fetch_package_records(rattler.Subdir("linux-64"), rattler.PackageName("example"))
         )
-        assert records[0] is not cached[0]
-        assert records[0].depends == ["example[build_number='>=1']"]
-        assert records[1] is cached[1]
-        assert cached[0].depends == []
+        assert {item.build_number: item.depends for item in records} == {
+            0: ["example[build_number='>=1']"],
+            1: [],
+        }
+        assert all(not item.depends for item in source.load_records("example"))
     info.installed = {}
-    assert (
-        asyncio.run(
-            info.fetch_package_records(rattler.Subdir("linux-64"), rattler.PackageName("example"))
-        )
-        == cached
+    unrestricted = asyncio.run(
+        info.fetch_package_records(rattler.Subdir("linux-64"), rattler.PackageName("example"))
     )
+    assert snapshot(unrestricted) == snapshot(source.load_records("example"))

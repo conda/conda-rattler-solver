@@ -97,23 +97,14 @@ def test_sharded_solve_benchmark(
         nonlocal index
         if phase == "fresh":
             index = _load_shards(data)
-        # The fallback also lets this benchmark run against main's sparse loader.
-        if getattr(index, "uses_sparse_repodata", True):
-            solve = rattler.solve_with_sparse_repodata(
+        return asyncio.run(
+            rattler.solve_with_sparse_repodata(
                 specs=specs,
                 sparse_repodata=index.solve_sources(sparse=True),
                 package_format_selection=index._package_format,
                 virtual_packages=[],
             )
-        else:
-            solve = rattler.solve(
-                specs=specs,
-                sources=index.solve_sources(),
-                platforms=index._subdirs,
-                virtual_packages=[],
-                channel_relations="disabled",
-            )
-        return asyncio.run(solve)
+        )
 
     def cleanup():
         nonlocal index
