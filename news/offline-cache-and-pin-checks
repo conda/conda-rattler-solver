@@ -4,4 +4,4 @@
 
 ### Enhancements
 
-* Skip empty package-cache repositories and avoid repeating pin compatibility checks before solving.
+* Skip empty package-cache repositories and validate pin compatibility once per solve, including update fallbacks.

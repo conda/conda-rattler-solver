@@ -122,13 +122,28 @@ def _make_cache_record(cache: Path, name: str, subdir: str, version: str = "1.0"
     ],
 )
 def test_package_cache_sources(
-    tmp_path: Path, sparse: bool, subdirs, cached, requested, expected_subdirs
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    sparse: bool,
+    subdirs,
+    cached,
+    requested,
+    expected_subdirs,
 ):
     cache = tmp_path / "pkgs"
     cache.mkdir()
     for name, subdir in cached:
         _make_cache_record(cache, name, subdir)
     index = RattlerIndexHelper(channels=(), subdirs=subdirs, pkgs_dirs=(str(cache),))
+    lookups = []
+    get_info = index.get_info
+
+    def track_get_info(key, subdir=None):
+        info = get_info(key) if subdir is None else get_info(key, subdir=subdir)
+        lookups.append((subdir, info.repo.subdir))
+        return info
+
+    monkeypatch.setattr(index, "get_info", track_get_info)
 
     assert tuple(info.repo.subdir for info in index.solve_sources()) == expected_subdirs
     assert len(index._unlink_on_del) == len(expected_subdirs)
@@ -143,12 +158,54 @@ def test_package_cache_sources(
         solved = asyncio.run(rattler.solve(specs=requested, sources=sources, platforms=subdirs))
     assert {record.name.normalized for record in solved} == set(requested)
     for record in solved:
+        lookups.clear()
         exported = rattler_record_to_conda_record(record, index=index)
+        assert lookups == [(record.subdir, record.subdir)]
         assert exported.url == f"{cache.as_uri()}/{record.file_name}"
         assert exported.channel == Channel(str(cache))
         info = index.get_info(record.url.rsplit("/", 1)[0], subdir=record.subdir)
         assert info.repo.subdir == record.subdir
         assert info.channel == Channel(str(cache))
+
+
+@pytest.mark.parametrize(
+    "subdirs,cached,missing_subdir,fallback_subdir",
+    [
+        pytest.param(
+            ("linux-64", "noarch"),
+            (("native", "linux-64"), ("portable", "noarch")),
+            "osx-64",
+            "linux-64",
+            id="native-first",
+        ),
+        pytest.param(
+            ("noarch", "linux-64"),
+            (("native", "linux-64"), ("portable", "noarch")),
+            "osx-64",
+            "noarch",
+            id="noarch-first",
+        ),
+        pytest.param(
+            ("linux-64", "noarch"),
+            (("portable", "noarch"),),
+            "linux-64",
+            "noarch",
+            id="native-not-cached",
+        ),
+    ],
+)
+def test_package_cache_lookup_requires_requested_subdir(
+    tmp_path: Path, subdirs, cached, missing_subdir, fallback_subdir
+):
+    cache = tmp_path / "pkgs"
+    for name, subdir in cached:
+        _make_cache_record(cache, name, subdir)
+    index = RattlerIndexHelper(channels=(), subdirs=subdirs, pkgs_dirs=(str(cache),))
+
+    assert index.get_info(cache.as_uri()).repo.subdir == fallback_subdir
+    assert index.get_info(cache.as_uri(), subdir=None).repo.subdir == fallback_subdir
+    with pytest.raises(KeyError):
+        index.get_info(cache.as_uri(), subdir=missing_subdir)
 
 
 @pytest.mark.parametrize("sparse", [True, False], ids=["sparse", "gateway"])

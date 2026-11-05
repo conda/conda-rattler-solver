@@ -1081,7 +1081,7 @@ def test_pinned_with_cli_build_string(tmp_env: TmpEnvFixture) -> None:
     ],
     ids=("compatible", "conflicting", "missing-candidate"),
 )
-def test_pin_validation_runs_once(
+def test_pin_validation_runs_once_per_solve(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
     pin: str,
@@ -1122,8 +1122,15 @@ def test_pin_validation_runs_once(
         assert exc.value.allow_retry is False
     assert validations == 1
 
+    if expected_error is None:
+        (metadata / "pinned").write_text("demo >=3\n")
+        with pytest.raises(PackagesNotFoundError) as exc:
+            solver.solve_final_state()
+        assert exc.value.allow_retry is False
+        assert validations == 2
 
-def test_update_build_downgrade_fallback_validates_pins(
+
+def test_update_build_downgrade_fallback_does_not_revalidate_pins(
     tmp_path: Path,
     tmp_env: TmpEnvFixture,
     monkeypatch: MonkeyPatch,
@@ -1161,7 +1168,7 @@ def test_update_build_downgrade_fallback_validates_pins(
             ("dep", "1.0", 0),
             ("app", "2.0", 0),
         ]
-        assert validations == 2
+        assert validations == 1
 
 
 def test_constraining_pin_and_requested():

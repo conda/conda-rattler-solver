@@ -155,6 +155,7 @@ class RattlerSolver(Solver):
             )
 
         with get_spinner(self._solving_loop_spinner_message()):
+            out_state.check_for_pin_conflicts(index)
             # This function will copy and mutate `out_state`
             # Make sure we get the latest copy to return the correct solution below
             try:
@@ -164,6 +165,7 @@ class RattlerSolver(Solver):
                     raise
                 # Keep build floors throughout the normal conflict retries. Only
                 # an otherwise unsatisfiable update may lower dependency builds.
+                # The fallback reuses the input state, whose pins are already validated.
                 out_state = self._solving_loop(
                     in_state,
                     SolverOutputState(solver_input_state=in_state),
@@ -294,7 +296,6 @@ class RattlerSolver(Solver):
         allow_build_downgrades: bool = False,
     ) -> SolverOutputState:
         solution = None
-        out_state.check_for_pin_conflicts(index)
         if n_installed := len(in_state.installed):
             max_attempts = min(n_installed, self.MAX_SOLVER_ATTEMPTS_CAP)
         else:
