@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-    from pytest import MonkeyPatch
+    from pytest import FixtureRequest, MonkeyPatch
     from pytest_benchmark.fixture import BenchmarkFixture
 
 
@@ -58,6 +58,7 @@ def state_benchmark_prefix(tmp_path: Path, monkeypatch: MonkeyPatch) -> Iterator
 @pytest.mark.parametrize("collection", ("first", "retry"))
 def test_state_spec_collection_benchmark(
     benchmark: BenchmarkFixture,
+    request: FixtureRequest,
     state_benchmark_prefix: Path,
     package_count: int,
     collection: str,
@@ -97,7 +98,7 @@ def test_state_spec_collection_benchmark(
     collected = benchmark.pedantic(
         first if collection == "first" else collect,
         setup=prepare_retry if collection == "retry" else None,
-        rounds=5,
+        rounds=request.config.getoption("benchmark_min_rounds"),
         iterations=1,
         warmup_rounds=1,
     )
@@ -113,6 +114,7 @@ def test_state_spec_collection_benchmark(
 @pytest.mark.benchmark
 def test_state_update_fallback_benchmark(
     benchmark: BenchmarkFixture,
+    request: FixtureRequest,
     state_benchmark_prefix: Path,
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -205,7 +207,11 @@ def test_state_update_fallback_benchmark(
         return solver.solve_for_diff(update_modifier=UpdateModifier.UPDATE_SPECS)
 
     unlink, link = benchmark.pedantic(
-        solve, setup=prepare, rounds=5, iterations=1, warmup_rounds=1
+        solve,
+        setup=prepare,
+        rounds=request.config.getoption("benchmark_min_rounds"),
+        iterations=1,
+        warmup_rounds=1,
     )
 
     assert len(attempts) == 3

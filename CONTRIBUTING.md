@@ -107,6 +107,8 @@ construction, and repeated collection with a rebuilt output state at 100, 563
 and 1,000 installed packages. It also measures a complete 563-package update
 fallback that needs three actual Rattler attempts. Prefix and channel fixtures
 are created outside the timed operations. Select these cases with `-k state_`.
+They take five measured rounds by default. Use `--benchmark-min-rounds=25` to
+increase sampling while keeping the existing setup and timed work.
 See [Input-state reuse](./docs/dev/benchmarks.md#input-state-reuse) for timing and
 memory interpretation.
 
@@ -114,17 +116,70 @@ memory interpretation.
 
 The [Benchmarks workflow](https://github.com/conda/conda-rattler-solver/actions/workflows/benchmarks.yml)
 runs on pushes to `main` and pull requests targeting `main`, and can also be run
-manually. It uses Ubuntu 22.04, Python 3.13 and the Pixi lockfile. Its
-`benchmark-results` artifact contains the JSON measurements and is retained for seven days.
+manually. It uses Ubuntu 24.04, Python 3.13 and the Pixi lockfile. Both revisions
+share the same checked-out conda test data. Its `benchmark-results-v3` artifact
+contains the JSON measurements, workflow event, dependency list, and runner
+diagnostics, retained for seven days.
 
 The [Track Benchmarks workflow](https://github.com/conda/conda-rattler-solver/actions/workflows/bencher.yml)
-uploads successful runs to the
+uses the shared Bencher reporting action in
+[`conda/actions`](https://github.com/conda/actions) to upload available results to the
 [Bencher project](https://bencher.dev/perf/conda-rattler-solver).
-Select `main` for the baseline or `pr-<number>` for a pull request.
-Manual runs are uploaded only when run from `main`.
+Select `main` for historical results. Manual runs keep downloadable artifacts
+but do not upload to Bencher because the shared reporter accepts push and
+pull-request events only.
 
-PR reports compare against the base branch's results. The latency threshold uses
-a t-test with an upper threshold of `0.99` and at most 64 historical samples.
-A first baseline run records measurements before comparisons can begin.
-Detected regressions fail the reporting workflow and generate PR feedback.
-Inspect the affected benchmark and its history before changing a threshold.
+PR measurements use the exact base and head commits on the same runner with
+`PYTHONHASHSEED=0`, the head revision's resolved dependencies, benchmark tests,
+and fixtures. Running both revisions roughly doubles the benchmark execution time.
+The full suite chooses which revision runs first using a recorded random seed.
+This removes the fixed base-first order across runs, but each comparison can still
+be affected by shared filesystem, package and network caches. Both results must
+contain the same benchmark names. If the base revision cannot run the complete
+head benchmark suite, the head results remain available and the
+`Benchmark comparison` check is neutral.
+
+The reporting workflow creates a separate baseline for each PR workflow run and
+attempt. Select `pr-<number>` for its comparison. This baseline never replaces the
+`main` history. PR alerts use Bencher's percentage test with one baseline
+measurement and an initial 25% slowdown tolerance, following the
+[relative benchmarking example](https://bencher.dev/docs/how-to/track-benchmarks/#relative-continuous-benchmarking).
+This is a starting tolerance for noisy shared runners, to adjust using observed
+variation. A green result does not rule out smaller regressions.
+
+Non-PR runs preserve the branch's history and use a t-test at `0.99`, with at least
+10 and at most 64 historical measurements. The `0.99` value is a statistical
+prediction level, not a 1% slowdown allowance. A new benchmark or testbed may have
+too little history to produce an alert. Missing comparison warnings remain visible.
+
+Testbeds include the producer's Ubuntu version, architecture, Python major/minor
+version, and CPU model. Ubuntu 24.04 measurements start separate histories from
+Ubuntu 22.04. Runner image versions are recorded in `runner_metadata.json` and
+`bencher noise` diagnostics in `noise.txt`, alongside the raw results. Noise
+measurements are diagnostic only and do not change timings or alert thresholds.
+
+The same CPU model can still have different contention, cache state, or frequency.
+Dependencies can change between workflow runs even though each base/head pair
+shares an environment. Inspect the measurements and runner diagnostics before
+changing a threshold. Give benchmarks new names when their timed work or fixtures
+change so historical comparisons do not combine different workloads.
+
+The versioned artifact name prevents the older reporting workflow from treating
+Ubuntu 24.04 measurements as Ubuntu 22.04 results while this change is in review.
+
+### Repeated state comparisons
+
+PRs also run the seven fixed-data state benchmarks in a separate job. After a
+warmup of each revision, ten blocks of four processes randomly use
+base–head–head–base or the reverse order. Each fresh process takes 25 measured
+rounds per benchmark.
+
+The job summary reports a median ratio and an exact confidence interval, adjusted
+across the seven cases. A slowdown is classified only when the whole interval exceeds
+a 2% slowdown. Wide intervals remain inconclusive. Timing results are advisory
+and never fail the job. Invalid or failed measurements still fail. Small-change detection still needs calibration on the CI runners.
+
+Raw results, execution order and dependencies are retained in
+`focused-benchmark-results-v1`. See
+[Repeated state comparisons](./docs/dev/benchmarks.md#repeated-state-comparisons)
+for the calculation, cache handling and interpretation.
