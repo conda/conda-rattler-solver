@@ -132,7 +132,7 @@ def rattler_record_to_conda_record(
         # identifies the source channel.
         for key in (str(record.url).rsplit("/", 1)[0], str(record.channel)):
             with suppress(KeyError):
-                info = index.get_info(key)
+                info = index.get_info(key, subdir=record.subdir or None)
                 break
     if info is not None:
         conda_record.channel = info.channel

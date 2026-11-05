@@ -26,6 +26,28 @@ To select a smaller group, append a pytest filter such as `-k query_search`.
 Compare local timings on the same machine with the same environment and cache
 state.
 
+## Solver overhead workloads
+
+The [solver overhead benchmarks](https://github.com/conda/conda-rattler-solver/blob/main/tests/test_solver_overhead_benchmarks.py)
+use synthetic local channels. Run them with:
+
+```shell
+pixi run --locked -e test-py313 benchmark -k 'pinned_request or empty_package_cache'
+```
+
+Use `-k pinned_request` or `-k empty_package_cache` to select one workload:
+
+- The pinned-request benchmark has 10 package names with 200 candidate builds
+  each. Pins exclude the newest version. It times `solve_final_state()`, including
+  metadata loading and pin validation. Channel and prefix creation, plus solver
+  construction, happen before timing starts.
+- The empty-cache benchmark requests 100 or 563 packages. It times index
+  construction and a Rattler solve, including package-cache source callbacks.
+  Channel creation and request-spec construction happen before timing starts.
+
+Both workloads clear conda's in-memory metadata and package-cache objects before
+each round, outside the timed operation. Filesystem caches are left intact.
+
 ## Add benchmarks
 
 Add tests marked with `@pytest.mark.benchmark` and time the operation with the

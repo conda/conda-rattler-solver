@@ -160,11 +160,14 @@ class RattlerIndexHelper:
         self._channel_urls = tuple(
             fetch_url for _, member_urls in self._plan for fetch_url in member_urls.values()
         )
-        self._index: dict[str, _ChannelRepoInfo] = {}
+        self._index: dict[str | tuple[str, str], _ChannelRepoInfo] = {}
         self._index.update(self._load_channels(self._channel_urls))
         if pkgs_dirs:
             self._index.update(
-                {info.noauth_url: info for info in self._load_pkgs_cache(pkgs_dirs)}
+                {
+                    (info.noauth_url, info.repo.subdir): info
+                    for info in self._load_pkgs_cache(pkgs_dirs)
+                }
             )
 
     @classmethod
@@ -241,13 +244,33 @@ class RattlerIndexHelper:
                 count += info.repo.record_count(self._package_format)
         return count
 
-    def get_info(self, key: str) -> _ChannelRepoInfo:
+    def get_info(self, key: str, subdir: str | None = None) -> _ChannelRepoInfo:
+        """
+        Return the repository information for a channel or package-cache URL.
+
+        Package caches keep one entry per subdir because native and ``noarch``
+        records share a download directory. Pass ``subdir`` to select the exact
+        source when the URL alone is ambiguous.
+        """
         if not key.startswith("file://"):
             # The conda functions (specifically remove_auth) assume the input
             # is a url; a file uri on windows with a drive letter messes them up.
             # For the rest, we remove all forms of authentication
             key = split_anaconda_token(remove_auth(key))[0]
-        return self._index[key]
+        if subdir is not None:
+            if info := self._index.get((key, subdir)):
+                return info
+            # A requested subdir rules out the other cache entries, leaving only
+            # a channel entry as a possible match.
+            return self._index[key]
+        try:
+            return self._index[key]
+        except KeyError:
+            # Cache subdirs share a download directory, but have distinct index keys.
+            for candidate in self._subdirs:
+                if info := self._index.get((key, candidate)):
+                    return info
+            raise
 
     def _fetch_channel(self, url: str) -> tuple[str, os.PathLike]:
         channel = Channel.from_url(url)
@@ -470,13 +493,14 @@ class RattlerIndexHelper:
 
     def _load_pkgs_cache(self, pkgs_dirs: PathsType) -> list[_ChannelRepoInfo]:
         repos = []
-        subdir = next(s for s in self._subdirs if s != "noarch")
         for path in pkgs_dirs:
             path_as_url = path_to_url(path)
             package_cache_data = PackageCacheData(path)
             package_cache_data.load()
-            arch = empty_repodata_dict(subdir, base_url=path_as_url)
-            noarch = empty_repodata_dict("noarch", base_url=path_as_url)
+            repodata_by_subdir = {
+                subdir: empty_repodata_dict(subdir, base_url=path_as_url)
+                for subdir in dict.fromkeys(("noarch", *self._subdirs))
+            }
             for record in package_cache_data.values():
                 record: PackageCacheRecord
                 if record.subdir not in self._subdirs:
@@ -498,11 +522,10 @@ class RattlerIndexHelper:
                     if value is not None:
                         record_data[field] = value
                 key = "packages" if record.fn.endswith(".tar.bz2") else "packages.conda"
-                if record.noarch:
-                    noarch[key][record.fn] = record_data
-                else:
-                    arch[key][record.fn] = record_data
-            for subdir_name, repodata in (("noarch", noarch), (subdir, arch)):
+                repodata_by_subdir[record.subdir][key][record.fn] = record_data
+            for subdir_name, repodata in repodata_by_subdir.items():
+                if not repodata["packages"] and not repodata["packages.conda"]:
+                    continue
                 with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
                     f.write(json_dump(repodata))
                 repos.append(
@@ -524,7 +547,9 @@ class RattlerIndexHelper:
         return repos
 
     def _search(
-        self, spec: rattler.MatchSpec, index: dict[str, _ChannelRepoInfo]
+        self,
+        spec: rattler.MatchSpec,
+        index: dict[str | tuple[str, str], _ChannelRepoInfo],
     ) -> Iterable[PackageRecord]:
         """
         Search for packages matching the given spec in the index. This function does not
