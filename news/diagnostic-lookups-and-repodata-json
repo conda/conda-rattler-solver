@@ -1,4 +1,0 @@
-### Enhancements
-
-* Use exact package names to look up installed records when interpreting solver errors, while preserving wildcard matching.
-* Write compact JSON for temporary repodata built from shards and the package cache.
