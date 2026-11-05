@@ -17,15 +17,11 @@ import rattler
 from conda.base.constants import REPODATA_FN
 from conda.base.context import context
 from conda.common.io import DummyExecutor, ThreadLimitedThreadPoolExecutor
+from conda.common.serialize.json import dumps as json_dump
 from conda.common.url import path_to_url, remove_auth, split_anaconda_token
 from conda.core.package_cache_data import PackageCacheData
 from conda.core.subdir_data import SubdirData
 from conda.models.channel import Channel, MultiChannel
-
-try:
-    from conda.common.serialize.json import dumps as json_dump
-except ImportError:
-    from conda.common.serialize import json_dump
 
 from .utils import empty_repodata_dict, rattler_record_to_conda_record
 
@@ -436,7 +432,7 @@ class RattlerIndexHelper:
                     list(repodata["packages"])[:3] + list(repodata["packages.conda"])[:3],
                 )
             with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
-                f.write(json_dump(repodata))
+                f.write(json_dump(repodata, indent=None, separators=(",", ":")))
             self._unlink_on_del.append(Path(f.name))
             info = self._json_path_to_repo_info(url, f.name)
             index[info.noauth_url] = info
@@ -504,7 +500,7 @@ class RattlerIndexHelper:
                     arch[key][record.fn] = record_data
             for subdir_name, repodata in (("noarch", noarch), (subdir, arch)):
                 with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
-                    f.write(json_dump(repodata))
+                    f.write(json_dump(repodata, indent=None, separators=(",", ":")))
                 repos.append(
                     _ChannelRepoInfo(
                         repo=rattler.SparseRepoData(
