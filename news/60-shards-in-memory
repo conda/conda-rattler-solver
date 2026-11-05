@@ -1,0 +1,11 @@
+### Enhancements
+
+* Load shard records directly into rattler without writing temporary repodata JSON files. (#60)
+
+### Bug fixes
+
+### Deprecations
+
+### Docs
+
+### Other

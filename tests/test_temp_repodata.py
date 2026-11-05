@@ -100,28 +100,39 @@ def temporary_repos(request, tmp_path):
         index.__del__()
 
 
+@pytest.mark.parametrize("temporary_repos", ("cache",), indirect=True)
 def test_temporary_repodata_is_compact(temporary_repos):
     repos, _ = temporary_repos
     for info in repos:
         text = Path(info.local_json).read_text()
+        assert json.loads(text)["info"]["subdir"] == info.repo.subdir
         assert "\n" not in text
         assert len(text) < len(json_dump(json.loads(text)))
 
 
 def test_temporary_repodata_preserves_metadata(temporary_repos):
     repos, records = temporary_repos
-    written = {}
+    loaded = {}
     for info in repos:
-        repodata = json.loads(Path(info.local_json).read_text())
-        assert repodata["info"]["subdir"] == info.repo.subdir
-        written.update(repodata["packages"])
-        written.update(repodata["packages.conda"])
-    assert set(written) == {filename for filename, _ in records}
+        for record in info.repo.load_all_records():
+            assert record.subdir == info.repo.subdir
+            data = json.loads(record.to_json())
+            if "noarch" in data:
+                data["noarch"] = "python" if record.noarch.python else "generic"
+            if "timestamp" in data:
+                data["timestamp"] = int(record.timestamp.timestamp() * 1000)
+            loaded[record.file_name] = data
+    assert set(loaded) == {filename for filename, _ in records}
     for filename, expected in records:
-        assert {key: written[filename][key] for key in expected} == expected
+        assert {key: loaded[filename][key] for key in expected} == expected
 
 
-@pytest.mark.parametrize("sparse", (True, False), ids=("sparse", "gateway"))
+@pytest.mark.parametrize(
+    "temporary_repos,sparse",
+    (("cache", True), ("cache", False), ("shards", True), ("shards", False)),
+    ids=("cache-sparse", "cache-gateway", "shards-sparse", "shards-gateway"),
+    indirect=("temporary_repos",),
+)
 def test_temporary_repodata_solves_dependencies(temporary_repos, sparse):
     repos, _ = temporary_repos
     if sparse:
@@ -155,7 +166,7 @@ def test_temporary_repodata_preserves_v3_extras(section, sparse):
     app["extra_depends"] = {"feature": ["optional >=2"]}
     dependency_filename, dependency = _record("optional", "2.0", "noarch")
     repodata = empty_repodata_dict("noarch", base_url=url)
-    repodata["v3"][section][filename] = app
+    repodata["v3"][section][filename.removesuffix(f".{section}")] = app
     repodata["packages.conda"][dependency_filename] = dependency
     shards = ShardLike(repodata, url)
     if "v3-app" not in shards.shards:
@@ -166,8 +177,8 @@ def test_temporary_repodata_preserves_v3_extras(section, sparse):
     index._index.update(index._load_repo_info_from_shards({url: shards}))
     try:
         info = next(iter(index._index.values()))
-        written = json.loads(Path(info.local_json).read_text())
-        assert written["v3"][section] == {filename: app}
+        (record,) = info.repo.load_records("v3-app")
+        assert record.extra_depends == app["extra_depends"]
         if sparse:
             solution = asyncio.run(
                 rattler.solve_with_sparse_repodata(
@@ -181,6 +192,9 @@ def test_temporary_repodata_preserves_v3_extras(section, sparse):
                 )
             )
         assert {record.name.normalized for record in solution} == {"v3-app", "optional"}
+        solved_app = next(record for record in solution if record.name.normalized == "v3-app")
+        assert solved_app.file_name == filename
+        assert solved_app.url == f"{url}/{filename}"
     finally:
         index.__del__()
 
@@ -195,10 +209,10 @@ def test_temporary_repodata_benchmark(
     source: str,
     record_count: int,
 ):
-    """Write temporary repodata, parse it, and solve with the resulting sources.
+    """Load shard or cache records and solve with the resulting sources.
 
     Shards and cache records are already in memory. Cache-directory scanning is
-    excluded so both cases measure repodata generation and consumption.
+    excluded so both cases measure record loading and solving.
     """
     records = tuple(
         _record(f"package-{i}", depends=("package-0",) if i else ()) for i in range(record_count)
@@ -233,7 +247,9 @@ def test_temporary_repodata_benchmark(
                     sparse_repodata=[info.repo for info in repos],
                 )
             )
-            emitted_bytes = sum(Path(info.local_json).stat().st_size for info in repos)
+            emitted_bytes = sum(
+                Path(info.local_json).stat().st_size for info in repos if info.local_json
+            )
             return solution, emitted_bytes
         finally:
             for info in repos:
@@ -242,6 +258,10 @@ def test_temporary_repodata_benchmark(
 
     solution, emitted_bytes = benchmark.pedantic(run, rounds=7, warmup_rounds=2, iterations=1)
     benchmark.extra_info.update(record_count=record_count, emitted_bytes=emitted_bytes)
+    if source == "shards":
+        assert emitted_bytes == 0
+    else:
+        assert emitted_bytes > 0
     assert {record.name.normalized for record in solution} == {
         "package-0",
         f"package-{record_count - 1}",
