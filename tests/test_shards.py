@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from types import SimpleNamespace
 
@@ -72,6 +73,11 @@ def test_format_selection_matches_sparse(tmp_path, package_format):
         assert snapshot(source.load_records(rattler.PackageName("example"), package_format)) == (
             snapshot(sparse.load_records("example", package_format))
         )
+        # Converting one archive format must not discard the other formats.
+        for other_format in rattler.PackageFormatSelection:
+            assert snapshot(source.load_all_records(other_format)) == snapshot(
+                sparse.load_all_records(other_format)
+            )
 
 
 @pytest.mark.parametrize("timestamp", [0, 1_640_000_000, 1_640_000_000_123])
@@ -188,3 +194,92 @@ def test_invalid_unrequested_records_are_not_converted():
     assert len(source.load_matching_records([rattler.MatchSpec("example")])) == 1
     with pytest.raises(rattler.exceptions.InvalidVersionError):
         source.load_records("unused")
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_v3_replaces_legacy_before_conversion(tmp_path, reverse):
+    entries = [
+        (("example-1.0-0.conda", "packages.conda"), record(version="invalid!")),
+        (("example-1.0-0", "v3.conda"), record(license="v3")),
+    ]
+    if reverse:
+        entries.reverse()
+    source = shard_source(entries)
+    with sparse_source(tmp_path, entries) as sparse:
+        assert snapshot(source.load_all_records()) == snapshot(sparse.load_all_records())
+    assert len(source._records["example"]) == 1
+
+
+def test_solver_reuses_records_without_changing_cached_dependencies():
+    from conda_rattler_solver.index import _ChannelRepoInfo
+
+    source = shard_source(
+        [
+            (("python-3.11-0.conda", "packages.conda"), record("python", version="3.11")),
+            (("pip-1.0-0.conda", "packages.conda"), record("pip")),
+        ]
+    )
+    cached = source.records_for_solve("python")[0]
+    assert source.records_for_solve("python")[0] is cached
+    assert source._records["python"]["python-3.11-0.conda"] is cached
+    source.load_records("python")[0].depends = ["changed by search"]
+    info = _ChannelRepoInfo(
+        None, source, URL, URL, None, {}, rattler.PackageFormatSelection.PREFER_CONDA
+    )
+    for add_pip in (False, True, False):
+        records = asyncio.run(
+            rattler.solve(
+                sources=[info],
+                specs=["python"],
+                platforms=["linux-64"],
+                virtual_packages=[],
+                add_pip_as_python_dependency=add_pip,
+                channel_relations="disabled",
+            )
+        )
+        assert {item.name.normalized for item in records} == (
+            {"python", "pip"} if add_pip else {"python"}
+        )
+        next(item for item in records if item.name.normalized == "python").depends = ["changed"]
+        assert cached.depends == []
+
+
+def test_build_floor_copies_only_restricted_candidates():
+    from conda.models.records import PackageRecord
+
+    from conda_rattler_solver.index import _ChannelRepoInfo
+
+    source = shard_source(
+        [
+            (
+                (f"example-1.0-{build}.conda", "packages.conda"),
+                record(build=str(build), build_number=build),
+            )
+            for build in (0, 1)
+        ]
+    )
+    cached = source.records_for_solve("example")
+    info = _ChannelRepoInfo(
+        None,
+        source,
+        URL,
+        URL,
+        None,
+        {"example": PackageRecord(name="example", version="1.0", build="1", build_number=1)},
+        rattler.PackageFormatSelection.PREFER_CONDA,
+    )
+    for _ in range(2):
+        records = asyncio.run(
+            info.fetch_package_records(rattler.Subdir("linux-64"), rattler.PackageName("example"))
+        )
+        assert records[0] is not cached[0]
+        assert records[0].depends == ["example[build_number='>=1']"]
+        assert records[1] is cached[1]
+        assert cached[0].depends == []
+    info.installed = {}
+    assert (
+        asyncio.run(
+            info.fetch_package_records(rattler.Subdir("linux-64"), rattler.PackageName("example"))
+        )
+        == cached
+    )

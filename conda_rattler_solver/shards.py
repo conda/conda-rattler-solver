@@ -33,13 +33,18 @@ class ShardedRepoData:
         self._channel = noauth_url.rsplit("/", 1)[0] + "/"
         self._url = url.rstrip("/") + "/"
         self._records = {}
-        self._converted = {}
+        self._names = {}
         for (key, section), record in shards.iter_records_v3():
             if section not in _FORMATS:
                 continue
             stem = key if section.startswith("v3.") else key.removesuffix(_FORMATS[section])
             name = stem.rsplit("-", 2)[0].lower()
-            self._records.setdefault(name, {})[section, stem] = record
+            records = self._records.setdefault(name, {})
+            if section.startswith("v3."):
+                records[stem + _FORMATS[section]] = record
+            else:
+                # V3 takes precedence regardless of the shard iteration order.
+                records.setdefault(key, record)
 
     def _selected(self, name, package_format):
         formats = rattler.PackageFormatSelection
@@ -53,33 +58,52 @@ class ShardedRepoData:
         selected = {}
         records = self._records.get(name, {})
         # Later entries replace older repodata and less preferred archive formats.
-        for section, suffix in _FORMATS.items():
+        for suffix in (".tar.bz2", ".whl", ".conda"):
             if suffix not in allowed:
                 continue
-            for (record_section, stem), record in records.items():
-                if record_section == section:
-                    key = (stem, suffix) if package_format == formats.BOTH else stem
-                    selected[key] = (section, stem, record)
+            for filename in records:
+                if filename.endswith(suffix):
+                    key = (
+                        filename
+                        if package_format == formats.BOTH
+                        else filename.removesuffix(suffix)
+                    )
+                    selected[key] = filename
         return selected.values()
 
     def package_names(self, package_format=_DEFAULT_FORMAT) -> list[str]:
-        return sorted(name for name in self._records if self._selected(name, package_format))
+        if package_format not in self._names:
+            self._names[package_format] = sorted(
+                name for name in self._records if self._selected(name, package_format)
+            )
+        return list(self._names[package_format])
 
     def record_count(self, package_format=_DEFAULT_FORMAT) -> int:
         return sum(len(self._selected(name, package_format)) for name in self._records)
 
     def load_records(self, name, package_format=_DEFAULT_FORMAT) -> list[rattler.RepoDataRecord]:
+        # Search callers may modify records, so keep their copies independent.
+        return [
+            rattler.RepoDataRecord(record, record.file_name, record.url, record.channel)
+            for record in self.records_for_solve(name, package_format)
+        ]
+
+    def records_for_solve(
+        self, name, package_format=_DEFAULT_FORMAT
+    ) -> list[rattler.RepoDataRecord]:
+        """Borrow cached records for py-rattler, which shares their Rust allocations.
+
+        Callers must copy a record before changing it in Python.
+        """
         name = name.normalized if isinstance(name, rattler.PackageName) else name.lower()
         records = []
-        for section, stem, raw in self._selected(name, package_format):
-            key = (section, stem)
-            if key not in self._converted:
-                self._converted[key] = self._convert(section, stem, raw)
-            record = self._converted[key]
-            # Update solves modify dependencies. Every caller needs its own record.
-            records.append(
-                rattler.RepoDataRecord(record, record.file_name, record.url, record.channel)
-            )
+        cached = self._records.get(name, {})
+        for filename in self._selected(name, package_format):
+            record = cached[filename]
+            if not isinstance(record, rattler.RepoDataRecord):
+                # Release our raw metadata reference when the native record replaces it.
+                record = cached[filename] = self._convert(filename, record)
+            records.append(record)
         return records
 
     def load_all_records(self, package_format=_DEFAULT_FORMAT) -> list[rattler.RepoDataRecord]:
@@ -109,7 +133,7 @@ class ShardedRepoData:
             if any(spec.matches(record) for spec in specs)
         ]
 
-    def _convert(self, section, stem, raw) -> rattler.RepoDataRecord:
+    def _convert(self, filename, raw) -> rattler.RepoDataRecord:
         kwargs = {
             field: raw[field]
             for field in (
@@ -154,8 +178,7 @@ class ShardedRepoData:
                 if field == "indexed_timestamp" or value > 253_402_300_799:
                     value /= 1000
                 setattr(record, field, datetime.fromtimestamp(value, timezone.utc))
-        filename = stem + _FORMATS[section]
-        package_url = raw["url"] if section == "v3.whl" else filename
+        package_url = raw["url"] if filename.endswith(".whl") else filename
         return rattler.RepoDataRecord(
             record, filename, urljoin(self._url, package_url), self._channel
         )

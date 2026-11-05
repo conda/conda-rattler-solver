@@ -113,12 +113,21 @@ class _ChannelRepoInfo:
         """
         if str(platform) != self.repo.subdir:
             return []
-        records = self.repo.load_records(name, self.package_format)
+        shared = isinstance(self.repo, ShardedRepoData)
+        records = (
+            self.repo.records_for_solve(name, self.package_format)
+            if shared
+            else self.repo.load_records(name, self.package_format)
+        )
         installed = self.installed.get(name.normalized)
         if installed and not installed.is_unmanageable:
             version = rattler.Version(installed.version)
-            for record in records:
+            for i, record in enumerate(records):
                 if record.version == version and record.build_number < installed.build_number:
+                    if shared:
+                        record = records[i] = rattler.RepoDataRecord(
+                            record, record.file_name, record.url, record.channel
+                        )
                     # Keep the candidate visible to strict channel priority, but make
                     # its own build number incompatible with the installed build floor.
                     record.depends = [
