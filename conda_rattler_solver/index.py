@@ -23,6 +23,7 @@ from conda.core.package_cache_data import PackageCacheData
 from conda.core.subdir_data import SubdirData
 from conda.models.channel import Channel, MultiChannel
 
+from .shards import ShardedRepoData
 from .utils import empty_repodata_dict, rattler_record_to_conda_record
 
 if TYPE_CHECKING:
@@ -83,10 +84,10 @@ def _root_extras_kwargs(
 
 @dataclass
 class _ChannelRepoInfo:
-    """Channel metadata and a record source for update solves."""
+    """Channel metadata and a record source for solves."""
 
     channel: Channel | None
-    repo: rattler.SparseRepoData
+    repo: rattler.SparseRepoData | ShardedRepoData
     full_url: str
     noauth_url: str
     local_json: str | None
@@ -177,6 +178,10 @@ class RattlerIndexHelper:
     @property
     def channels(self) -> list[Channel]:
         return [Channel(c) for c in self._channels]
+
+    @property
+    def uses_sparse_repodata(self) -> bool:
+        return all(isinstance(info.repo, rattler.SparseRepoData) for info in self._index.values())
 
     def reload_channel(self, channel: Channel) -> None:
         urls = {}
@@ -420,45 +425,20 @@ class RattlerIndexHelper:
     def _load_repo_info_from_shards(
         self, channel_data: dict[str, Shards]
     ) -> dict[str, _ChannelRepoInfo]:
-        """
-        Convert a dict[url, Shards] returned by build_repodata_subset into
-        the same dict[noauth_url, _ChannelRepoInfo] format used by _load_channels.
-        Each Shards object is serialised to a temporary repodata JSON file so that
-        rattler.SparseRepoData can consume it without any changes to the rattler API.
-        """
+        """Keep the records returned by build_repodata_subset in memory."""
         index = {}
         for url, shards in channel_data.items():
-            subdir = Channel.from_url(url).subdir
-            repodata = empty_repodata_dict(subdir, base_url=url)
-            for (key, section), record in shards.iter_records_v3():
-                if section == "packages":
-                    repodata["packages"][key] = record
-                elif section == "packages.conda":
-                    repodata["packages.conda"][key] = record
-                elif section.startswith("v3."):
-                    # Extract v3 package type (whl, conda, tar.bz2) from section name
-                    v3_type = section[3:]  # Remove "v3." prefix
-                    repodata["v3"][v3_type][key] = record
-            n_packages = (
-                len(repodata["packages"])
-                + len(repodata["packages.conda"])
-                + sum(len(group) for group in repodata["v3"].values())
+            channel = Channel.from_url(url)
+            noauth_url = channel.urls(with_credentials=False, subdirs=(channel.subdir,))[0]
+            index[noauth_url] = _ChannelRepoInfo(
+                repo=ShardedRepoData(url, shards),
+                channel=channel,
+                full_url=url,
+                noauth_url=noauth_url,
+                local_json=None,
+                installed=self.in_state.installed if self.in_state else {},
+                package_format=self._package_format,
             )
-            log.debug(
-                "_load_repo_info_from_shards: %s packages for %s",
-                n_packages,
-                url,
-            )
-            if n_packages > 0:
-                log.debug(
-                    "_load_repo_info_from_shards: sample filenames: %s",
-                    list(repodata["packages"])[:3] + list(repodata["packages.conda"])[:3],
-                )
-            with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
-                f.write(json_dump(repodata, indent=None, separators=(",", ":")))
-            self._unlink_on_del.append(Path(f.name))
-            info = self._json_path_to_repo_info(url, f.name)
-            index[info.noauth_url] = info
         return index
 
     def _load_channels(self, urls: Iterable[str]) -> dict[str, _ChannelRepoInfo]:

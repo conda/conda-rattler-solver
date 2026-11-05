@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import shutil
 import time
@@ -11,8 +12,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
+import msgpack
 import pytest
 import rattler
+from conda._private.zstd import compress
 from conda.base.context import context, reset_context
 from conda.common.url import path_to_url
 from conda.core.subdir_data import SubdirData
@@ -27,7 +30,8 @@ from conda_rattler_solver.index import (
     _is_sharded_repodata_enabled,
     _root_extras,
 )
-from conda_rattler_solver.state import SolverInputState
+from conda_rattler_solver.solver import RattlerSolver
+from conda_rattler_solver.state import SolverInputState, SolverOutputState
 from conda_rattler_solver.utils import rattler_record_to_conda_record
 
 if TYPE_CHECKING:
@@ -245,6 +249,65 @@ def test_package_cache_directory_priority(tmp_path: Path, sparse: bool):
         exported = rattler_record_to_conda_record(record, index=index)
         assert exported.url == f"{first.as_uri()}/{record.file_name}"
         assert exported.channel == Channel(str(first))
+
+
+@pytest.mark.parametrize("mixed_channels", [False, True])
+@pytest.mark.parametrize("command", ["create", "update"])
+def test_sharded_solve_without_temporary_repodata(
+    tmp_path: Path, http_test_server, monkeypatch, mixed_channels, command
+):
+    noarch = http_test_server.directory / "noarch"
+    noarch.mkdir()
+    shard_index = {
+        "info": {"subdir": "noarch", "base_url": "", "shards_base_url": ""},
+        "version": 1,
+        "shards": {},
+    }
+    for name, depends in (("foo", ["bar"]), ("bar", [])):
+        record = {
+            "name": name,
+            "version": "1.0",
+            "build": "0",
+            "build_number": 0,
+            "depends": depends,
+        }
+        shard = compress(msgpack.packb({"packages.conda": {f"{name}-1.0-0.conda": record}}))
+        digest = hashlib.sha256(shard).digest()
+        (noarch / f"{digest.hex()}.msgpack.zst").write_bytes(shard)
+        shard_index["shards"][name] = digest
+    (noarch / "repodata_shards.msgpack.zst").write_bytes(compress(msgpack.packb(shard_index)))
+
+    def reject_temporary_repodata(*args, **kwargs):
+        pytest.fail("Shard records must not be written to temporary repodata JSON")
+
+    monkeypatch.setattr("conda_rattler_solver.index.NamedTemporaryFile", reject_temporary_repodata)
+    monkeypatch.setattr(context, "repodata_use_shards", True)
+    channels = [Channel(http_test_server.url)]
+    requested = ["foo"]
+    expected = {"foo", "bar"}
+    if mixed_channels:
+        channels.append(Channel(str(DATA / "mamba_repo")))
+        requested.append("test-package")
+        expected.add("test-package")
+    prefix = tmp_path / "env"
+    in_state = SolverInputState(prefix, requested=requested, command=command)
+    index = RattlerIndexHelper(
+        channels=channels,
+        subdirs=("noarch",),
+        in_state=in_state,
+        build_repodata_subset=build_repodata_subset,
+    )
+    solver = RattlerSolver(prefix, channels=channels, subdirs=("noarch",), specs_to_add=requested)
+
+    for _ in range(2):
+        result = solver._solve_attempt(
+            in_state, SolverOutputState(solver_input_state=in_state), index
+        )
+        assert isinstance(result, list), str(result)
+        assert {record.name.normalized for record in result} == expected
+        assert index.n_packages() == len(expected)
+        assert {record.name for record in index.search("bar")} == {"bar"}
+        index.reload_channel(channels[0])
 
 
 def test_given_channels(monkeypatch: pytest.MonkeyPatch, tmp_path: PathLike):
