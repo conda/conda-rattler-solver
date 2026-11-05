@@ -64,33 +64,6 @@ def _load_shards(data) -> RattlerIndexHelper:
     return index
 
 
-async def _solve(index: RattlerIndexHelper, specs: list[str]):
-    # The fallback allows this benchmark to run before in-memory shard support.
-    if getattr(index, "uses_sparse_repodata", True):
-        return await rattler.solve_with_sparse_repodata(
-            specs=specs,
-            sparse_repodata=index.solve_sources(sparse=True),
-            package_format_selection=index._package_format,
-            virtual_packages=[],
-        )
-    return await rattler.solve(
-        specs=specs,
-        sources=index.solve_sources(),
-        platforms=index._subdirs,
-        virtual_packages=[],
-        channel_relations="disabled",
-    )
-
-
-def _close(index: RattlerIndexHelper) -> None:
-    for info in index._index.values():
-        info.repo.close()
-    index._index.clear()
-    for path in index._unlink_on_del:
-        path.unlink(missing_ok=True)
-    index._unlink_on_del.clear()
-
-
 @pytest.mark.benchmark
 @pytest.mark.parametrize(
     "names,versions,closure",
@@ -124,12 +97,33 @@ def test_sharded_solve_benchmark(
         nonlocal index
         if phase == "fresh":
             index = _load_shards(data)
-        return asyncio.run(_solve(index, specs))
+        # The fallback also lets this benchmark run against main's sparse loader.
+        if getattr(index, "uses_sparse_repodata", True):
+            solve = rattler.solve_with_sparse_repodata(
+                specs=specs,
+                sparse_repodata=index.solve_sources(sparse=True),
+                package_format_selection=index._package_format,
+                virtual_packages=[],
+            )
+        else:
+            solve = rattler.solve(
+                specs=specs,
+                sources=index.solve_sources(),
+                platforms=index._subdirs,
+                virtual_packages=[],
+                channel_relations="disabled",
+            )
+        return asyncio.run(solve)
 
     def cleanup():
         nonlocal index
         if index is not None:
-            _close(index)
+            for info in index._index.values():
+                info.repo.close()
+            index._index.clear()
+            for path in index._unlink_on_del:
+                path.unlink(missing_ok=True)
+            index._unlink_on_del.clear()
             index = None
 
     try:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 from urllib.parse import urljoin
@@ -21,6 +22,7 @@ _FORMATS = {
     "v3.conda": ".conda",
 }
 _DEFAULT_FORMAT = rattler.PackageFormatSelection.PREFER_CONDA
+_ARCHIVE_BASENAME = re.compile(r"[A-Za-z0-9_.+@!-]+")
 
 
 class ShardedRepoData:
@@ -32,6 +34,7 @@ class ShardedRepoData:
         noauth_url = channel.urls(with_credentials=False, subdirs=(self.subdir,))[0]
         self._channel = noauth_url.rsplit("/", 1)[0] + "/"
         self._url = url.rstrip("/") + "/"
+        self._archive_url = urljoin(self._url, "./")
         self._records = {}
         self._names = {}
         for (key, section), record in shards.iter_records_v3():
@@ -82,11 +85,20 @@ class ShardedRepoData:
         return sum(len(self._selected(name, package_format)) for name in self._records)
 
     def load_records(self, name, package_format=_DEFAULT_FORMAT) -> list[rattler.RepoDataRecord]:
-        # Search callers may modify records, so keep their copies independent.
-        return [
-            rattler.RepoDataRecord(record, record.file_name, record.url, record.channel)
-            for record in self.records_for_solve(name, package_format)
-        ]
+        """Read independent records without populating the solver's native cache."""
+        name = name.normalized if isinstance(name, rattler.PackageName) else name.lower()
+        stored = self._records.get(name, {})
+        records = []
+        for filename in self._selected(name, package_format):
+            record = stored[filename]
+            if isinstance(record, rattler.RepoDataRecord):
+                record = rattler.RepoDataRecord(
+                    record, record.file_name, record.url, record.channel
+                )
+            else:
+                record = self._convert(filename, record)
+            records.append(record)
+        return records
 
     def records_for_solve(
         self, name, package_format=_DEFAULT_FORMAT
@@ -126,12 +138,21 @@ class ShardedRepoData:
                 names.update(self.package_names(package_format))
                 break
             names.add(name.normalized)
-        return [
-            record
-            for name in sorted(names)
-            for record in self.load_records(name, package_format)
-            if any(spec.matches(record) for spec in specs)
-        ]
+        matches = []
+        for name in sorted(names):
+            stored = self._records.get(name, {})
+            for filename in self._selected(name, package_format):
+                record = stored[filename]
+                shared = isinstance(record, rattler.RepoDataRecord)
+                if not shared:
+                    record = self._convert(filename, record)
+                if any(spec.matches(record) for spec in specs):
+                    if shared:
+                        record = rattler.RepoDataRecord(
+                            record, record.file_name, record.url, record.channel
+                        )
+                    matches.append(record)
+        return matches
 
     def _convert(self, filename, raw) -> rattler.RepoDataRecord:
         kwargs = {
@@ -178,10 +199,14 @@ class ShardedRepoData:
                 if field == "indexed_timestamp" or value > 253_402_300_799:
                     value /= 1000
                 setattr(record, field, datetime.fromtimestamp(value, timezone.utc))
-        package_url = raw["url"] if filename.endswith(".whl") else filename
-        return rattler.RepoDataRecord(
-            record, filename, urljoin(self._url, package_url), self._channel
-        )
+        if filename.endswith(".whl"):
+            package_url = urljoin(self._url, raw["url"])
+        elif _ARCHIVE_BASENAME.fullmatch(filename):
+            # Ordinary archive names only need the already-resolved channel prefix.
+            package_url = self._archive_url + filename
+        else:
+            package_url = urljoin(self._url, filename)
+        return rattler.RepoDataRecord(record, filename, package_url, self._channel)
 
     def close(self) -> None:
         pass

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import json
+import weakref
 from types import SimpleNamespace
 
 import pytest
@@ -165,6 +167,58 @@ def test_authenticated_source_preserves_package_url():
     loaded = source.load_all_records()[0]
     assert loaded.channel == "https://example.org/channel/"
     assert loaded.url == url + "/example-1.0-0.conda"
+
+
+@pytest.mark.parametrize(
+    "url,filename,expected",
+    [
+        (URL, "example-1.0-legacy@build.conda", URL + "/example-1.0-legacy@build.conda"),
+        (
+            "https://example.org/old/../channel/linux-64",
+            "example-1.0-0.conda",
+            URL + "/example-1.0-0.conda",
+        ),
+        (
+            URL + "?ignored=query",
+            "example-1.0-0.conda",
+            "https://example.org/channel/example-1.0-0.conda",
+        ),
+        (
+            URL + "#ignored-fragment",
+            "example-1.0-0.conda",
+            "https://example.org/channel/example-1.0-0.conda",
+        ),
+        (URL, "example-1.0-0%20build.conda", URL + "/example-1.0-0%20build.conda"),
+        (URL, "../example-1.0-0.conda", "https://example.org/channel/example-1.0-0.conda"),
+    ],
+)
+def test_archive_url_resolution(url, filename, expected):
+    source = shard_source([((filename, "packages.conda"), record())], url)
+    assert source.load_all_records()[0].url == expected
+
+
+@pytest.mark.parametrize("operation", ["name", "all", "matching"])
+def test_search_only_records_are_released(operation):
+    converted = []
+
+    class TrackedRepoData(ShardedRepoData):
+        def _convert(self, filename, raw):
+            result = super()._convert(filename, raw)
+            converted.append(weakref.ref(result))
+            return result
+
+    entries = [(("example-1.0-0.conda", "packages.conda"), record())]
+    source = TrackedRepoData(URL, SimpleNamespace(iter_records_v3=lambda: iter(entries)))
+    if operation == "name":
+        records = source.load_records("example")
+    elif operation == "all":
+        records = source.load_all_records()
+    else:
+        records = source.load_matching_records([rattler.MatchSpec("example")])
+    assert [item.name.normalized for item in records] == ["example"]
+    del records
+    gc.collect()
+    assert converted and all(reference() is None for reference in converted)
 
 
 @pytest.mark.parametrize("noarch", [None, False, True, "generic", "python"])
