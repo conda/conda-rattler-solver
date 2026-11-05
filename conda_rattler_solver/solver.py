@@ -762,28 +762,26 @@ class RattlerSolver(Solver):
             ):
                 position = line.index(" can be installed with")
                 unsatisfiable[words[0]] = matchspec_from_solver_diagnostic(line[:position])
-            elif "No candidates were found for" in line:
-                position = line.index("No candidates were found for ")
-                position += len("No candidates were found for ")
-                spec = line[position:].rstrip(".")
-                spec = matchspec_from_solver_diagnostic(spec)
-                # Do not consider "not found" if it's already installed; this happens
-                # when user requested a package from a channel that is no longer in the
-                # list. e.g. `conda create main::psutil` + `conda install -c conda-forge python`
-                if any(spec.match(record) for record in in_state.installed.values()):
-                    unsatisfiable[spec.name] = spec
-                    out_state.installed_without_candidates.add(spec.name)
+            elif (
+                "No candidates were found for" in line
+                or "for which no candidates were found" in line
+            ):
+                if "No candidates were found for" in line:
+                    position = line.index("No candidates were found for ")
+                    position += len("No candidates were found for ")
+                    spec = line[position:].rstrip(".")
                 else:
-                    not_found[spec.name] = spec
-            elif "for which no candidates were found" in line:
-                # Same situation as "No candidates were found for" above, but reported as a
-                # nested reason under some other unsatisfiable package instead of as a
-                # standalone line, e.g. "foo >=2, for which no candidates were found." This
-                # happens when the name does have candidates in the index, just not any that
-                # satisfy the requested version (as opposed to being fully absent from it).
-                spec = line.split(", for which no candidates were found", 1)[0].strip()
+                    # Nested reason, e.g. "foo >=2, for which no candidates were found."
+                    spec = line.split(", for which no candidates were found", 1)[0].strip()
                 spec = matchspec_from_solver_diagnostic(spec)
-                if any(spec.match(record) for record in in_state.installed.values()):
+                installed = in_state.installed
+                if name := spec.get_exact_value("name"):
+                    record = installed.get(name)
+                    matches_installed = record is not None and spec.match(record)
+                else:
+                    matches_installed = any(spec.match(record) for record in installed.values())
+                # A matching installed package can outlive its channel's candidates.
+                if matches_installed:
                     unsatisfiable[spec.name] = spec
                     out_state.installed_without_candidates.add(spec.name)
                 else:
