@@ -107,6 +107,8 @@ construction, and repeated collection with a rebuilt output state at 100, 563
 and 1,000 installed packages. It also measures a complete 563-package update
 fallback that needs three actual Rattler attempts. Prefix and channel fixtures
 are created outside the timed operations. Select these cases with `-k state_`.
+They take five measured rounds by default. Use `--benchmark-min-rounds=25` to
+increase sampling while keeping the existing setup and timed work.
 See [Input-state reuse](./docs/dev/benchmarks.md#input-state-reuse) for timing and
 memory interpretation.
 
@@ -130,12 +132,12 @@ pull-request events only.
 PR measurements use the exact base and head commits on the same runner with
 `PYTHONHASHSEED=0`, the head revision's resolved dependencies, benchmark tests,
 and fixtures. Running both revisions roughly doubles the benchmark execution time.
-The base runs first, so the head can benefit from filesystem, package and network
-caches warmed by the base. This comparison screens for larger regressions. It
-does not establish that a small timing difference is repeatable. Both results
-must contain the same benchmark names. If the base revision
-cannot run the complete head benchmark suite, the head results remain available
-and the `Benchmark comparison` check is neutral.
+The full suite chooses which revision runs first using a recorded random seed.
+This removes the fixed base-first order across runs, but each comparison can still
+be affected by shared filesystem, package and network caches. Both results must
+contain the same benchmark names. If the base revision cannot run the complete
+head benchmark suite, the head results remain available and the
+`Benchmark comparison` check is neutral.
 
 The reporting workflow creates a separate baseline for each PR workflow run and
 attempt. Select `pr-<number>` for its comparison. This baseline never replaces the
@@ -164,3 +166,20 @@ change so historical comparisons do not combine different workloads.
 
 The versioned artifact name prevents the older reporting workflow from treating
 Ubuntu 24.04 measurements as Ubuntu 22.04 results while this change is in review.
+
+### Repeated state comparisons
+
+PRs also run the seven fixed-data state benchmarks in a separate job. After a
+warmup of each revision, ten blocks of four processes randomly use
+base–head–head–base or the reverse order. Each fresh process takes 25 measured
+rounds per benchmark.
+
+The job summary reports a median ratio and an exact confidence interval, adjusted
+across the seven cases. A slowdown is classified only when the whole interval exceeds
+a 2% slowdown. Wide intervals remain inconclusive. Timing results are advisory
+and never fail the job. Invalid or failed measurements still fail. Small-change detection still needs calibration on the CI runners.
+
+Raw results, execution order and dependencies are retained in
+`focused-benchmark-results-v1`. See
+[Repeated state comparisons](./docs/dev/benchmarks.md#repeated-state-comparisons)
+for the calculation, cache handling and interpretation.

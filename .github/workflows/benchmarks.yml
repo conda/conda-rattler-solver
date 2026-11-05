@@ -22,6 +22,7 @@ jobs:
       CONDA_TEST_DATA_DIR: ${{ github.workspace }}/conda/tests/data
       CONDA_CHANNELS: conda-forge
     runs-on: ubuntu-24.04
+    timeout-minutes: 120
     steps:
       - name: Checkout conda-rattler-solver
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -84,41 +85,20 @@ jobs:
         working-directory: conda-rattler-solver
         run: pixi list --locked -e test-py313 | tee "$RUNNER_TEMP/benchmark_dependencies.txt"
 
-      - name: Checkout base revision
-        if: github.event_name == 'pull_request'
+      - name: Run benchmarks in recorded order
         working-directory: conda-rattler-solver
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          ORDER_SEED: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
-          git checkout --detach "$BASE_SHA"
-          git restore --source "$HEAD_SHA" --worktree -- tests pyproject.toml
-
-      - name: Run base benchmarks
-        if: github.event_name == 'pull_request'
-        id: baseline
-        continue-on-error: true
-        working-directory: conda-rattler-solver
-        run: >-
-          .pixi/envs/test-py313/bin/python -m pytest -m benchmark --benchmark-only
-          --benchmark-json "$RUNNER_TEMP/baseline_results.json"
-
-      - name: Discard incomplete base results
-        if: github.event_name == 'pull_request' && steps.baseline.outcome != 'success'
-        run: rm -f "$RUNNER_TEMP/baseline_results.json"
-
-      - name: Checkout head revision
-        if: github.event_name == 'pull_request'
-        working-directory: conda-rattler-solver
-        env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: git checkout --force --detach "$HEAD_SHA"
-
-      - name: Run benchmarks
-        working-directory: conda-rattler-solver
-        run: >-
-          .pixi/envs/test-py313/bin/python -m pytest -m benchmark --benchmark-only
-          --benchmark-json "$RUNNER_TEMP/benchmark_results.json"
+          cp dev/run_benchmarks.py dev/benchmark_statistics.py "$RUNNER_TEMP/"
+          args=(--head "$HEAD_SHA" --python .pixi/envs/test-py313/bin/python
+                --output "$RUNNER_TEMP" --mode full --seed "$ORDER_SEED")
+          if [[ -n "$BASE_SHA" ]]; then
+            args+=(--base "$BASE_SHA")
+          fi
+          .pixi/envs/test-py313/bin/python "$RUNNER_TEMP/run_benchmarks.py" "${args[@]}"
 
       - name: Record workflow event
         run: cp "$GITHUB_EVENT_PATH" "$RUNNER_TEMP/event.json"
@@ -134,5 +114,94 @@ jobs:
             ${{ runner.temp }}/benchmark_dependencies.txt
             ${{ runner.temp }}/noise.txt
             ${{ runner.temp }}/event.json
+            ${{ runner.temp }}/execution.json
           if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload benchmark diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: benchmark-diagnostics-v1
+          path: |
+            ${{ runner.temp }}/execution.json
+            ${{ runner.temp }}/runs/*/results.json
+            ${{ runner.temp }}/runs/*/pytest.log
+          if-no-files-found: warn
+          retention-days: 7
+
+  focused-benchmarks:
+    name: Focused benchmark comparison (advisory)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONHASHSEED: '0'
+      CONDA_TEST_SOLVERS: rattler
+      CONDA_TEST_DATA_DIR: ${{ github.workspace }}/conda/tests/data
+      CONDA_CHANNELS: conda-forge
+    steps:
+      - name: Checkout conda-rattler-solver
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: conda-rattler-solver
+
+      - name: Checkout conda test data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: conda/conda
+          ref: main
+          persist-credentials: false
+          path: conda
+
+      - name: Setup Pixi
+        uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          pixi-version: v0.70.1
+          working-directory: conda-rattler-solver
+          environments: test-py313
+          locked: true
+
+      - name: Install benchmark package
+        working-directory: conda-rattler-solver
+        run: pixi run --locked -e test-py313 _install-self
+
+      - name: Record focused benchmark dependencies
+        working-directory: conda-rattler-solver
+        run: |
+          mkdir "$RUNNER_TEMP/focused"
+          pixi list --locked -e test-py313 > "$RUNNER_TEMP/focused/dependencies.txt"
+          git -C ../conda rev-parse HEAD > "$RUNNER_TEMP/focused/conda_revision.txt"
+
+      - name: Compare repeated state benchmarks
+        working-directory: conda-rattler-solver
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          ORDER_SEED: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          cp dev/run_benchmarks.py dev/benchmark_statistics.py "$RUNNER_TEMP/"
+          .pixi/envs/test-py313/bin/python "$RUNNER_TEMP/run_benchmarks.py" \
+            --base "$BASE_SHA" --head "$HEAD_SHA" \
+            --python .pixi/envs/test-py313/bin/python \
+            --output "$RUNNER_TEMP/focused" --mode focused --seed "$ORDER_SEED" \
+            --blocks 10 --rounds 25
+
+      - name: Upload focused measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: focused-benchmark-results-v1
+          path: |
+            ${{ runner.temp }}/focused/execution.json
+            ${{ runner.temp }}/focused/report.json
+            ${{ runner.temp }}/focused/report.md
+            ${{ runner.temp }}/focused/dependencies.txt
+            ${{ runner.temp }}/focused/conda_revision.txt
+            ${{ runner.temp }}/focused/runs/*/results.json
+            ${{ runner.temp }}/focused/runs/*/pytest.log
+          if-no-files-found: warn
           retention-days: 7

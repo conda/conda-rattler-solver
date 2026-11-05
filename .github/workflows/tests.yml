@@ -65,6 +65,7 @@ jobs:
           filters: |
             code:
               - 'conda_rattler_solver/**'
+              - 'dev/**'
               - '*.py'
               - '.github/workflows/tests.yml'
               - 'tests/**'
