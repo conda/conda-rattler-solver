@@ -100,6 +100,16 @@ benchmarks, define whether each case measures a cold or warm cache.
 The existing tests cover index searches, installed-package solver handling, and
 end-to-end solve comparisons between rattler and libmamba.
 
+### Input-state reuse
+
+`tests/test_state_benchmarks.py` measures first collection, including input-state
+construction, and repeated collection with a rebuilt output state at 100, 563
+and 1,000 installed packages. It also measures a complete 563-package update
+fallback that needs three actual Rattler attempts. Prefix and channel fixtures
+are created outside the timed operations. Select these cases with `-k state_`.
+See [Input-state reuse](./docs/dev/benchmarks.md#input-state-reuse) for timing and
+memory interpretation.
+
 ### Results and regression alerts
 
 The [Benchmarks workflow](https://github.com/conda/conda-rattler-solver/actions/workflows/benchmarks.yml)
