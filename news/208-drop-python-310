@@ -1,0 +1,8 @@
+### Deprecations
+
+* Drop support for Python 3.10. Python 3.11 is now the minimum supported version.
+
+### Other
+
+* Update solver regression tests for Windows ARM64, including Python downgrades,
+  package history, pins, and noarch package reinstallation.
