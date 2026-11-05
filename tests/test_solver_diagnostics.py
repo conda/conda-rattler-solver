@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from conda.core.prefix_data import PrefixData
 from conda.exceptions import PackagesNotFoundError
 from conda.models.match_spec import MatchSpec
 from conda.models.records import PrefixRecord
@@ -32,10 +33,10 @@ def _record(name):
 @pytest.fixture
 def diagnostic_state(tmp_path):
     solver = RattlerSolver(tmp_path, channels=(), subdirs=("noarch",))
-    in_state = SolverInputState(tmp_path)
-    in_state.prefix_data._prefix_records.update(
+    PrefixData(tmp_path)._prefix_records.update(
         (name, _record(name)) for name in ("other-a", "other-b", "target")
     )
+    in_state = SolverInputState(tmp_path)
     out_state = SolverOutputState(solver_input_state=in_state)
     return solver, in_state, out_state
 
@@ -117,11 +118,10 @@ def test_exact_name_diagnostics_avoid_unrelated_record_matches(
 @pytest.mark.parametrize("diagnostic", DIAGNOSTICS)
 def test_benchmark_missing_candidate_diagnostics(tmp_path, benchmark, installed_count, diagnostic):
     solver = RattlerSolver(tmp_path, channels=(), subdirs=("noarch",))
-    in_state = SolverInputState(tmp_path)
-    records = in_state.prefix_data._prefix_records
-    records.update(
+    PrefixData(tmp_path)._prefix_records.update(
         (name, _record(name)) for name in (f"package-{i:05d}" for i in range(installed_count))
     )
+    in_state = SolverInputState(tmp_path)
     # Diagnose eight records at the end of the installed package order.
     names = tuple(f"package-{i:05d}" for i in range(installed_count - 8, installed_count))
     problems = "\n".join(diagnostic.format(f"{name} >=2") for name in names)
