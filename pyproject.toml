@@ -106,7 +106,7 @@ sphinxcontrib-programoutput = "*"
 pre-commit = 'pre-commit'
 
 [tool.pixi.feature.test.tasks.test]
-cmd = "python -m pytest"
+cmd = 'python -m pytest -m "not benchmark"'
 depends-on = ["_install-self"]
 default-environment = "test-py313"
 [tool.pixi.feature.test.tasks.test.env]

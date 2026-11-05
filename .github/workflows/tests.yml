@@ -242,7 +242,7 @@ jobs:
           python -m pip install -e ../conda/ --no-deps
           python -m conda init --all
           . $CONDA_PREFIX/etc/profile.d/conda.sh
-          python -m pytest -vv -m "not slow" --reruns=${{ env.PYTEST_RERUN_FAILURES }} --reruns-delay=${{ env.PYTEST_RERUN_FAILURES_DELAY }} --durations=16
+          python -m pytest -vv -m "not slow and not benchmark" --reruns=${{ env.PYTEST_RERUN_FAILURES }} --reruns-delay=${{ env.PYTEST_RERUN_FAILURES_DELAY }} --durations=16
       #/ CONDA-RATTLER-SOLVER CHANGE
 
       - name: Upload Coverage
@@ -413,7 +413,7 @@ jobs:
           python -m pip install -e ../conda/ --no-deps
           python -m conda init --all
           . $CONDA_PREFIX/etc/profile.d/conda.sh
-          python -m pytest -vv -m "not slow" --reruns=${{ env.PYTEST_RERUN_FAILURES }} --reruns-delay ${{ env.PYTEST_RERUN_FAILURES_DELAY }} --durations=16
+          python -m pytest -vv -m "not slow and not benchmark" --reruns=${{ env.PYTEST_RERUN_FAILURES }} --reruns-delay ${{ env.PYTEST_RERUN_FAILURES_DELAY }} --durations=16
       #/ CONDA-RATTLER-SOLVER CHANGE
 
       - name: Upload Coverage
@@ -585,7 +585,7 @@ jobs:
           python -m pip install -e ../conda/ --no-deps
           python -m conda init --all
           . $CONDA_PREFIX/etc/profile.d/conda.sh
-          python -m pytest -vv -m "not slow" --reruns=${{ env.PYTEST_RERUN_FAILURES }} --reruns-delay ${{ env.PYTEST_RERUN_FAILURES_DELAY }} --durations=16
+          python -m pytest -vv -m "not slow and not benchmark" --reruns=${{ env.PYTEST_RERUN_FAILURES }} --reruns-delay ${{ env.PYTEST_RERUN_FAILURES_DELAY }} --durations=16
       #/ CONDA-RATTLER-SOLVER CHANGE
 
       - name: Upload Coverage
