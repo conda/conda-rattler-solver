@@ -1,3 +1,5 @@
 ### Enhancements
 
 * Speed up spec collection and `--only-deps` handling on large environments by no longer rebuilding the installed-package and spec mappings for every package. (#216)
+
+* Reuse input-derived specs across solve attempts, refreshing installed packages, pins and configuration for each new solve.
