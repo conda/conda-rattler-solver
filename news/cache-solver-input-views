@@ -1,0 +1,3 @@
+### Enhancements
+
+* Cache read-only solver input views for each solve to avoid rebuilding installed-package mappings and specifications during package collection and conflict retries.

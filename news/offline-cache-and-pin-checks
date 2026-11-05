@@ -1,0 +1,7 @@
+### Bug fixes
+
+* Keep native and noarch packages available when solving from an offline package cache.
+
+### Enhancements
+
+* Skip empty package-cache repositories and avoid repeating pin compatibility checks before solving.

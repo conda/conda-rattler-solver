@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
 
+import asyncio
 import json
 import shutil
 import time
@@ -27,6 +28,7 @@ from conda_rattler_solver.index import (
     _root_extras,
 )
 from conda_rattler_solver.state import SolverInputState
+from conda_rattler_solver.utils import rattler_record_to_conda_record
 
 if TYPE_CHECKING:
     from os import PathLike
@@ -39,6 +41,151 @@ initialize_logging()
 DATA = Path(__file__).parent / "data"
 
 CONDA_FORGE_WITH_SHARDS = "conda-forge"
+
+
+def _make_cache_record(cache: Path, name: str, subdir: str, version: str = "1.0") -> Path:
+    filename = f"{name}-{version}-0.conda"
+    extracted = cache / f"{name}-{version}-0"
+    info = extracted / "info"
+    info.mkdir(parents=True)
+    record = {
+        "name": name,
+        "version": version,
+        "build": "0",
+        "build_number": 0,
+        "subdir": subdir,
+        "depends": [],
+    }
+    if subdir == "noarch":
+        record["noarch"] = "generic"
+    (info / "index.json").write_text(json.dumps(record))
+    (info / "repodata_record.json").write_text(
+        json.dumps(
+            {
+                **record,
+                "fn": filename,
+                "channel": "https://example.invalid/channel",
+                "url": f"https://example.invalid/channel/{subdir}/{filename}",
+            }
+        )
+    )
+    return extracted
+
+
+@pytest.mark.parametrize("sparse", [True, False], ids=["sparse", "gateway"])
+@pytest.mark.parametrize(
+    "subdirs,cached,requested,expected_subdirs",
+    [
+        pytest.param(
+            ("linux-64", "noarch"),
+            (("native", "linux-64"), ("portable", "noarch")),
+            ("native", "portable"),
+            ("noarch", "linux-64"),
+            id="mixed",
+        ),
+        pytest.param(
+            ("linux-64", "noarch"),
+            (("portable", "noarch"),),
+            ("portable",),
+            ("noarch",),
+            id="only-noarch-cached",
+        ),
+        pytest.param(
+            ("noarch",),
+            (("portable", "noarch"),),
+            ("portable",),
+            ("noarch",),
+            id="noarch-only-subdirs",
+        ),
+        pytest.param(
+            ("linux-64", "osx-64", "noarch"),
+            (("native-linux", "linux-64"), ("native-osx", "osx-64"), ("portable", "noarch")),
+            ("native-linux", "native-osx", "portable"),
+            ("noarch", "linux-64", "osx-64"),
+            id="multiple-native-subdirs",
+        ),
+        pytest.param(
+            ("linux-64",),
+            (("native", "linux-64"),),
+            ("native",),
+            ("linux-64",),
+            id="native-only-subdirs",
+        ),
+        pytest.param(("linux-64", "noarch"), (), (), (), id="empty-cache"),
+        pytest.param(
+            ("linux-64", "noarch"),
+            (("other-platform", "osx-64"),),
+            (),
+            (),
+            id="irrelevant-subdir",
+        ),
+    ],
+)
+def test_package_cache_sources(
+    tmp_path: Path, sparse: bool, subdirs, cached, requested, expected_subdirs
+):
+    cache = tmp_path / "pkgs"
+    cache.mkdir()
+    for name, subdir in cached:
+        _make_cache_record(cache, name, subdir)
+    index = RattlerIndexHelper(channels=(), subdirs=subdirs, pkgs_dirs=(str(cache),))
+
+    assert tuple(info.repo.subdir for info in index.solve_sources()) == expected_subdirs
+    assert len(index._unlink_on_del) == len(expected_subdirs)
+    assert index.n_packages() == len(requested)
+
+    sources = index.solve_sources(sparse=sparse)
+    if sparse:
+        solved = asyncio.run(
+            rattler.solve_with_sparse_repodata(specs=requested, sparse_repodata=sources)
+        )
+    else:
+        solved = asyncio.run(rattler.solve(specs=requested, sources=sources, platforms=subdirs))
+    assert {record.name.normalized for record in solved} == set(requested)
+    for record in solved:
+        exported = rattler_record_to_conda_record(record, index=index)
+        assert exported.url == f"{cache.as_uri()}/{record.file_name}"
+        assert exported.channel == Channel(str(cache))
+        assert index.get_info(record.url.rsplit("/", 1)[0]).channel == Channel(str(cache))
+
+
+@pytest.mark.parametrize("sparse", [True, False], ids=["sparse", "gateway"])
+def test_package_cache_directory_priority(tmp_path: Path, sparse: bool):
+    first, second = tmp_path / "first", tmp_path / "second"
+    for cache, version in ((first, "1.0"), (second, "2.0")):
+        _make_cache_record(cache, "portable", "noarch", version)
+        _make_cache_record(cache, "native", "linux-64", version)
+    subdirs = ("linux-64", "noarch")
+    index = RattlerIndexHelper(channels=(), subdirs=subdirs, pkgs_dirs=(str(first), str(second)))
+
+    assert [(info.full_url, info.repo.subdir) for info in index.solve_sources()] == [
+        (first.as_uri(), "noarch"),
+        (first.as_uri(), "linux-64"),
+        (second.as_uri(), "noarch"),
+        (second.as_uri(), "linux-64"),
+    ]
+    kwargs = {
+        "specs": ("portable", "native"),
+        "channel_priority": rattler.ChannelPriority.Strict,
+    }
+    if sparse:
+        solved = asyncio.run(
+            rattler.solve_with_sparse_repodata(
+                **kwargs, sparse_repodata=index.solve_sources(sparse=True)
+            )
+        )
+    else:
+        solved = asyncio.run(
+            rattler.solve(**kwargs, sources=index.solve_sources(), platforms=subdirs)
+        )
+    assert {record.name.normalized: str(record.version) for record in solved} == {
+        "portable": "1.0",
+        "native": "1.0",
+    }
+    for record in solved:
+        exported = rattler_record_to_conda_record(record, index=index)
+        assert exported.url == f"{first.as_uri()}/{record.file_name}"
+        assert exported.channel == Channel(str(first))
 
 
 def test_given_channels(monkeypatch: pytest.MonkeyPatch, tmp_path: PathLike):

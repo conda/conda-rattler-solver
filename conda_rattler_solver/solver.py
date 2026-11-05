@@ -153,7 +153,6 @@ class RattlerSolver(Solver):
                 subdirs=self.subdirs,
                 in_state=in_state,
             )
-            out_state.check_for_pin_conflicts(index)
 
         with get_spinner(self._solving_loop_spinner_message()):
             # This function will copy and mutate `out_state`

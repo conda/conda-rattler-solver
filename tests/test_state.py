@@ -2,13 +2,151 @@
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
 
+import pytest
 from conda.base.constants import UpdateModifier
+from conda.base.context import context
 from conda.models.enums import PackageType
 from conda.models.match_spec import MatchSpec
 from conda.models.records import PackageRecord, PrefixRecord
 
 from conda_rattler_solver.solver import RattlerSolver
 from conda_rattler_solver.state import SolverInputState, SolverOutputState
+
+
+def _record(name, version="1.0"):
+    return PrefixRecord(
+        name=name,
+        version=version,
+        build="0",
+        build_number=0,
+        channel="https://example.invalid",
+        subdir="noarch",
+        fn=f"{name}-{version}-0.conda",
+        url=f"https://example.invalid/noarch/{name}-{version}-0.conda",
+    )
+
+
+def test_retries_reuse_input_views(tmp_path):
+    state = SolverInputState(
+        tmp_path, requested=("alpha >=2",), update_modifier=UpdateModifier.UPDATE_ALL
+    )
+    record = _record("alpha")
+    state.prefix_data._prefix_records["alpha"] = record
+    state._pinned = {"alpha": MatchSpec("alpha <3")}
+    state._history = {"alpha": MatchSpec("alpha =1")}
+    first = SolverOutputState(solver_input_state=state)
+    views = state.installed, state.virtual, state.always_update, first.specs
+    retry = SolverOutputState(
+        solver_input_state=state,
+        records={"alpha": _record("alpha", "2.0")},
+        conflicts={"alpha": MatchSpec("alpha")},
+        for_history={"beta": MatchSpec("beta")},
+    )
+
+    assert state.installed["alpha"] is record
+    assert retry.specs["alpha"] == MatchSpec("alpha >=2")
+    assert "beta" not in retry.specs
+    assert "alpha" not in state.always_update
+    assert all(
+        before is after
+        for before, after in zip(
+            views, (state.installed, state.virtual, state.always_update, retry.specs)
+        )
+    )
+
+
+def test_cached_specs_are_read_only(tmp_path):
+    state = SolverInputState(tmp_path, requested=("alpha",))
+    output = SolverOutputState(solver_input_state=state)
+
+    with pytest.raises(TypeError):
+        output.specs["beta"] = MatchSpec("beta")
+    assert "beta" not in output.specs
+
+
+def test_new_input_state_refreshes_installed_records_and_pins(tmp_path):
+    with context._override("pinned_packages", ("alpha <2",)):
+        first = SolverInputState(tmp_path, update_modifier=UpdateModifier.UPDATE_ALL)
+        old = _record("alpha")
+        first.prefix_data._prefix_records["alpha"] = old
+        output = SolverOutputState(solver_input_state=first)
+        assert output.specs["alpha"].get_raw_value("version") == "<2"
+        assert "alpha" not in first.always_update
+
+    replacement = _record("alpha", "2.0")
+    first.prefix_data._prefix_records["alpha"] = replacement
+    first.prefix_data._prefix_records["beta"] = _record("beta")
+    with context._override("pinned_packages", ("alpha >=2",)):
+        pinned = SolverInputState(tmp_path, update_modifier=UpdateModifier.UPDATE_ALL)
+        pinned_output = SolverOutputState(solver_input_state=pinned)
+        assert pinned_output.specs["alpha"].get_raw_value("version") == ">=2"
+        assert "alpha" not in pinned.always_update
+        second = SolverInputState(
+            tmp_path, update_modifier=UpdateModifier.UPDATE_ALL, ignore_pinned=True
+        )
+        next_output = SolverOutputState(solver_input_state=second)
+        assert second.installed["alpha"] is replacement
+        assert {"alpha", "beta"} <= second.always_update.keys()
+        assert next_output.specs["alpha"].match(replacement)
+        assert "beta" in next_output.specs
+
+    assert first.installed["alpha"] is old
+    assert "beta" not in first.installed
+    assert output.specs["alpha"].get_raw_value("version") == "<2"
+
+
+def test_new_input_state_refreshes_auto_update_conda(tmp_path):
+    with context._override("auto_update_conda", True):
+        first = SolverInputState(tmp_path)
+        first.prefix = context.root_prefix
+        assert "conda" in first.always_update
+    with context._override("auto_update_conda", False):
+        second = SolverInputState(tmp_path)
+        second.prefix = context.root_prefix
+        assert "conda" not in second.always_update
+        assert "conda" in first.always_update
+
+
+def test_cached_input_does_not_freeze_retry_conflicts(tmp_path):
+    state = SolverInputState(tmp_path, update_modifier=UpdateModifier.UPDATE_ALL, command="update")
+    state.prefix_data._prefix_records["alpha"] = _record("alpha")
+    state.prefix_data._prefix_records["python"] = _record("python", "3.13.9")
+    solver = RattlerSolver(tmp_path, channels=(), command="update")
+    output = SolverOutputState(solver_input_state=state)
+
+    first = solver._collect_specs_main(state, output)
+    assert "alpha" in {str(spec) for spec in first["specs"]}
+    assert "alpha >=1.0" in {str(spec) for spec in first["constraints"]}
+    output.conflicts["alpha"] = MatchSpec("alpha")
+    retry = solver._collect_specs_main(state, output)
+    assert "alpha" not in {str(spec) for spec in retry["specs"]}
+    assert "alpha >=1.0" not in {str(spec) for spec in retry["constraints"]}
+    assert "python 3.13.*" in {str(spec) for spec in retry["constraints"]}
+
+
+@pytest.mark.benchmark
+@pytest.mark.parametrize("reuse_input", (False, True), ids=("first-attempt", "retry"))
+def test_update_all_spec_collection_benchmark(tmp_path, benchmark, reuse_input):
+    names = {f"package-{i:04}" for i in range(563)}
+    initial = SolverInputState(tmp_path)
+    initial.prefix_data._prefix_records.update({name: _record(name) for name in names})
+    solver = RattlerSolver(tmp_path, channels=(), command="update")
+
+    def prepare():
+        state = SolverInputState(
+            tmp_path, update_modifier=UpdateModifier.UPDATE_ALL, command="update"
+        )
+        return (state, SolverOutputState(solver_input_state=state)), {}
+
+    if reuse_input:
+        args, _ = prepare()
+        solver._collect_specs_main(*args)
+        result = benchmark.pedantic(solver._collect_specs_main, args=args, rounds=5)
+    else:
+        result = benchmark.pedantic(solver._collect_specs_main, setup=prepare, rounds=5)
+
+    assert {str(spec) for spec in result["specs"]} == names
+    assert {str(spec) for spec in result["constraints"]} == {f"{name} >=1.0" for name in names}
 
 
 def test_update_all_includes_python_in_always_update(tmp_path):
