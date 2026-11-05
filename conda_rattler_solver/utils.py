@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import re
@@ -147,6 +148,8 @@ def conda_record_to_rattler_record(record: PackageRecord) -> rattler.RepoDataRec
         platform = platform.value
     if noarch := record.get("noarch"):
         noarch = rattler.NoArchType(noarch.value)
+    # conda stores features as a tuple and dumps it space-separated, rattler keeps the string
+    features = record.get("features")
     package_record = rattler.PackageRecord(
         name=record.name,
         version=record.version,
@@ -161,13 +164,21 @@ def conda_record_to_rattler_record(record: PackageRecord) -> rattler.RepoDataRec
         sha256=bytes.fromhex(record.get("sha256") or "") or None,
         md5=bytes.fromhex(record.get("md5", "") or "") or None,
         size=record.get("size"),
-        features=record.get("features") or None,
+        features=" ".join(features) if features else None,
         legacy_bz2_md5=bytes.fromhex(record.get("legacy_bz2_md5", "") or "") or None,
         legacy_bz2_size=record.get("legacy_bz2_size", 0),
         license=record.get("license"),
         license_family=record.get("license_family"),
         python_site_packages_path=record.get("python_site_packages_path"),
     )
+    # TODO: change after py-rattler is released with conda/rattler#3127
+    if track_features := record.get("track_features"):
+        package_record.track_features = list(track_features)
+    if timestamp := record.get("timestamp"):
+        # conda keeps seconds, rattler takes a datetime
+        package_record.timestamp = datetime.datetime.fromtimestamp(
+            timestamp, tz=datetime.timezone.utc
+        )
     file_name, url = record.fn, record.url
     if record.subdir == "pypi":
         # Pip metadata has no conda archive. Restore the original record after solving.
