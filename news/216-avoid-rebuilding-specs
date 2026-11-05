@@ -1,0 +1,5 @@
+### Enhancements
+
+* Speed up spec collection and `--only-deps` handling on large environments by building the installed-package and spec mappings once per solve instead of once per package. (#216)
+
+* Reuse the spec mapping across solver retry attempts, so each retry skips rebuilding it. Each new solve still reads the current installed packages, pins, and configuration. (#216)

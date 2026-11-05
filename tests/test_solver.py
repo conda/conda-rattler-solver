@@ -1671,8 +1671,7 @@ def test_add_pip_does_not_patch_locked_python(
     monkeypatch.setattr(context, "add_pip_as_python_dependency", True)
 
     prefix = tmp_path / "env"
-    in_state = SolverInputState(prefix, requested=("standalone",))
-    in_state.prefix_data._prefix_records["python"] = PrefixRecord(
+    PrefixData(prefix)._prefix_records["python"] = PrefixRecord(
         name="python",
         version="3.13.0",
         build="0",
@@ -1683,7 +1682,12 @@ def test_add_pip_does_not_patch_locked_python(
         url="https://example.invalid/noarch/python-3.13.0-0.tar.bz2",
         depends=(),
     )
-    in_state._history["python"] = MatchSpec("python")
+    metadata = prefix / "conda-meta"
+    metadata.mkdir(parents=True, exist_ok=True)
+    (metadata / "history").write_text(
+        "==> 2026-01-01 00:00:00 <==\n# cmd: conda install python\n# update specs: ['python']\n"
+    )
+    in_state = SolverInputState(prefix, requested=("standalone",))
     out_state = SolverOutputState(solver_input_state=in_state)
     solver = Solver(
         prefix=prefix,
@@ -1888,13 +1892,12 @@ def test_removing_pip_respects_installed_python_metadata(
         specs_to_remove=requested,
         command="remove",
     )
-    in_state = SolverInputState(prefix, requested=requested, command="remove")
     for name, version, depends in (
         ("python", "3.13.0", python_depends),
         ("pip", "25.0", ()),
     ):
         filename = f"{name}-{version}-0.tar.bz2"
-        in_state.prefix_data._prefix_records[name] = PrefixRecord(
+        PrefixData(prefix)._prefix_records[name] = PrefixRecord(
             name=name,
             version=version,
             build="0",
@@ -1905,7 +1908,12 @@ def test_removing_pip_respects_installed_python_metadata(
             url=f"https://example.invalid/noarch/{filename}",
             depends=depends,
         )
-    in_state._history["python"] = MatchSpec("python")
+    metadata = prefix / "conda-meta"
+    metadata.mkdir(parents=True, exist_ok=True)
+    (metadata / "history").write_text(
+        "==> 2026-01-01 00:00:00 <==\n# cmd: conda install python\n# update specs: ['python']\n"
+    )
+    in_state = SolverInputState(prefix, requested=requested, command="remove")
     out_state = SolverOutputState(solver_input_state=in_state)
     repodata = _add_pip_repodata()
     for filename in tuple(repodata["packages"]):

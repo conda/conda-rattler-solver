@@ -63,3 +63,23 @@ samples. A first baseline run records measurements before comparisons can
 begin. Detected regressions fail the reporting workflow and generate PR
 feedback. Inspect the affected benchmark and its history before changing a
 threshold.
+
+## Input-state reuse
+
+`tests/test_state_benchmarks.py` measures spec collection for 100, 563, and
+1,000 installed packages. The `first` cases include input-state construction,
+output-state construction, and spec collection. The `retry` cases populate the
+input-derived values before timing, then rebuild the output state and collect
+specs again. Record creation stays outside both timed operations.
+
+The same module includes a complete 563-package update fallback. A pinned app
+requires an older dependency build, forcing three Rattler attempts across the
+normal and fallback loops. This case checks the resulting transaction as well
+as the attempt count. Local channel and prefix creation are outside timing.
+
+Run this group with `-k state_` or pass `tests/test_state_benchmarks.py` to the
+benchmark task. Compare first collection, repeated collection, and complete
+solves separately. A faster repeated collection does not imply the same
+percentage improvement for the full solve. Use separate processes for Python
+allocation measurements, since tracing affects timing, and distinguish retained
+input-state data from allocation peaks and native Rattler memory.
