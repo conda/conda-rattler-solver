@@ -147,6 +147,8 @@ def conda_record_to_rattler_record(record: PackageRecord) -> rattler.RepoDataRec
         platform = platform.value
     if noarch := record.get("noarch"):
         noarch = rattler.NoArchType(noarch.value)
+    # conda stores features as a tuple and dumps it space-separated, rattler keeps the string
+    features = record.get("features")
     package_record = rattler.PackageRecord(
         name=record.name,
         version=record.version,
@@ -161,7 +163,7 @@ def conda_record_to_rattler_record(record: PackageRecord) -> rattler.RepoDataRec
         sha256=bytes.fromhex(record.get("sha256") or "") or None,
         md5=bytes.fromhex(record.get("md5", "") or "") or None,
         size=record.get("size"),
-        features=record.get("features") or None,
+        features=" ".join(features) if features else None,
         legacy_bz2_md5=bytes.fromhex(record.get("legacy_bz2_md5", "") or "") or None,
         legacy_bz2_size=record.get("legacy_bz2_size", 0),
         license=record.get("license"),
