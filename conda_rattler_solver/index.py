@@ -244,18 +244,31 @@ class RattlerIndexHelper:
                 count += info.repo.record_count(self._package_format)
         return count
 
-    def get_info(self, key: str) -> _ChannelRepoInfo:
+    def get_info(self, key: str, subdir: str | None = None) -> _ChannelRepoInfo:
+        """
+        Return the repository information for a channel or package-cache URL.
+
+        Package caches keep one entry per subdir because native and ``noarch``
+        records share a download directory. Pass ``subdir`` to select the exact
+        source when the URL alone is ambiguous.
+        """
         if not key.startswith("file://"):
             # The conda functions (specifically remove_auth) assume the input
             # is a url; a file uri on windows with a drive letter messes them up.
             # For the rest, we remove all forms of authentication
             key = split_anaconda_token(remove_auth(key))[0]
+        if subdir is not None:
+            if info := self._index.get((key, subdir)):
+                return info
+            # A requested subdir rules out the other cache entries, leaving only
+            # a channel entry as a possible match.
+            return self._index[key]
         try:
             return self._index[key]
         except KeyError:
             # Cache subdirs share a download directory, but have distinct index keys.
-            for subdir in self._subdirs:
-                if info := self._index.get((key, subdir)):
+            for candidate in self._subdirs:
+                if info := self._index.get((key, candidate)):
                     return info
             raise
 

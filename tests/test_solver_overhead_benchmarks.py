@@ -47,8 +47,8 @@ def _write_channel(channel: Path, names: tuple[str, ...], builds: int = 1) -> No
     packages = {}
     for name in names:
         for build in range(builds):
-            # The pinned benchmark must reject the newest candidate, not merely
-            # return the same result with or without its version constraints.
+            # The pinned benchmark must reject the newest candidate; otherwise it
+            # returns the same result with or without the version constraints.
             version = "2.0" if builds > 1 and build == builds - 1 else "1.0"
             packages[f"{name}-{version}-{build}.tar.bz2"] = {
                 "name": name,

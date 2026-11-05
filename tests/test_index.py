@@ -146,7 +146,9 @@ def test_package_cache_sources(
         exported = rattler_record_to_conda_record(record, index=index)
         assert exported.url == f"{cache.as_uri()}/{record.file_name}"
         assert exported.channel == Channel(str(cache))
-        assert index.get_info(record.url.rsplit("/", 1)[0]).channel == Channel(str(cache))
+        info = index.get_info(record.url.rsplit("/", 1)[0], subdir=record.subdir)
+        assert info.repo.subdir == record.subdir
+        assert info.channel == Channel(str(cache))
 
 
 @pytest.mark.parametrize("sparse", [True, False], ids=["sparse", "gateway"])
