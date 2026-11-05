@@ -318,7 +318,6 @@ class RattlerSolver(Solver):
                 neutered=dict(out_state.neutered),
                 conflicts=dict(out_state.conflicts),
                 pins=dict(out_state.pins),
-                installed_without_candidates=set(out_state.installed_without_candidates),
             )
         else:
             # Didn't find a solution after all attempts, let's unfreeze everything
@@ -373,6 +372,8 @@ class RattlerSolver(Solver):
           the installed packages, history or lockfiles).
         - pinned_packages: Records that MUST be present if needed. It will not allow any other
           variant.
+        - additional_packages: Records that should be included in the solve, but should not be
+          preferred. Can be useful to represent packages that are already installed in the prefix.
         - virtual_packages: Details of the system.
         """
         solve_kwargs = {
@@ -614,15 +615,6 @@ class RattlerSolver(Solver):
                 elif action == "lock":
                     locked_packages.append(installed)
 
-        # Add packages marked as missing to the set of locked packages
-        if out_state.installed_without_candidates:
-            already_locked = {record.name for record in locked_packages}
-            for name in out_state.installed_without_candidates:
-                if name in already_locked:
-                    continue
-                if installed := in_state.installed.get(name):
-                    locked_packages.append(installed)
-
         if in_state.is_updating:
             for i, spec in enumerate(specs):
                 spec = MatchSpec(spec)
@@ -647,6 +639,9 @@ class RattlerSolver(Solver):
             "pinned_packages": [
                 conda_record_to_rattler_record(record) for record in pinned_packages
             ],
+            "additional_packages": [
+                conda_prefix_record_to_rattler_prefix_record(record) for record in in_state.installed.values()
+            ]
         }
 
     def _collect_specs_for_remove(
@@ -772,20 +767,6 @@ class RattlerSolver(Solver):
                 # list. e.g. `conda create main::psutil` + `conda install -c conda-forge python`
                 if any(spec.match(record) for record in in_state.installed.values()):
                     unsatisfiable[spec.name] = spec
-                    out_state.installed_without_candidates.add(spec.name)
-                else:
-                    not_found[spec.name] = spec
-            elif "for which no candidates were found" in line:
-                # Same situation as "No candidates were found for" above, but reported as a
-                # nested reason under some other unsatisfiable package instead of as a
-                # standalone line, e.g. "foo >=2, for which no candidates were found." This
-                # happens when the name does have candidates in the index, just not any that
-                # satisfy the requested version (as opposed to being fully absent from it).
-                spec = line.split(", for which no candidates were found", 1)[0].strip()
-                spec = matchspec_from_solver_diagnostic(spec)
-                if any(spec.match(record) for record in in_state.installed.values()):
-                    unsatisfiable[spec.name] = spec
-                    out_state.installed_without_candidates.add(spec.name)
                 else:
                     not_found[spec.name] = spec
 
