@@ -42,6 +42,10 @@ Include a [news entry](./news/TEMPLATE) for changes that need release notes.
 
 ## Benchmarks
 
+Solver and index performance is tracked with
+[pytest-benchmark](https://pytest-benchmark.readthedocs.io/) and published to
+[Bencher](https://bencher.dev/perf/conda-rattler-solver).
+
 ### Run locally
 
 Run the existing solver and index benchmarks with the same Python environment as CI:
@@ -60,10 +64,32 @@ The JSON file is ignored by Git. Local runs do not upload results to Bencher.
 To select a smaller group, append a pytest filter such as `-k query_search`.
 Compare local timings on the same machine with the same environment and cache state.
 
+### Solver overhead workloads
+
+The [solver overhead benchmarks](./tests/test_solver_overhead_benchmarks.py) use
+synthetic local channels. Run them with:
+
+```shell
+pixi run --locked -e test-py313 benchmark -k 'pinned_request or empty_package_cache'
+```
+
+Use `-k pinned_request` or `-k empty_package_cache` to select one workload:
+
+- The pinned-request benchmark has 10 package names with 200 candidate builds
+  each. Pins exclude the newest version. It times `solve_final_state()`, including
+  metadata loading and pin validation. Channel and prefix creation, plus solver
+  construction, happen before timing starts.
+- The empty-cache benchmark requests 100 or 563 packages. It times index
+  construction and a Rattler solve, including package-cache source callbacks.
+  Channel creation and request-spec construction happen before timing starts.
+
+Both workloads clear conda's in-memory metadata and package-cache objects before
+each round, outside the timed operation. Filesystem caches are left intact.
+
 ### Add benchmarks
 
 Add tests marked with `@pytest.mark.benchmark` and time the operation with the
-`benchmark` fixture. See [index benchmarks](./tests/test_index.py) and
+`benchmark` fixture. See the [index benchmarks](./tests/test_index.py) and
 [solver benchmarks](./tests/test_solver.py) for examples.
 
 Keep fixture setup outside the timed callable unless it is part of the operation
@@ -71,9 +97,8 @@ you intend to measure. Use fixed test data and stable test names and parameter I
 so Bencher can track the same workload across commits. For cache-sensitive
 benchmarks, define whether each case measures a cold or warm cache.
 
-The existing tests cover index searches and installed-package solver handling.
-Representative end-to-end rattler/libmamba comparisons are tracked in
-[#118](https://github.com/conda/conda-rattler-solver/issues/118).
+The existing tests cover index searches, installed-package solver handling, and
+end-to-end solve comparisons between rattler and libmamba.
 
 ### Input-state reuse
 

@@ -348,7 +348,7 @@ def test_rattler_record_to_conda_record_restores_channel_from_cdn_url() -> None:
     )
 
     class _Index:
-        def get_info(self, key: str):
+        def get_info(self, key: str, subdir: str | None = None):
             if key == info.noauth_url:
                 return info
             raise KeyError(key)
