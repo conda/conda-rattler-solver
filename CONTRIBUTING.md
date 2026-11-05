@@ -123,12 +123,17 @@ The [Track Benchmarks workflow](https://github.com/conda/conda-rattler-solver/ac
 uses the shared Bencher reporting action in
 [`conda/actions`](https://github.com/conda/actions) to upload available results to the
 [Bencher project](https://bencher.dev/perf/conda-rattler-solver).
-Select `main` for historical results. Manual runs upload only from `main`.
+Select `main` for historical results. Manual runs keep downloadable artifacts
+but do not upload to Bencher because the shared reporter accepts push and
+pull-request events only.
 
 PR measurements use the exact base and head commits on the same runner with
 `PYTHONHASHSEED=0`, the head revision's resolved dependencies, benchmark tests,
 and fixtures. Running both revisions roughly doubles the benchmark execution time.
-Both results must contain the same benchmark names. If the base revision
+The base runs first, so the head can benefit from filesystem, package and network
+caches warmed by the base. This comparison screens for larger regressions. It
+does not establish that a small timing difference is repeatable. Both results
+must contain the same benchmark names. If the base revision
 cannot run the complete head benchmark suite, the head results remain available
 and the `Benchmark comparison` check is neutral.
 
