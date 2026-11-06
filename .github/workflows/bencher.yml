@@ -64,7 +64,7 @@ jobs:
             core.exportVariable("PR_NUMBER", prEvent.number)
 
       - name: Install Bencher CLI
-        uses: bencherdev/bencher@f80847436d7157936b40525db4c2a1064124f04a # v0.6.13
+        uses: bencherdev/bencher@24c333d7030390d2f3e130569386f4f1f8577113 # v0.6.15
         with:
           version: '0.6.12'
 
