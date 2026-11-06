@@ -182,16 +182,15 @@ def test_python_downgrade_reinstalls_noarch_packages(
         pip_cli("--version", prefix=prefix)
 
 
-@pytest.mark.xfail(
-    reason="multichannels not fully implemented yet: https://github.com/conda/rattler/issues/1327",
-    strict=True,
-)
 def test_defaults_specs_work(conda_cli: CondaCLIFixture) -> None:
     """
     See https://github.com/conda/conda-libmamba-solver/issues/173
 
     defaults is secretly (main, r and msys2), and repos are built using those
-    actual channels. Multichannels are not present in rattler so far.
+    actual channels. The channels are grouped in a 'rattler.MultiSource', so
+    'defaults::-style specs match any of its members. Member names work too:
+    conda canonicalizes them to the multichannel name ('pkgs/main::' becomes
+    'defaults::') before the specs reach the solver.
     """
     out, err, rc = conda_cli(
         "create",
@@ -212,6 +211,64 @@ def test_defaults_specs_work(conda_cli: CondaCLIFixture) -> None:
             break
     else:
         raise AssertionError("libarchive not found in LINK actions")
+
+    out, err, rc = conda_cli(
+        "create",
+        "--dry-run",
+        "--json",
+        "--solver=rattler",
+        "--override-channels",
+        "--channel=conda-forge",
+        "pkgs/main::python=3.9",
+        raises=DryRunExit,
+    )
+    data = json.loads(out)
+    assert data.get("success") is True
+    for link in data["actions"]["LINK"]:
+        if link["name"] == "python":
+            assert link["channel"] in ("defaults", "pkgs/main")
+            break
+    else:
+        raise AssertionError("python not found in LINK actions")
+
+
+def test_channel_history_survives_package_base_url(tmp_path, tmp_env):
+    from conda.core.subdir_data import SubdirData
+    from conda.history import History
+
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "demo", "1.0")
+    _make_noarch_package(channel, "other", "1.0", depends=("demo >=2",))
+    requested = MatchSpec(f"{channel.as_uri()}::demo")
+    with tmp_env(
+        str(requested),
+        "--solver=rattler",
+        "--override-channels",
+        f"--channel={channel}",
+    ) as prefix:
+        assert History(prefix).get_requested_specs_map()["demo"].get_raw_value("channel")
+        _make_noarch_package(channel, "demo", "2.0")
+        repodata = channel / "noarch" / "repodata.json"
+        data = json.loads(repodata.read_text())
+        data["info"]["base_url"] = "https://cdn.example.test/packages/noarch/"
+        data["repodata_version"] = 2
+        repodata.write_text(json.dumps(data))
+        SubdirData._cache_.clear()
+
+        solver = Solver(
+            prefix=prefix,
+            channels=[Channel(channel.as_uri())],
+            subdirs=("noarch",),
+            specs_to_add=["other"],
+        )
+        records = {record.name: record for record in solver.solve_final_state()}
+
+        assert records["demo"].version == "2.0"
+        assert not solver.neutered_specs
+        assert requested.match(records["demo"])
+        assert records["other"].url == (
+            "https://cdn.example.test/packages/noarch/other-1.0-0.tar.bz2"
+        )
 
 
 def test_determinism(tmpdir):
@@ -881,7 +938,10 @@ def test_install_keeps_unrequested_history_packages(
     _make_noarch_package(high, "ca-certificates", available_version)
     _make_noarch_package(high, "ca-certificates", "4.0", depends=("__unavailable",))
     _make_noarch_package(high, "app", "1.0", build="high", depends=("ca-certificates >=1",))
+    # Override host channel priority to flexible
+    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", "flexible")
     monkeypatch.setenv("CONDA_AGGRESSIVE_UPDATE_PACKAGES", "")
+    reset_context()
     args = ("--override-channels", f"--solver={solver}")
     with tmp_env("app", f"--channel={low}", *args) as prefix:
         channels = [f"--channel={high}"]
@@ -1010,6 +1070,105 @@ def test_pinned_with_cli_build_string(tmp_env: TmpEnvFixture) -> None:
             "PackagesNotFoundError",
             "PackagesNotFoundInChannelsError",
         )
+
+
+@pytest.mark.parametrize(
+    "pin,requested,expected_error",
+    [
+        ("demo >=1", "demo", None),
+        ("demo <2", "demo >=2", SpecsConfigurationConflictError),
+        ("demo >=3", "demo", PackagesNotFoundError),
+    ],
+    ids=("compatible", "conflicting", "missing-candidate"),
+)
+def test_pin_validation_runs_once_per_solve(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    pin: str,
+    requested: str,
+    expected_error: type[Exception] | None,
+) -> None:
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "demo", "1.0")
+    _make_noarch_package(channel, "demo", "2.0")
+    prefix = tmp_path / "prefix"
+    metadata = prefix / "conda-meta"
+    metadata.mkdir(parents=True)
+    (metadata / "pinned").write_text(pin + "\n")
+
+    validations = 0
+    check_for_pin_conflicts = SolverOutputState.check_for_pin_conflicts
+
+    def count_validation(self, index):
+        nonlocal validations
+        validations += 1
+        return check_for_pin_conflicts(self, index)
+
+    monkeypatch.setattr(SolverOutputState, "check_for_pin_conflicts", count_validation)
+    solver = Solver(
+        prefix=prefix,
+        channels=[Channel(channel.as_uri())],
+        subdirs=("noarch",),
+        specs_to_add=[requested],
+        command="create",
+    )
+
+    if expected_error is None:
+        solution = solver.solve_final_state()
+        assert [(record.name, record.version) for record in solution] == [("demo", "2.0")]
+    else:
+        with pytest.raises(expected_error) as exc:
+            solver.solve_final_state()
+        assert exc.value.allow_retry is False
+    assert validations == 1
+
+    if expected_error is None:
+        (metadata / "pinned").write_text("demo >=3\n")
+        with pytest.raises(PackagesNotFoundError) as exc:
+            solver.solve_final_state()
+        assert exc.value.allow_retry is False
+        assert validations == 2
+
+
+def test_update_build_downgrade_fallback_does_not_revalidate_pins(
+    tmp_path: Path,
+    tmp_env: TmpEnvFixture,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    from conda.core.subdir_data import SubdirData
+
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "dep", "1.0", build="2", build_number=2)
+    _make_noarch_package(channel, "app", "1.0", depends=("dep 1.0 2",))
+    with tmp_env("app", "dep", "--override-channels", f"--channel={channel}") as prefix:
+        _make_noarch_package(channel, "dep", "1.0", build="0")
+        _make_noarch_package(channel, "app", "2.0", depends=("dep 1.0 0",))
+        (prefix / "conda-meta" / "pinned").write_text("app >=2\n")
+        SubdirData.clear_cached_local_channel_data()
+
+        validations = 0
+        check_for_pin_conflicts = SolverOutputState.check_for_pin_conflicts
+
+        def count_validation(self, index):
+            nonlocal validations
+            validations += 1
+            return check_for_pin_conflicts(self, index)
+
+        monkeypatch.setattr(SolverOutputState, "check_for_pin_conflicts", count_validation)
+        solver = Solver(
+            prefix=prefix,
+            channels=[Channel(channel.as_uri())],
+            subdirs=("noarch",),
+            specs_to_add=["app"],
+            command="update",
+        )
+
+        solution = solver.solve_final_state(update_modifier=UpdateModifier.UPDATE_SPECS)
+        assert [(record.name, record.version, record.build_number) for record in solution] == [
+            ("dep", "1.0", 0),
+            ("app", "2.0", 0),
+        ]
+        assert validations == 1
 
 
 def test_constraining_pin_and_requested():
@@ -1573,7 +1732,7 @@ def test_add_pip_as_python_dependency(
 
         assert isinstance(solution, list)
         assert ("pip" in {record.name.source for record in solution}) is add_pip
-        solver._export_solved_records(solution, out_state)
+        solver._export_solved_records(solution, out_state, index)
         assert ("pip" in out_state.records["python"].depends) is add_pip
 
 
@@ -1611,8 +1770,7 @@ def test_add_pip_does_not_patch_locked_python(
     monkeypatch.setattr(context, "add_pip_as_python_dependency", True)
 
     prefix = tmp_path / "env"
-    in_state = SolverInputState(prefix, requested=("standalone",))
-    in_state.prefix_data._prefix_records["python"] = PrefixRecord(
+    PrefixData(prefix)._prefix_records["python"] = PrefixRecord(
         name="python",
         version="3.13.0",
         build="0",
@@ -1623,7 +1781,12 @@ def test_add_pip_does_not_patch_locked_python(
         url="https://example.invalid/noarch/python-3.13.0-0.tar.bz2",
         depends=(),
     )
-    in_state._history["python"] = MatchSpec("python")
+    metadata = prefix / "conda-meta"
+    metadata.mkdir(parents=True, exist_ok=True)
+    (metadata / "history").write_text(
+        "==> 2026-01-01 00:00:00 <==\n# cmd: conda install python\n# update specs: ['python']\n"
+    )
+    in_state = SolverInputState(prefix, requested=("standalone",))
     out_state = SolverOutputState(solver_input_state=in_state)
     solver = Solver(
         prefix=prefix,
@@ -1828,13 +1991,12 @@ def test_removing_pip_respects_installed_python_metadata(
         specs_to_remove=requested,
         command="remove",
     )
-    in_state = SolverInputState(prefix, requested=requested, command="remove")
     for name, version, depends in (
         ("python", "3.13.0", python_depends),
         ("pip", "25.0", ()),
     ):
         filename = f"{name}-{version}-0.tar.bz2"
-        in_state.prefix_data._prefix_records[name] = PrefixRecord(
+        PrefixData(prefix)._prefix_records[name] = PrefixRecord(
             name=name,
             version=version,
             build="0",
@@ -1845,7 +2007,12 @@ def test_removing_pip_respects_installed_python_metadata(
             url=f"https://example.invalid/noarch/{filename}",
             depends=depends,
         )
-    in_state._history["python"] = MatchSpec("python")
+    metadata = prefix / "conda-meta"
+    metadata.mkdir(parents=True, exist_ok=True)
+    (metadata / "history").write_text(
+        "==> 2026-01-01 00:00:00 <==\n# cmd: conda install python\n# update specs: ['python']\n"
+    )
+    in_state = SolverInputState(prefix, requested=requested, command="remove")
     out_state = SolverOutputState(solver_input_state=in_state)
     repodata = _add_pip_repodata()
     for filename in tuple(repodata["packages"]):

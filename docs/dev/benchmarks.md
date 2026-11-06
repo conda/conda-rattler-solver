@@ -26,6 +26,28 @@ To select a smaller group, append a pytest filter such as `-k query_search`.
 Compare local timings on the same machine with the same environment and cache
 state.
 
+## Solver overhead workloads
+
+The [solver overhead benchmarks](https://github.com/conda/conda-rattler-solver/blob/main/tests/test_solver_overhead_benchmarks.py)
+use synthetic local channels. Run them with:
+
+```shell
+pixi run --locked -e test-py313 benchmark -k 'pinned_request or empty_package_cache'
+```
+
+Use `-k pinned_request` or `-k empty_package_cache` to select one workload:
+
+- The pinned-request benchmark has 10 package names with 200 candidate builds
+  each. Pins exclude the newest version. It times `solve_final_state()`, including
+  metadata loading and pin validation. Channel and prefix creation, plus solver
+  construction, happen before timing starts.
+- The empty-cache benchmark requests 100 or 563 packages. It times index
+  construction and a Rattler solve, including package-cache source callbacks.
+  Channel creation and request-spec construction happen before timing starts.
+
+Both workloads clear conda's in-memory metadata and package-cache objects before
+each round, outside the timed operation. Filesystem caches are left intact.
+
 ## Add benchmarks
 
 Add tests marked with `@pytest.mark.benchmark` and time the operation with the
@@ -63,3 +85,23 @@ samples. A first baseline run records measurements before comparisons can
 begin. Detected regressions fail the reporting workflow and generate PR
 feedback. Inspect the affected benchmark and its history before changing a
 threshold.
+
+## Input-state reuse
+
+`tests/test_state_benchmarks.py` measures spec collection for 100, 563, and
+1,000 installed packages. The `first` cases include input-state construction,
+output-state construction, and spec collection. The `retry` cases populate the
+input-derived values before timing, then rebuild the output state and collect
+specs again. Record creation stays outside both timed operations.
+
+The same module includes a complete 563-package update fallback. A pinned app
+requires an older dependency build, forcing three Rattler attempts across the
+normal and fallback loops. This case checks the resulting transaction as well
+as the attempt count. Local channel and prefix creation are outside timing.
+
+Run this group with `-k state_` or pass `tests/test_state_benchmarks.py` to the
+benchmark task. Compare first collection, repeated collection, and complete
+solves separately. A faster repeated collection does not imply the same
+percentage improvement for the full solve. Use separate processes for Python
+allocation measurements, since tracing affects timing, and distinguish retained
+input-state data from allocation peaks and native Rattler memory.

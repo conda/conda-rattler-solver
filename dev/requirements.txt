@@ -1,2 +1,4 @@
 conda >=26.7.0
-py-rattler >=0.27.1,<0.29.0a0
+# Remove this bootstrap pin once a compatible conda-forge release is available.
+conda-canary/label/dev::conda-rattler-solver ==0.2.0.22+g37705a0 py_0
+py-rattler >=0.28.1,<0.29.0a0

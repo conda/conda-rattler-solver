@@ -17,6 +17,9 @@ cd conda-rattler-solver
 
 The tasks expect conda's test data at `../conda/tests/data`. Pixi installs the
 locked dependencies and an editable copy of this repository when you run them.
+The development dependencies bootstrap conda with a compatible solver from
+`conda-canary/label/dev`, then replace it with this checkout for tests and benchmarks.
+
 For example, to run the test suite with Python 3.13:
 
 ```shell
@@ -101,7 +104,7 @@ initialisation.
 3. Install the required dependencies for conda-rattler-solver:
 
    ```bash
-   conda install \
+   CONDA_CHANNEL_PRIORITY=flexible conda install \
      --file "$REPO_LOCATION"/dev/requirements.txt \
      --file "$REPO_LOCATION"/tests/requirements.txt
    ```
