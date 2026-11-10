@@ -17,7 +17,7 @@ from conda.base.context import context
 from conda.common.constants import NULL
 from conda.common.io import time_recorder
 from conda.core.solve import Solver
-from conda.exceptions import PackagesNotFoundError
+from conda.exceptions import ChannelError, PackagesNotFoundError
 from conda.models.channel import Channel
 from conda.models.match_spec import MatchSpec
 from conda.reporters import get_spinner
@@ -434,6 +434,52 @@ class RattlerSolver(Solver):
         else:
             return self._collect_specs_main(in_state, out_state)
 
+    def _relax_implicit_channel_spec(
+        self, spec: MatchSpec, installed: PackageRecord | None
+    ) -> MatchSpec:
+        """
+        Drop the channel from an implicit (history-derived) spec when it references a
+        channel that is not part of this solve and the installed record satisfies it.
+
+        Classic conda keeps installed records around even if the channels they came
+        from are no longer configured, but requiring a candidate from that channel
+        made those solves fail with "No candidates were found for ...". User-requested
+        specs are never relaxed; only history specs reach this helper.
+        """
+        if installed is None:
+            return spec
+        channel = spec.get_raw_value("channel")
+        if channel is None:
+            return spec
+        try:
+            channel = Channel(channel)
+        except (ChannelError, TypeError, ValueError):
+            return spec
+        if channel.canonical_name in {chn.canonical_name for chn in self.channels}:
+            return spec
+        if not spec.match(installed):
+            return spec
+        log.debug(
+            "Relaxing implicit spec %s: channel %s is not part of this solve",
+            spec,
+            channel.canonical_name,
+        )
+        return MatchSpec(
+            **{
+                field: value
+                for field in (
+                    "name",
+                    "version",
+                    "build",
+                    "build_number",
+                    "subdir",
+                    "track_features",
+                    "features",
+                )
+                if (value := spec.get_raw_value(field)) is not None
+            }
+        )
+
     def _collect_specs_main(
         self,
         in_state: SolverInputState,
@@ -548,6 +594,9 @@ class RattlerSolver(Solver):
                 specs.append(history or name)
                 pinned_packages.append(installed)
             elif history:
+                # Relaxing the channel also lowers the strictness of name-only specs,
+                # so they keep their installed record locked instead of being neutered.
+                history = self._relax_implicit_channel_spec(history, installed)
                 if conflicting and history.strictness == 3:
                     # relax name-version-build (strictness=3) history specs that cause
                     # conflicts this is called neutering and makes
