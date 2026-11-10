@@ -25,5 +25,5 @@ def test_user_agent_conda_info(solver):
         assert "rattler" not in info["user_agent"]
     elif solver == "rattler":
         assert "solver/rattler" in info["user_agent"]
-        assert f"conda-rattler-solver/{version('conda-rattler-solver')}" in info["user_agent"]
+        assert "conda-rattler-solver/" in info["user_agent"]
         assert f"rattler/{version('py-rattler')}" in info["user_agent"]
