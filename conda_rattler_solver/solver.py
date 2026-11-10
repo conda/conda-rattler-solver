@@ -435,7 +435,7 @@ class RattlerSolver(Solver):
             return self._collect_specs_main(in_state, out_state)
 
     def _relax_implicit_channel_spec(
-        self, spec: MatchSpec, installed: PackageRecord | None
+        self, spec: MatchSpec, installed: PackageRecord | None, channels: Iterable[Channel]
     ) -> MatchSpec:
         """
         Drop the channel from an implicit (history-derived) spec when it references a
@@ -445,6 +445,9 @@ class RattlerSolver(Solver):
         from are no longer configured, but requiring a candidate from that channel
         made those solves fail with "No candidates were found for ...". User-requested
         specs are never relaxed; only history specs reach this helper.
+
+        ``channels`` must be the channels of the current solve, not just the configured
+        ones, because ``channel::package`` specs add channels to the solve too.
         """
         if installed is None:
             return spec
@@ -455,7 +458,7 @@ class RattlerSolver(Solver):
             channel = Channel(channel)
         except (ChannelError, TypeError, ValueError):
             return spec
-        if channel.canonical_name in {chn.canonical_name for chn in self.channels}:
+        if channel.canonical_name in {chn.canonical_name for chn in channels}:
             return spec
         if not spec.match(installed):
             return spec
@@ -492,6 +495,7 @@ class RattlerSolver(Solver):
         constraints: list[rattler.MatchSpec] = []
         locked_packages: list[rattler.PackageRecord] = []
         pinned_packages: list[rattler.PackageRecord] = []
+        solve_channels: list[Channel] | None = None
 
         protected: set[str] = {
             # we do not include history on purpose (but history is "protected" too)
@@ -596,7 +600,9 @@ class RattlerSolver(Solver):
             elif history:
                 # Relaxing the channel also lowers the strictness of name-only specs,
                 # so they keep their installed record locked instead of being neutered.
-                history = self._relax_implicit_channel_spec(history, installed)
+                if solve_channels is None:
+                    solve_channels = self._collect_channel_list(in_state)
+                history = self._relax_implicit_channel_spec(history, installed, solve_channels)
                 if conflicting and history.strictness == 3:
                     # relax name-version-build (strictness=3) history specs that cause
                     # conflicts this is called neutering and makes
