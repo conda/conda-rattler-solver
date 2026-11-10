@@ -1031,9 +1031,7 @@ def test_conflicting_history_channel_spec_keeps_installed_record_available(
     index = RattlerIndexHelper(channels=solver.channels, subdirs=("noarch",), in_state=in_state)
     out_state = SolverOutputState(
         solver_input_state=in_state,
-        conflicts={
-            name: record.to_match_spec() for name, record in in_state.installed.items()
-        },
+        conflicts={name: record.to_match_spec() for name, record in in_state.installed.items()},
     )
 
     solution = solver._solve_attempt(in_state, out_state, index, attempt=1001)
