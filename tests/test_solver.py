@@ -1046,7 +1046,11 @@ def test_conflicting_history_channel_spec_keeps_installed_record_available(
     "spec, channels, record_channel, expected",
     (
         pytest.param(
-            "conda-forge::demo >=2", (), "conda-forge", "demo >=2", id="channel-not-configured"
+            "conda-forge::demo >=2",
+            ("https://example.test/other",),
+            "conda-forge",
+            "demo >=2",
+            id="channel-not-configured",
         ),
         pytest.param(
             "https://example.test/available::demo >=2",
