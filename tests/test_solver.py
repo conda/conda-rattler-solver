@@ -1089,13 +1089,59 @@ def test_relax_implicit_channel_spec(
     )
     spec = MatchSpec(spec)
 
-    relaxed = solver._relax_implicit_channel_spec(spec, record)
+    relaxed = solver._relax_implicit_channel_spec(spec, record, solver.channels)
 
     if expected is None:
         assert relaxed is spec
     else:
         assert relaxed.get_raw_value("channel") is None
         assert relaxed == MatchSpec(expected)
+
+
+def test_requested_spec_channel_keeps_history_spec_channel(tmp_path: Path) -> None:
+    """
+    A `channel::package` spec adds its channel to the solve, so a history spec naming
+    that channel must keep it even though the channel is not configured. Relaxing it
+    there could let another channel's record replace the installed one.
+    """
+    available = tmp_path / "available"
+    _make_noarch_package(available, "demo", "1.0")
+    _make_noarch_package(available, "other", "1.0")
+    prefix = tmp_path / "env"
+    metadata = prefix / "conda-meta"
+    metadata.mkdir(parents=True)
+    (metadata / "history").write_text(
+        "==> 2026-01-01 00:00:00 <==\n"
+        "# cmd: conda install demo\n"
+        f"# update specs: ['{available.as_uri()}::demo']\n"
+    )
+    PrefixData._cache_.clear()
+    PrefixData(prefix)._prefix_records["demo"] = PrefixRecord(
+        name="demo",
+        version="1.0",
+        build="0",
+        build_number=0,
+        channel=available.as_uri(),
+        subdir="noarch",
+        fn="demo-1.0-0.tar.bz2",
+        url=f"{available.as_uri()}/noarch/demo-1.0-0.tar.bz2",
+    )
+    requested = (f"{available.as_uri()}::other",)
+    solver = Solver(
+        prefix=prefix,
+        channels=(),
+        subdirs=("noarch",),
+        specs_to_add=requested,
+        command="install",
+    )
+    in_state = SolverInputState(prefix, requested=requested, command="install")
+    out_state = SolverOutputState(solver_input_state=in_state)
+
+    collected = solver._collect_specs_main(in_state, out_state)
+
+    demo = next(spec for spec in collected["specs"] if spec.name.normalized == "demo")
+    assert demo.channel is not None
+    assert str(demo.channel.base_url) == f"{available.as_uri()}/"
 
 
 @pytest.mark.skipif(not on_linux, reason="Linux only")
