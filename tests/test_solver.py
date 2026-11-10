@@ -28,6 +28,7 @@ from conda.base.context import context, reset_context
 from conda.common.compat import on_linux, on_mac, on_win
 from conda.core.prefix_data import PrefixData
 from conda.exceptions import (
+    CondaExitZero,
     DryRunExit,
     PackagesNotFoundError,
     SpecsConfigurationConflictError,
@@ -952,6 +953,149 @@ def test_install_keeps_unrequested_history_packages(
         installed = PrefixData(prefix)
         assert installed.get("ca-certificates").version == expected_version
         assert installed.get("app").build == expected_build
+
+
+def test_install_ignores_history_channel_missing_from_solve(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+) -> None:
+    """
+    A history entry like `conda-forge::demo` must not require a candidate from
+    conda-forge when a different channel is configured. The package is already
+    installed, so the solve should keep it as is.
+    """
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "demo", "1.0")
+    _make_noarch_package(channel, "other", "1.0")
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("demo", *args) as prefix:
+        history = prefix / "conda-meta" / "history"
+        history.write_text(
+            history.read_text()
+            + "\n==> 2026-01-01 00:00:00 <==\n"
+            + "# cmd: conda install demo\n"
+            + "# update specs: ['conda-forge::demo']\n"
+        )
+        PrefixData._cache_.clear()
+
+        conda_cli(
+            "install",
+            "other",
+            "--download-only",
+            f"--prefix={prefix}",
+            *args,
+            "--yes",
+            raises=CondaExitZero,
+        )
+
+
+def test_conflicting_history_channel_spec_keeps_installed_record_available(
+    tmp_path: Path,
+) -> None:
+    """
+    The last-ditch attempt marks every installed record as conflicting. A history
+    entry like `conda-forge::demo` used to be appended as a bare name with no locked
+    record when its channel was not part of the solve, so a package that only exists
+    in the prefix made the solve fail with "No candidates were found for demo".
+    """
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "other", "1.0")
+    prefix = tmp_path / "env"
+    metadata = prefix / "conda-meta"
+    metadata.mkdir(parents=True)
+    (metadata / "history").write_text(
+        "==> 2026-01-01 00:00:00 <==\n"
+        "# cmd: conda install demo\n"
+        "# update specs: ['conda-forge::demo']\n"
+    )
+    PrefixData._cache_.clear()
+    PrefixData(prefix)._prefix_records["demo"] = PrefixRecord(
+        name="demo",
+        version="1.0",
+        build="0",
+        build_number=0,
+        channel="https://conda.anaconda.org/conda-forge",
+        subdir="noarch",
+        fn="demo-1.0-0.tar.bz2",
+        url="https://conda.anaconda.org/conda-forge/noarch/demo-1.0-0.tar.bz2",
+    )
+    solver = Solver(
+        prefix=prefix,
+        channels=[Channel(channel.as_uri())],
+        subdirs=("noarch",),
+        specs_to_add=["other"],
+        command="install",
+    )
+    in_state = SolverInputState(prefix, requested=["other"], command="install")
+    index = RattlerIndexHelper(channels=solver.channels, subdirs=("noarch",), in_state=in_state)
+    out_state = SolverOutputState(
+        solver_input_state=in_state,
+        conflicts={
+            name: record.to_match_spec() for name, record in in_state.installed.items()
+        },
+    )
+
+    solution = solver._solve_attempt(in_state, out_state, index, attempt=1001)
+
+    assert isinstance(solution, list)
+    assert {record.name.source for record in solution} == {"demo", "other"}
+
+
+@pytest.mark.parametrize(
+    "spec, channels, record_channel, expected",
+    (
+        pytest.param(
+            "conda-forge::demo >=2", (), "conda-forge", "demo >=2", id="channel-not-configured"
+        ),
+        pytest.param(
+            "https://example.test/available::demo >=2",
+            ("https://example.test/available",),
+            "https://example.test/available",
+            None,
+            id="channel-configured",
+        ),
+        pytest.param(
+            "https://example.test/missing::demo >=3",
+            (),
+            "https://example.test/available",
+            None,
+            id="installed-does-not-match",
+        ),
+        pytest.param("demo >=2", (), "https://example.test/available", None, id="no-channel"),
+        pytest.param("conda-forge::demo >=2", (), None, None, id="not-installed"),
+    ),
+)
+def test_relax_implicit_channel_spec(
+    tmp_path: Path,
+    spec: str,
+    channels: tuple[str, ...],
+    record_channel: str | None,
+    expected: str | None,
+) -> None:
+    solver = Solver(tmp_path, channels=channels, subdirs=("noarch",))
+    record = (
+        PrefixRecord(
+            name="demo",
+            version="2.0",
+            build="build_0",
+            build_number=0,
+            channel=record_channel,
+            subdir="noarch",
+            fn="demo-2.0-build_0.conda",
+        )
+        if record_channel
+        else None
+    )
+    spec = MatchSpec(spec)
+
+    relaxed = solver._relax_implicit_channel_spec(spec, record)
+
+    if expected is None:
+        assert relaxed is spec
+    else:
+        assert relaxed.get_raw_value("channel") is None
+        assert relaxed == MatchSpec(expected)
 
 
 @pytest.mark.skipif(not on_linux, reason="Linux only")
