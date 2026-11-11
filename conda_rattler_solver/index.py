@@ -166,6 +166,10 @@ class RattlerIndexHelper:
             self._index.update(
                 {info.noauth_url: info for info in self._load_pkgs_cache(pkgs_dirs)}
             )
+        if in_state is not None and in_state.installed:
+            self._index.update(
+                {info.noauth_url: info for info in self._load_installed_records(in_state)}
+            )
 
     @classmethod
     def from_platform_aware_channel(cls, channel: Channel) -> Self:
@@ -521,6 +525,41 @@ class RattlerIndexHelper:
                     )
                 )
                 self._unlink_on_del.append(Path(f.name))
+        return repos
+
+    def _load_installed_records(self, in_state: SolverInputState) -> list[_ChannelRepoInfo]:
+        """
+        Expose installed records as a candidate source, even when their channel is no longer
+        configured, like classic conda's `Index._supplement_index_dict_with_prefix`.
+        """
+        repodata_by_subdir = {
+            subdir: empty_repodata_dict(subdir)
+            for subdir in dict.fromkeys(("noarch", *self._subdirs))
+        }
+        for record in in_state.installed.values():
+            if record.subdir not in repodata_by_subdir:
+                continue
+            key = "packages" if record.fn.endswith(".tar.bz2") else "packages.conda"
+            repodata_by_subdir[record.subdir][key][record.fn] = dict(record.dump())
+        repos = []
+        for subdir_name, repodata in repodata_by_subdir.items():
+            if not repodata["packages"] and not repodata["packages.conda"]:
+                continue
+            with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+                f.write(json_dump(repodata))
+            url = path_to_url(f.name)
+            repos.append(
+                _ChannelRepoInfo(
+                    repo=rattler.SparseRepoData(rattler.Channel(url), subdir_name, f.name),
+                    channel=None,
+                    full_url=url,
+                    noauth_url=url,
+                    local_json=f.name,
+                    installed=in_state.installed,
+                    package_format=self._package_format,
+                )
+            )
+            self._unlink_on_del.append(Path(f.name))
         return repos
 
     def _search(

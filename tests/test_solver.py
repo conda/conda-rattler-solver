@@ -28,6 +28,7 @@ from conda.base.context import context, reset_context
 from conda.common.compat import on_linux, on_mac, on_win
 from conda.core.prefix_data import PrefixData
 from conda.exceptions import (
+    CondaExitZero,
     DryRunExit,
     PackagesNotFoundError,
     SpecsConfigurationConflictError,
@@ -952,6 +953,41 @@ def test_install_keeps_unrequested_history_packages(
         installed = PrefixData(prefix)
         assert installed.get("ca-certificates").version == expected_version
         assert installed.get("app").build == expected_build
+
+
+def test_install_ignores_history_channel_missing_from_solve(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+) -> None:
+    """
+    A history entry like `conda-forge::demo` must not require a candidate from
+    conda-forge when a different channel is configured. The package is already
+    installed, so the solve should keep it as is.
+    """
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "demo", "1.0")
+    _make_noarch_package(channel, "other", "1.0")
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("demo", *args) as prefix:
+        history = prefix / "conda-meta" / "history"
+        history.write_text(
+            history.read_text()
+            + "\n==> 2026-01-01 00:00:00 <==\n"
+            + "# cmd: conda install demo\n"
+            + "# update specs: ['conda-forge::demo']\n"
+        )
+        PrefixData._cache_.clear()
+
+        conda_cli(
+            "install",
+            "other",
+            "--download-only",
+            f"--prefix={prefix}",
+            *args,
+            "--yes",
+            raises=CondaExitZero,
+        )
 
 
 @pytest.mark.skipif(not on_linux, reason="Linux only")
