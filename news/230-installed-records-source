@@ -1,0 +1,3 @@
+### Bug fixes
+
+* Installed packages from channels that are no longer configured stay available to the solver, so a history entry such as `conda-forge::demo` no longer fails with `No candidates were found`. (#230)
