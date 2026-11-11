@@ -1,3 +1,3 @@
 ### Bug fixes
 
-* Relax implicit history specs by dropping a channel that is not part of the solve, so an installed package keeps its record available and the solve no longer fails with `No candidates were found for`. (#226 via #227)
+* Relax implicit history specs that name a channel outside the solve by dropping only the channel, so the installed package stays available as a candidate and the solve no longer fails with `No candidates were found`. (#227)
