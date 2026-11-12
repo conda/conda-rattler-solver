@@ -25,7 +25,7 @@ All notable changes to this project will be documented in this file.
 ### Docs
 
 * Document conda-rattler-solver as stable and as conda's default solver starting with conda 26.10. (#200)
-* Correct the minimum conda version to 26.7 and use the libmamba solver when installing a missing conda-rattler-solver plugin.
+* Correct the minimum conda version to 26.7 and use the libmamba solver when installing a missing conda-rattler-solver plugin. (#200)
 
 ### Other
 
@@ -35,7 +35,7 @@ All notable changes to this project will be documented in this file.
 
 * @conda-bot
 * @danyeaw
-* @dependabot[bot] made their first contribution in <https://github.com/conda/conda-rattler-solver/pull/86>
+* @dependabot[bot]
 * @jezdez
 
 
