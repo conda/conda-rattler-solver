@@ -21,20 +21,20 @@ conda-rattler-solver is conda's default solver starting with conda 26.10.
 Conda 26.10 and later use conda-rattler-solver by default unless another
 solver is explicitly selected in your configuration.
 
-If you have a conda release older than 26.5, update conda first:
+If you have a conda release older than 26.7, update conda first:
 
 ```console
 $ conda update -n base conda
 ```
 
 If your installation does not include conda-rattler-solver, install it in
-`base`:
+`base` using the `libmamba` solver:
 
 ```console
-$ conda install -n base conda-rattler-solver
+$ conda install --solver libmamba -n base conda-rattler-solver
 ```
 
-On conda 26.5 through 26.9, or if another solver is configured, select rattler:
+On conda 26.7 through 26.9, or if another solver is configured, select rattler:
 
 ```console
 $ conda config --set solver rattler
@@ -44,7 +44,7 @@ Development builds are published to the `conda-canary` channel under the `dev`
 label:
 
 ```console
-$ conda install -n base conda-canary/label/dev::conda-rattler-solver
+$ conda install --solver libmamba -n base conda-canary/label/dev::conda-rattler-solver
 ```
 
 ## Usage

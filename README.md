@@ -23,13 +23,14 @@ and the [user guide](https://conda.github.io/conda-rattler-solver/user-guide/) f
 Conda 26.10 and later use conda-rattler-solver by default unless another
 solver is explicitly selected in your configuration.
 
-If your installation does not include the plugin, install it in `base`:
+If your installation does not include the plugin, install it in `base` using
+the `libmamba` solver:
 
 ```
-conda install --name base conda-rattler-solver
+conda install --solver libmamba --name base conda-rattler-solver
 ```
 
-On conda 26.5 through 26.9, or if another solver is configured, select rattler:
+On conda 26.7 through 26.9, or if another solver is configured, select rattler:
 
 ```
 conda config --set solver rattler

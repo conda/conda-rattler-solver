@@ -46,10 +46,11 @@ CondaValueError: Invalid choice for 'solver': rattler
 ```
 
 the plugin is not installed in the environment that provides the `conda`
-command, which is usually `base`. Install it there:
+command, which is usually `base`. Install it there using the `libmamba` solver
+so the command works while rattler is unavailable:
 
 ```console
-$ conda install -n base conda-rattler-solver
+$ conda install --solver libmamba -n base conda-rattler-solver
 ```
 
 ## How do I uninstall it?
