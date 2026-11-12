@@ -7,6 +7,38 @@ All notable changes to this project will be documented in this file.
 
 [//]: # (current developments)
 
+## 26.11.0 (2026-11-12)
+
+### Enhancements
+
+* Speed up spec collection and `--only-deps` handling on large environments by building the installed-package and spec mappings once per solve instead of once per package. (#216)
+* Reuse the spec mapping across solver retry attempts, so each retry skips rebuilding it. Each new solve still reads the current installed packages, pins, and configuration. (#216)
+* Speed up updates that fall back to lowering dependency builds by checking pin conflicts once per solve and reusing the result, instead of repeating the index search on the retry. (#217)
+* Speed up solves with an offline package cache by skipping cache repositories that have no packages, avoiding temporary repodata files and searches without candidates. (#217)
+* Speed up solver error reporting on environments with many installed packages: exact package names now use a direct lookup instead of a full scan. Wildcard and regex names still scan. (#218)
+* Speed up temporary repodata handling by writing shards and package-cache repodata as compact JSON. (#218)
+
+### Bug fixes
+
+* Keep `noarch` packages available when solving from an offline package cache that also holds native packages for the same platform. (#217)
+
+### Docs
+
+* Document conda-rattler-solver as stable and as conda's default solver starting with conda 26.10. (#200)
+* Correct the minimum conda version to 26.7 and use the libmamba solver when installing a missing conda-rattler-solver plugin. (#200)
+
+### Other
+
+* Move the development environments from the `conda-canary` bootstrap pin to the released `conda-rattler-solver` on conda-forge. (#228)
+
+### Contributors
+
+* @conda-bot
+* @danyeaw
+* @dependabot[bot]
+* @jezdez
+
+
 ## 26.10.2 (2026-11-03)
 
 ### Bug fixes
