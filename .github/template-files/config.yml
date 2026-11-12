@@ -30,6 +30,44 @@ conda/infrastructure:
   #   with:
   #     tests_workflow: Test
 
+  # [optional] news fragment validation on PRs
+  - src: templates/workflows/check-news.yml
+    dst: .github/workflows/check-news.yml
+  # For repos whose news directory is not "news", add:
+  #   with:
+  #     news_directory: releases/news
+
+  # [optional] aggregate news fragments into CHANGELOG on release branches
+  - src: templates/workflows/prepare-release.yml
+    dst: .github/workflows/prepare-release.yml
+  # For repos whose test workflow is not named "Tests", add:
+  #   with:
+  #     tests_workflow: Test
+  # For repos whose news directory is not "news", add:
+  #   with:
+  #     news_directory: releases/news
+  # For on-demand release projects without `.x` release branches, add:
+    with:
+      on_demand: true
+  # which replaces the workflow_run automation with a workflow_dispatch
+  # trigger for manual runs with a `version` input; cadence release projects
+  # (the default) must rely on the workflow_run automation instead
+
+  # [optional] push a connector branch and open a PR merging the release
+  # branch back into main after a release is published
+  # - src: templates/workflows/merge-back.yml
+  #   dst: .github/workflows/merge-back.yml
+  # For repos whose release process doc isn't at the repo root, add:
+  #   with:
+  #     release_process_path: releases/RELEASE.md
+
+  # [optional] keep .authors.yml current (weekly PR)
+  - src: templates/workflows/prepare-authors.yml
+    dst: .github/workflows/prepare-authors.yml
+  # For repos with a non-standard schedule, add:
+  #   with:
+  #     schedule: '0 4 * * 2'
+
   # [optional] general processes for the conda org
   - src: templates/HOW_WE_USE_GITHUB.md
     dst: HOW_WE_USE_GITHUB.md
