@@ -28,8 +28,8 @@ feedback, but it is not yet recommended for production use.
 % conda-rattler-solver is already preconfigured as default. For older versions of
 % `conda`, we simply recommend updating `conda` to a more recent version:
 
-conda-rattler-solver requires `conda` 26.7 or later. If you have an older
-`conda`, we simply recommend updating `conda` to a more recent version first:
+conda-rattler-solver requires Python 3.11 or later and `conda` 26.7 or later.
+If you have an older `conda`, update it to a more recent version first:
 
 ```console
 $ conda update -n base conda
