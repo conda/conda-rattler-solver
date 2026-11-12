@@ -28,10 +28,10 @@ $ conda update -n base conda
 ```
 
 If your installation does not include conda-rattler-solver, install it in
-`base` using the built-in `classic` solver:
+`base` using the `libmamba` solver:
 
 ```console
-$ conda install --solver classic -n base conda-rattler-solver
+$ conda install --solver libmamba -n base conda-rattler-solver
 ```
 
 On conda 26.7 through 26.9, or if another solver is configured, select rattler:
@@ -44,7 +44,7 @@ Development builds are published to the `conda-canary` channel under the `dev`
 label:
 
 ```console
-$ conda install --solver classic -n base conda-canary/label/dev::conda-rattler-solver
+$ conda install --solver libmamba -n base conda-canary/label/dev::conda-rattler-solver
 ```
 
 ## Usage
