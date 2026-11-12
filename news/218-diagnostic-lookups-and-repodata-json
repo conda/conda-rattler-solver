@@ -1,4 +1,0 @@
-### Enhancements
-
-* Speed up solver error reporting on environments with many installed packages: exact package names now use a direct lookup instead of a full scan. Wildcard and regex names still scan. (#218)
-* Speed up temporary repodata handling by writing shards and package-cache repodata as compact JSON. (#218)

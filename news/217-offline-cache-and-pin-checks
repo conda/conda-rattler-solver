@@ -1,8 +1,0 @@
-### Bug fixes
-
-* Keep `noarch` packages available when solving from an offline package cache that also holds native packages for the same platform. (#217)
-
-### Enhancements
-
-* Speed up updates that fall back to lowering dependency builds by checking pin conflicts once per solve and reusing the result, instead of repeating the index search on the retry. (#217)
-* Speed up solves with an offline package cache by skipping cache repositories that have no packages, avoiding temporary repodata files and searches without candidates. (#217)
