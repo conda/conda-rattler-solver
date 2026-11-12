@@ -1,0 +1,3 @@
+### Other
+
+* Move the development environments from the `conda-canary` bootstrap pin to the released `conda-rattler-solver` on conda-forge. (#228)
