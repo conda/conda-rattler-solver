@@ -18,8 +18,8 @@ requirements:
   host:
     - python 3.11.*
     - pip
-    - hatchling
-    - hatch-vcs
+    - hatchling >=1.12.2
+    - hatch-vcs >0.2.0
   run:
     - python >=3.11
     - conda >=26.7.0
@@ -52,3 +52,4 @@ about:
 extra:
   recipe-maintainers:
     - jaimergp
+    - danyeaw
