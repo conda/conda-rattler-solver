@@ -318,7 +318,6 @@ class RattlerSolver(Solver):
                 neutered=dict(out_state.neutered),
                 conflicts=dict(out_state.conflicts),
                 pins=dict(out_state.pins),
-                installed_without_candidates=set(out_state.installed_without_candidates),
             )
         else:
             # Didn't find a solution after all attempts, let's unfreeze everything
@@ -373,6 +372,8 @@ class RattlerSolver(Solver):
           the installed packages, history or lockfiles).
         - pinned_packages: Records that MUST be present if needed. It will not allow any other
           variant.
+        - additional_packages: Records that should be included in the solve, but should not be
+          preferred. Can be useful to represent packages that are already installed in the prefix.
         - virtual_packages: Details of the system.
         """
         solve_kwargs = {
@@ -614,15 +615,6 @@ class RattlerSolver(Solver):
                 elif action == "lock":
                     locked_packages.append(installed)
 
-        # Add packages marked as missing to the set of locked packages
-        if out_state.installed_without_candidates:
-            already_locked = {record.name for record in locked_packages}
-            for name in out_state.installed_without_candidates:
-                if name in already_locked:
-                    continue
-                if installed := in_state.installed.get(name):
-                    locked_packages.append(installed)
-
         if in_state.is_updating:
             for i, spec in enumerate(specs):
                 spec = MatchSpec(spec)
@@ -647,6 +639,9 @@ class RattlerSolver(Solver):
             "pinned_packages": [
                 conda_record_to_rattler_record(record) for record in pinned_packages
             ],
+            "additional_packages": [
+                conda_prefix_record_to_rattler_prefix_record(record) for record in in_state.installed.values()
+            ]
         }
 
     def _collect_specs_for_remove(
@@ -751,9 +746,6 @@ class RattlerSolver(Solver):
             elif "cannot be installed because there are no viable options" in line:
                 spec = matchspec_from_solver_diagnostic(f"{words[0]} {words[1].rstrip(',')}")
                 unsatisfiable[spec.name] = spec
-                if (installed := in_state.installed.get(spec.name)) and spec.match(installed):
-                    # Repository candidates may all have unavailable dependencies.
-                    out_state.installed_without_candidates.add(spec.name)
             elif "the constraint" in line and "cannot be fulfilled" in line:
                 unsatisfiable[words[2]] = matchspec_from_solver_diagnostic(" ".join(words[2:-3]))
             elif (
@@ -783,7 +775,6 @@ class RattlerSolver(Solver):
                 # A matching installed package can outlive its channel's candidates.
                 if matches_installed:
                     unsatisfiable[spec.name] = spec
-                    out_state.installed_without_candidates.add(spec.name)
                 else:
                     not_found[spec.name] = spec
 
