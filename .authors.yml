@@ -8,7 +8,7 @@
 - name: Dan Yeaw
   email: dan@yeaw.me
   github: danyeaw
-  num_commits: 12
+  num_commits: 17
   first_commit: 2026-01-23 13:23:50
 - name: Sophia Castellarin
   email: scastellarin@openteams.com
@@ -18,12 +18,12 @@
 - name: Jannis Leidel
   email: jannis@leidel.info
   github: jezdez
-  num_commits: 15
+  num_commits: 18
   first_commit: 2025-10-20 04:49:07
 - name: conda-bot
   email: 18747875+conda-bot@users.noreply.github.com
   github: conda-bot
-  num_commits: 18
+  num_commits: 20
   first_commit: 2026-06-10 15:19:32
 - name: jaimergp
   email: jaimergp@users.noreply.github.com
@@ -38,7 +38,7 @@
 - name: dependabot[bot]
   email: 49699333+dependabot[bot]@users.noreply.github.com
   github: dependabot[bot]
-  num_commits: 17
+  num_commits: 18
   first_commit: 2026-06-22 22:35:32
 - name: Mahe Iram Khan
   email: 65779580+ForgottenProgramme@users.noreply.github.com
