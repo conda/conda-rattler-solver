@@ -420,45 +420,32 @@ class RattlerIndexHelper:
     def _load_repo_info_from_shards(
         self, channel_data: dict[str, Shards]
     ) -> dict[str, _ChannelRepoInfo]:
-        """
-        Convert a dict[url, Shards] returned by build_repodata_subset into
-        the same dict[noauth_url, _ChannelRepoInfo] format used by _load_channels.
-        Each Shards object is serialised to a temporary repodata JSON file so that
-        rattler.SparseRepoData can consume it without any changes to the rattler API.
-        """
+        """Load the shard subset into native sparse repodata without a temporary file."""
         index = {}
         for url, shards in channel_data.items():
-            subdir = Channel.from_url(url).subdir
+            channel = Channel.from_url(url)
+            subdir = channel.subdir
+            noauth_url = channel.urls(with_credentials=False, subdirs=(subdir,))[0]
             repodata = empty_repodata_dict(subdir, base_url=url)
             for (key, section), record in shards.iter_records_v3():
-                if section == "packages":
-                    repodata["packages"][key] = record
-                elif section == "packages.conda":
-                    repodata["packages.conda"][key] = record
+                if section in ("packages", "packages.conda"):
+                    repodata[section][key] = record
                 elif section.startswith("v3."):
-                    # Extract v3 package type (whl, conda, tar.bz2) from section name
-                    v3_type = section[3:]  # Remove "v3." prefix
-                    repodata["v3"][v3_type][key] = record
-            n_packages = (
-                len(repodata["packages"])
-                + len(repodata["packages.conda"])
-                + sum(len(group) for group in repodata["v3"].values())
+                    repodata["v3"][section[3:]][key] = record
+            repo = rattler.SparseRepoData.from_bytes(
+                rattler.Channel(noauth_url.rsplit("/", 1)[0]),
+                subdir,
+                json_dump(repodata, indent=None, separators=(",", ":")).encode(),
             )
-            log.debug(
-                "_load_repo_info_from_shards: %s packages for %s",
-                n_packages,
-                url,
+            index[noauth_url] = _ChannelRepoInfo(
+                repo=repo,
+                channel=channel,
+                full_url=url,
+                noauth_url=noauth_url,
+                local_json=None,
+                installed=self.in_state.installed if self.in_state else {},
+                package_format=self._package_format,
             )
-            if n_packages > 0:
-                log.debug(
-                    "_load_repo_info_from_shards: sample filenames: %s",
-                    list(repodata["packages"])[:3] + list(repodata["packages.conda"])[:3],
-                )
-            with NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
-                f.write(json_dump(repodata, indent=None, separators=(",", ":")))
-            self._unlink_on_del.append(Path(f.name))
-            info = self._json_path_to_repo_info(url, f.name)
-            index[info.noauth_url] = info
         return index
 
     def _load_channels(self, urls: Iterable[str]) -> dict[str, _ChannelRepoInfo]:
