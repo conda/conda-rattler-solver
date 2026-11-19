@@ -20,6 +20,7 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
   "Programming Language :: Python :: Implementation :: CPython",
   "Topic :: Software Development :: Libraries :: Python Modules",
   "Topic :: System :: Software Distribution",
@@ -151,7 +152,7 @@ python = "3.13.*"
 [tool.pixi.feature.release.dependencies]
 hatch-vcs = ">=0.2.0"
 hatchling = ">=1.12.2"
-python = ">=3.13,<3.14"
+python = ">=3.13,<3.15"
 python-build = ">=1.2"
 rever = "*"
 twine = ">=6.1"
@@ -163,6 +164,9 @@ check-dist = "python -m twine check --strict dist/*"
 [tool.pixi.feature.py314.dependencies]
 python = "3.14.*"
 
+[tool.pixi.feature.py315.dependencies]
+python = "3.15.*"
+
 [tool.pixi.environments]
 build = ["build"]
 dev = ["py311", "self"]
@@ -173,6 +177,7 @@ test-py311 = ["test", "py311", "self"]
 test-py312 = ["test", "py312", "self"]
 test-py313 = ["test", "py313", "self"]
 test-py314 = ["test", "py314", "self"]
+test-py315 = ["test", "py315", "self"]
 
 [tool.hatch.build.hooks.vcs]
 version-file = "conda_rattler_solver/_version.py"
