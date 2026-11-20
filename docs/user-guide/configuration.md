@@ -27,9 +27,7 @@ override this setting for a single command.
 
 Controls how the solver chooses between packages that are available from more
 than one channel. conda's `strict`, `flexible`, and `disabled` modes map onto
-rattler's own channel priority modes. `flexible` is the default. Note that
-`disabled` does not sort candidates exactly as `classic` does. See
-[](known-limitations) for details.
+rattler's own channel priority modes. `flexible` is the default.
 
 ```console
 $ conda config --set channel_priority strict
