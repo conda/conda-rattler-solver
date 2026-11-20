@@ -18,13 +18,6 @@ solver for those environments.
 
 ## Channel priority
 
-With `channel_priority: disabled`, `classic` prefers the higher-priority
-channel when the same version is available from several channels.
-conda-rattler-solver may pick a build from a lower-priority channel instead.
-See
-[conda/rattler#2823](https://github.com/conda/rattler/issues/2823). The
-default, `flexible`, and `strict` are not affected.
-
 % TODO: remove the paragraph below when PR #181 (additional_packages, issue
 % #174) is merged. It drops the xfail on the test for this case.
 

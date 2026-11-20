@@ -2354,6 +2354,43 @@ def test_channel_priority_version_against_channel_order(
     assert packages == {"foo": expected_foo}
 
 
+@pytest.mark.parametrize("command", ["install", "update"])
+@pytest.mark.parametrize(
+    "channel_priority",
+    ["strict", "flexible", "disabled"],
+)
+def test_channel_priority_version_tie_against_channel_order(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    channel_priority: str,
+    command: str,
+) -> None:
+    """
+    Both channels carry ``foo 1.0``, and the lower-priority channel has the
+    higher build number. Every channel priority should resolve the tie from
+    the higher-priority channel. Disabled priority trades the channel order
+    for a newer version, but not for a newer build of the same version.
+    """
+    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", channel_priority)
+    reset_context()
+
+    channel_a = tmp_path / "channel-a"
+    _make_noarch_package(channel_a, "foo", "1.0", build="0")
+    channel_b = tmp_path / "channel-b"
+    _make_noarch_package(channel_b, "foo", "1.0", build="3", build_number=3)
+
+    solver = Solver(
+        prefix=str(tmp_path / "prefix"),
+        channels=[Channel(str(channel_a)), Channel(str(channel_b))],
+        subdirs=("noarch",),
+        specs_to_add=("foo",),
+        command=command,
+    )
+    solution = solver.solve_final_state()
+    packages = {record.name: (record.version, record.build_number) for record in solution}
+    assert packages == {"foo": ("1.0", 0)}
+
+
 @pytest.mark.parametrize(
     "channel_priority",
     ["strict", "flexible", "disabled"],
