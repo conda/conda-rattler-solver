@@ -381,6 +381,8 @@ class RattlerSolver(Solver):
             "channel_priority": CHANNEL_PRIORITY_MAP[context.channel_priority],
             "strategy": "highest",
             "add_pip_as_python_dependency": context.add_pip_as_python_dependency,
+            # rattler filters every source by format, including the wrappers used for updates
+            "package_format_selection": index._package_format,
         }
         if in_state.is_updating:
             # MatchSpec fields are combined with AND, so a build-number constraint
@@ -391,10 +393,7 @@ class RattlerSolver(Solver):
             solve_kwargs.update(sources=sources, platforms=index._subdirs)
         else:
             solve = rattler.solve_with_sparse_repodata
-            solve_kwargs.update(
-                sparse_repodata=index.solve_sources(sparse=True),
-                package_format_selection=index._package_format,
-            )
+            solve_kwargs.update(sparse_repodata=index.solve_sources(sparse=True))
         if log.isEnabledFor(logging.DEBUG):
             dumped = json.dumps(solve_kwargs, indent=2, default=str, sort_keys=True)
             log.debug("Solver input for attempt %s:\n%s", attempt, dumped)
