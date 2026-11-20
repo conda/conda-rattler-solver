@@ -47,6 +47,7 @@ from conda_rattler_solver.exceptions import RattlerUnsatisfiableError
 from conda_rattler_solver.index import RattlerIndexHelper
 from conda_rattler_solver.solver import RattlerSolver as Solver
 from conda_rattler_solver.state import SolverInputState, SolverOutputState
+from conda_rattler_solver.utils import empty_repodata_dict
 
 from .utils import conda_subprocess
 
@@ -536,41 +537,6 @@ def test_update_all_allows_newer_versions_and_builds(
         assert (updated.version, updated.build_number) == (version, build_number)
 
 
-def test_update_considers_wheel_records(
-    tmp_env: TmpEnvFixture,
-    conda_cli: CondaCLIFixture,
-    tmp_path: Path,
-) -> None:
-    """Update solves must see wheel records, like install solves do."""
-    channel = tmp_path / "channel"
-    _make_noarch_package(channel, "app", "1.0")
-    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
-    with tmp_env("app", *args) as prefix:
-        _make_noarch_package(channel, "app", "2.0", depends=("wheel-only",))
-        repodata_path = channel / "noarch" / "repodata.json"
-        repodata = json.loads(repodata_path.read_text())
-        repodata["v3"] = {
-            "whl": {
-                "wheel-only-1.0-py3_none_any_0": {
-                    "build": "py3_none_any_0",
-                    "build_number": 0,
-                    "depends": [],
-                    "name": "wheel-only",
-                    "subdir": "noarch",
-                    "timestamp": 1700000000000,
-                    "url": "wheel_only-1.0-py3-none-any.whl",
-                    "version": "1.0",
-                }
-            }
-        }
-        repodata_path.write_text(json.dumps(repodata))
-        out, _, _ = conda_cli(
-            "update", "app", f"--prefix={prefix}", *args, "--dry-run", "--json", raises=DryRunExit
-        )
-        linked = {pkg["name"]: pkg["version"] for pkg in json.loads(out)["actions"]["LINK"]}
-        assert linked == {"app": "2.0", "wheel-only": "1.0"}
-
-
 def test_install_allows_explicit_build_downgrade(
     tmp_env: TmpEnvFixture,
     conda_cli: CondaCLIFixture,
@@ -584,6 +550,43 @@ def test_install_allows_explicit_build_downgrade(
         conda_cli("install", "foo=1.0=0", f"--prefix={prefix}", *args, "--yes")
         PrefixData._cache_.clear()
         assert PrefixData(prefix).get("foo").build_number == 0
+
+
+@pytest.mark.parametrize("command", ["install", "update"])
+def test_wheel_records_are_solver_candidates(tmp_path: Path, command: str) -> None:
+    """
+    The channel only has ``foo`` as a wheel. Update solves use ``rattler.solve()``,
+    which drops wheels from its sources unless it is given a package format
+    selection, so both solve paths have to pass one.
+    """
+    channel = tmp_path / "channel"
+    (channel / "noarch").mkdir(parents=True)
+    repodata = empty_repodata_dict("noarch")
+    repodata["v3"]["whl"]["foo-1.0-py3_none_any_0"] = {
+        "build": "py3_none_any_0",
+        "build_number": 0,
+        "depends": [],
+        "fn": "foo-1.0-py3-none-any.whl",
+        "name": "foo",
+        "noarch": "python",
+        "sha256": "0" * 64,
+        "size": 1,
+        "subdir": "noarch",
+        "timestamp": 1700000000000,
+        "url": "https://example.invalid/foo-1.0-py3-none-any.whl",
+        "version": "1.0",
+    }
+    (channel / "noarch" / "repodata.json").write_text(json.dumps(repodata))
+
+    solver = Solver(
+        prefix=str(tmp_path / "prefix"),
+        channels=[Channel(str(channel))],
+        subdirs=("noarch",),
+        specs_to_add=("foo",),
+        command=command,
+    )
+    solution = solver.solve_final_state()
+    assert [(record.name, record.version) for record in solution] == [("foo", "1.0")]
 
 
 @pytest.mark.parametrize("extras", [(), ("feature",)])
