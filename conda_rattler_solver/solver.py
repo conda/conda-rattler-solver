@@ -58,7 +58,10 @@ log = logging.getLogger(f"conda.{__name__}")
 CHANNEL_PRIORITY_MAP = {
     ChannelPriority.STRICT: rattler.ChannelPriority.Strict,
     ChannelPriority.FLEXIBLE: rattler.ChannelPriority.Flexible,
-    ChannelPriority.DISABLED: rattler.ChannelPriority.Disabled,
+    # A variant of rattler's `Disabled` channel priority that uses the
+    # channel order to break ties between candidates with the same version
+    # before comparing build numbers.
+    ChannelPriority.DISABLED: rattler.ChannelPriority.VersionFirst,
 }
 
 
