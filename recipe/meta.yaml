@@ -18,8 +18,8 @@ requirements:
   host:
     - python 3.11.*
     - pip
-    - hatchling
-    - hatch-vcs
+    - hatchling >=1.12.2
+    - hatch-vcs >0.2.0
   run:
     - python >=3.11
     - conda >=26.7.0
@@ -47,8 +47,9 @@ about:
   license: BSD-3-Clause
   license_family: BSD
   license_file: src/LICENSE
-  summary: 'The fast pixi solver, now in conda!'
+  summary: 'The fast, Rust-based solver for conda'
 
 extra:
   recipe-maintainers:
     - jaimergp
+    - danyeaw

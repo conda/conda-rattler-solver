@@ -65,6 +65,7 @@ as well as richer logging for each action.
 from __future__ import annotations
 
 import logging
+from functools import cached_property
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -83,7 +84,7 @@ from conda.models.match_spec import MatchSpec
 from conda.models.prefix_graph import PrefixGraph
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Mapping
     from os import PathLike
     from typing import Any
 
@@ -101,6 +102,16 @@ class SolverInputState:
     """
     Helper object to provide the input data needed to compute the state that will be
     exposed to the solver.
+
+    Prefix records, pins and update configuration are captured at construction. Derived
+    specs are reused for all attempts using this input state, including attempts
+    with a new output state. Construct a new input state for a new solve to pick up
+    changed packages, pins or configuration. Output records and conflicts remain
+    mutable, as does the pruning flag adjusted during post-processing.
+
+    Callers that replace the private virtual-package mapping during initialization
+    must do so before first reading ``virtual`` or ``specs``. That first read captures
+    a sorted, read-only mapping for the rest of the solve.
 
     Parameters
     ----------
@@ -174,10 +185,16 @@ class SolverInputState:
     ):
         self.prefix = prefix
         self._prefix_data = PrefixData(prefix, interoperability=interoperability)
+        self._installed = MappingProxyType(dict(sorted(self.prefix_data._prefix_records.items())))
         self.interoperability = interoperability
-        self._history = History(prefix).get_requested_specs_map()
-        self._pinned = {spec.name: spec for spec in get_pinned_specs(prefix)}
-        self._aggressive_updates = {spec.name: spec for spec in context.aggressive_update_packages}
+        self._history = MappingProxyType(dict(History(prefix).get_requested_specs_map()))
+        self._pinned = MappingProxyType({spec.name: spec for spec in get_pinned_specs(prefix)})
+        self._aggressive_updates = MappingProxyType(
+            {spec.name: spec for spec in context.aggressive_update_packages}
+        )
+        self._auto_update_conda = context.auto_update_conda and paths_equal(
+            self.prefix, context.root_prefix
+        )
 
         virtual = Index().system_packages
         self._virtual = {record.name: record for record in virtual}
@@ -186,6 +203,7 @@ class SolverInputState:
         for spec in requested:
             spec = MatchSpec(spec)
             self._requested[spec.name] = spec
+        self._requested = MappingProxyType(self._requested)
 
         self._update_modifier = self._default_to_context_if_null(
             "update_modifier", update_modifier
@@ -194,6 +212,8 @@ class SolverInputState:
             self._update_modifier = UpdateModifier.UPDATE_SPECS  # revert to default
         self._deps_modifier = self._default_to_context_if_null("deps_modifier", deps_modifier)
         self._ignore_pinned = self._default_to_context_if_null("ignore_pinned", ignore_pinned)
+        if self._ignore_pinned:
+            self._pinned = MappingProxyType({})
         self._force_remove = self._default_to_context_if_null("force_remove", force_remove)
         self._force_reinstall = self._default_to_context_if_null(
             "force_reinstall", force_reinstall
@@ -202,7 +222,9 @@ class SolverInputState:
         self._command = command
 
         # special cases
-        self._do_not_remove = {p: MatchSpec(p) for p in self._DO_NOT_REMOVE_NAMES}
+        self._do_not_remove = MappingProxyType(
+            {p: MatchSpec(p) for p in self._DO_NOT_REMOVE_NAMES}
+        )
 
     def _default_to_context_if_null(self, name, value, context=context) -> Any:
         "Obtain default value from the context if value is set to NULL; otherwise leave as is"
@@ -223,9 +245,9 @@ class SolverInputState:
         """
         This exposes the installed packages in the prefix. Note that a ``PackageRecord``
         can generate an equivalent ``MatchSpec`` object with ``.to_match_spec()``.
-        Records are toposorted.
+        Records are sorted by package name and captured at construction.
         """
-        return MappingProxyType(dict(sorted(self.prefix_data._prefix_records.items())))
+        return self._installed
 
     @property
     def history(self) -> dict[str, MatchSpec]:
@@ -233,7 +255,7 @@ class SolverInputState:
         These are the specs that the user explicitly asked for in previous operations
         on the prefix. See :class:`History` for more details.
         """
-        return MappingProxyType(self._history)
+        return self._history
 
     @property
     def pinned(self) -> dict[str, MatchSpec]:
@@ -243,11 +265,9 @@ class SolverInputState:
 
         If ``ignore_pinned`` is True, this returns an empty dictionary.
         """
-        if self.ignore_pinned:
-            return MappingProxyType({})
-        return MappingProxyType(self._pinned)
+        return self._pinned
 
-    @property
+    @cached_property
     def virtual(self) -> dict[str, MatchSpec]:
         """
         System properties exposed as virtual packages (e.g. ``__glibc=2.17``). These packages
@@ -263,9 +283,9 @@ class SolverInputState:
         associated version or build constrain. Note that the packages here returned do not need to
         be installed.
         """
-        return MappingProxyType(self._aggressive_updates)
+        return self._aggressive_updates
 
-    @property
+    @cached_property
     def always_update(self) -> dict[str, MatchSpec]:
         """
         Merged lists of packages that should always be updated, depending on the flags, including:
@@ -277,7 +297,7 @@ class SolverInputState:
         installed = self.installed
         pinned = self.pinned
         pkgs = {pkg: MatchSpec(pkg) for pkg in self.aggressive_updates if pkg in installed}
-        if context.auto_update_conda and paths_equal(self.prefix, context.root_prefix):
+        if self._auto_update_conda:
             pkgs.setdefault("conda", MatchSpec("conda"))
         if self.update_modifier.UPDATE_ALL:
             for pkg in installed:
@@ -294,14 +314,35 @@ class SolverInputState:
         Packages that are protected by the solver so they are not accidentally removed. This list
         is not configurable, but hardcoded for legacy reasons.
         """
-        return MappingProxyType(self._do_not_remove)
+        return self._do_not_remove
 
     @property
     def requested(self) -> dict[str, MatchSpec]:
         """
         Packages that the user has explicitly asked for in this operation.
         """
-        return MappingProxyType(self._requested)
+        return self._requested
+
+    @cached_property
+    def specs(self) -> Mapping[str, MatchSpec]:
+        """Merge the input specs once, preserving source and strictness precedence."""
+        specs_by_strictness = {}
+        for group in (
+            "requested",
+            "pinned",
+            "history",
+            "aggressive_updates",
+        ):
+            for name, spec in sorted(
+                getattr(self, group).items(),
+                key=sort_by_spec_strictness,
+                reverse=True,
+            ):
+                specs_by_strictness.setdefault(name, spec)
+        for record_group in ("installed", "virtual"):
+            for name, record in getattr(self, record_group).items():
+                specs_by_strictness.setdefault(name, record.to_match_spec())
+        return MappingProxyType(specs_by_strictness)
 
     # Types of commands
 
@@ -335,7 +376,7 @@ class SolverInputState:
 
     # modifiers
 
-    @property
+    @cached_property
     def update_modifier(self) -> EnumAsBools:
         """
         Use attribute access to test whether the modifier is set to that value
@@ -348,7 +389,7 @@ class SolverInputState:
         """
         return EnumAsBools(self._update_modifier)
 
-    @property
+    @cached_property
     def deps_modifier(self) -> EnumAsBools:
         """
         Use attribute access to test whether the modifier is set to that value
@@ -493,30 +534,13 @@ class SolverOutputState:
         return IndexedSet(PrefixGraph(self.records.values()).graph)
 
     @property
-    def specs(self) -> dict[str, MatchSpec]:
+    def specs(self) -> Mapping[str, MatchSpec]:
         """
         Merge all possible sources of input package specs, sorted by their input category and
         strictness. It's just meant to be an enumeration of all possible inputs, not a ready-to-use
         list of specs for a solver.
         """
-        sis = self.solver_input_state
-        specs_by_strictness = {}
-        for group in (
-            "requested",
-            "pinned",
-            "history",
-            "aggressive_updates",
-        ):
-            for name, spec in sorted(
-                getattr(sis, group).items(),
-                key=sort_by_spec_strictness,
-                reverse=True,
-            ):
-                specs_by_strictness.setdefault(name, spec)
-        for record_group in ("installed", "virtual"):
-            for name, record in getattr(sis, record_group).items():
-                specs_by_strictness.setdefault(name, record.to_match_spec())
-        return specs_by_strictness
+        return self.solver_input_state.specs
 
     @property
     def real_specs(self) -> dict[str, MatchSpec]:

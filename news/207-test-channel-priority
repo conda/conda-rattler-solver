@@ -1,3 +1,0 @@
-### Other
-
-* Run `test_install_keeps_unrequested_history_packages` with `CONDA_CHANNEL_PRIORITY=flexible` so it also passes on hosts configured with strict channel priority. (#207)

@@ -1,0 +1,39 @@
+# edit this in https://github.com/conda/infrastructure
+# template-files-set
+
+name: Prepare release notes
+
+on:
+  # template-files-if
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version to prepare (MAJOR.MINOR.PATCH).
+        required: true
+        type: string
+  # template-files-endif
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    # template-files-if
+    runs-on: ubuntu-slim
+    steps:
+      - name: Prepare Release Notes
+        uses: conda/actions/prepare-release@8153f7f73472ac36d654d5111be19abaecc48cc6 #v26.10.0
+        with:
+          token: ${{ secrets.RELEASE_TOKEN }}
+          news-directory: 'news'
+          changelog-path: CHANGELOG.md
+          # template-files-if
+          version: ${{ inputs.version }}
+          # template-files-endif
+          release-branch-pattern: |
+            [0-9].*.x
+            [0-9][0-9].*.x

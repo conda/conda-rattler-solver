@@ -12,8 +12,9 @@ for the solver.
 
 ### `solver`
 
-Selects the solver plugin. Set it to `rattler` to use conda-rattler-solver by
-default:
+Selects the solver plugin. Starting with conda 26.10, conda-rattler-solver is
+the default, so you only need this setting on older conda releases or to switch
+between solvers:
 
 ```console
 $ conda config --set solver rattler

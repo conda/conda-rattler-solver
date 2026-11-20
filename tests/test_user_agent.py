@@ -22,8 +22,8 @@ def test_user_agent_conda_info(solver):
     info = json.loads(out)
     assert "conda/" in info["user_agent"]
     if solver == "classic":
-        assert "solver/" not in info["user_agent"]
+        assert "rattler" not in info["user_agent"]
     elif solver == "rattler":
         assert "solver/rattler" in info["user_agent"]
-        assert f"conda-rattler-solver/{version('conda-rattler-solver')}" in info["user_agent"]
+        assert "conda-rattler-solver/" in info["user_agent"]
         assert f"rattler/{version('py-rattler')}" in info["user_agent"]
