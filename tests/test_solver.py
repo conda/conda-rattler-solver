@@ -536,6 +536,41 @@ def test_update_all_allows_newer_versions_and_builds(
         assert (updated.version, updated.build_number) == (version, build_number)
 
 
+def test_update_considers_wheel_records(
+    tmp_env: TmpEnvFixture,
+    conda_cli: CondaCLIFixture,
+    tmp_path: Path,
+) -> None:
+    """Update solves must see wheel records, like install solves do."""
+    channel = tmp_path / "channel"
+    _make_noarch_package(channel, "app", "1.0")
+    args = ("--override-channels", f"--channel={channel}", "--solver=rattler")
+    with tmp_env("app", *args) as prefix:
+        _make_noarch_package(channel, "app", "2.0", depends=("wheel-only",))
+        repodata_path = channel / "noarch" / "repodata.json"
+        repodata = json.loads(repodata_path.read_text())
+        repodata["v3"] = {
+            "whl": {
+                "wheel-only-1.0-py3_none_any_0": {
+                    "build": "py3_none_any_0",
+                    "build_number": 0,
+                    "depends": [],
+                    "name": "wheel-only",
+                    "subdir": "noarch",
+                    "timestamp": 1700000000000,
+                    "url": "wheel_only-1.0-py3-none-any.whl",
+                    "version": "1.0",
+                }
+            }
+        }
+        repodata_path.write_text(json.dumps(repodata))
+        out, _, _ = conda_cli(
+            "update", "app", f"--prefix={prefix}", *args, "--dry-run", "--json", raises=DryRunExit
+        )
+        linked = {pkg["name"]: pkg["version"] for pkg in json.loads(out)["actions"]["LINK"]}
+        assert linked == {"app": "2.0", "wheel-only": "1.0"}
+
+
 def test_install_allows_explicit_build_downgrade(
     tmp_env: TmpEnvFixture,
     conda_cli: CondaCLIFixture,
