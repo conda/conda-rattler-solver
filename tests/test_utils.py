@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 from __future__ import annotations
 
+import datetime
 import json
 import re
 from types import SimpleNamespace
@@ -275,8 +276,32 @@ def test_matchspec_from_solver_diagnostic(
     assert str(utils_module.matchspec_from_solver_diagnostic(diagnostic_text)) == expected_str
 
 
-@pytest.mark.parametrize("build", ["py313h1234567_0", "py3-none-any"])
-def test_prefix_record_roundtrip_preserves_build(build: str) -> None:
+@pytest.mark.parametrize(
+    "field,value,rattler_value",
+    [
+        pytest.param(
+            "build", "py313h1234567_0", rattler.BuildString("py313h1234567_0"), id="build"
+        ),
+        pytest.param(
+            "build",
+            "py3-none-any",
+            rattler.BuildString.new_unchecked("py3-none-any"),
+            id="non-cep26-build",
+        ),
+        pytest.param("track_features", ("mkl",), ["mkl"], id="track_features"),
+        pytest.param("features", ("mkl",), "mkl", id="features"),
+        pytest.param(
+            "timestamp",
+            1673001600000,
+            datetime.datetime(2023, 1, 6, 10, 40, tzinfo=datetime.timezone.utc),
+            id="timestamp",
+        ),
+    ],
+)
+def test_prefix_record_roundtrip_preserves_field(
+    field: str, value: object, rattler_value: object
+) -> None:
+    build = value if field == "build" else "py313h1234567_0"
     record = PrefixRecord(
         name="example",
         version="1.0",
@@ -286,12 +311,14 @@ def test_prefix_record_roundtrip_preserves_build(build: str) -> None:
         subdir="noarch",
         fn=f"example-1.0-{build}.conda",
         url=f"https://conda.anaconda.org/conda-forge/noarch/example-1.0-{build}.conda",
+        **({} if field == "build" else {field: value}),
     )
 
     rattler_record = utils_module.conda_record_to_rattler_record(record)
-    result = utils_module.rattler_record_to_conda_record(rattler_record)
+    assert getattr(rattler_record, field) == rattler_value
 
-    assert result.build == build
+    result = utils_module.rattler_record_to_conda_record(rattler_record)
+    assert getattr(result, field) == getattr(record, field)
     assert (result.name, result.version, result.build_number) == ("example", "1.0", 0)
 
 
