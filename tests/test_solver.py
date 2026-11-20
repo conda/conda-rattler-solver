@@ -1763,6 +1763,33 @@ def test_add_pip_in_index_search(
         }
 
 
+def test_sharded_install_can_downgrade_build(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setattr(context, "repodata_use_shards", True)
+    prefix = tmp_path / "env"
+    PrefixData(prefix)._prefix_records["standalone"] = PrefixRecord(
+        name="standalone",
+        version="1.0",
+        build="2",
+        build_number=2,
+        channel="https://example.invalid/noarch",
+        subdir="noarch",
+        fn="standalone-1.0-2.tar.bz2",
+        url="https://example.invalid/noarch/standalone-1.0-2.tar.bz2",
+        depends=(),
+    )
+    requested = ("standalone=1.0=0",)
+    in_state = SolverInputState(prefix, requested=requested, command="install")
+    solver = Solver(prefix, channels=(), subdirs=("noarch",), specs_to_add=requested)
+    index = _add_pip_index(tmp_path, in_state, _add_pip_repodata(), repodata_use_shards=True)
+
+    (record,) = solver._solve_attempt(
+        in_state, SolverOutputState(solver_input_state=in_state), index
+    )
+
+    assert record.name.normalized == "standalone"
+    assert record.build_number == 0
+
+
 def test_add_pip_does_not_patch_locked_python(
     tmp_path: Path,
     monkeypatch: MonkeyPatch,
