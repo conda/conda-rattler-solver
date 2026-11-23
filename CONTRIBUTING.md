@@ -31,7 +31,7 @@ Run tests with Python 3.13:
 pixi run --locked -e test-py313 test
 ```
 
-Choose another Python version with an environment such as `test-py310` or
+Choose another Python version with an environment such as `test-py311` or
 `test-py314`. Run the pre-commit formatters and checks with:
 
 ```shell

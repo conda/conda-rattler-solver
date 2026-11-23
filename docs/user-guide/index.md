@@ -21,7 +21,8 @@ conda-rattler-solver is conda's default solver starting with conda 26.10.
 Conda 26.10 and later use conda-rattler-solver by default unless another
 solver is explicitly selected in your configuration.
 
-If you have a conda release older than 26.7, update conda first:
+conda-rattler-solver requires Python 3.11 or later. If you have a conda release
+older than 26.7, update conda first:
 
 ```console
 $ conda update -n base conda

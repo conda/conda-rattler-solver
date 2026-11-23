@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 import pytest
 import rattler
 from conda._private.shards import ShardLike
-from conda.base.constants import UpdateModifier
+from conda.base.constants import DEFAULT_CHANNELS, UpdateModifier
 from conda.base.context import context, reset_context
 from conda.common.compat import on_linux, on_mac, on_win
 from conda.core.prefix_data import PrefixData
@@ -35,6 +35,7 @@ from conda.exceptions import (
 )
 from conda.gateways.shards import build_repodata_subset
 from conda.models.channel import Channel
+from conda.models.enums import NoarchType
 from conda.models.match_spec import MatchSpec
 from conda.models.records import PrefixRecord
 from conda.testing.integration import package_is_installed
@@ -163,10 +164,13 @@ def test_python_downgrade_reinstalls_noarch_packages(
         "--channel=conda-forge",
         "--solver=rattler",
         "pip",
-        "python=3.11",
+        "python=3.15",
     ) as prefix:
-        assert PrefixData(prefix).get("python").version.startswith("3.11")
-        pip_cli("--version", prefix=prefix)
+        assert PrefixData(prefix).get("python").version.startswith("3.15")
+        pip_record = PrefixData(prefix).get("pip")
+        assert pip_record.noarch == NoarchType.python
+        _, err, rc = pip_cli("--version", prefix=prefix)
+        assert rc == 0, err
 
         conda_cli(
             "install",
@@ -174,15 +178,18 @@ def test_python_downgrade_reinstalls_noarch_packages(
             "--solver=rattler",
             "--override-channels",
             "--channel=conda-forge",
-            "python=3.10",
+            "python=3.14",
             "--yes",
         )
         PrefixData._cache_.clear()
-        assert PrefixData(prefix).get("python").version.startswith("3.10")
-        pip_cli("--version", prefix=prefix)
+        assert PrefixData(prefix).get("python").version.startswith("3.14")
+        assert PrefixData(prefix).get("pip") == pip_record
+        _, err, rc = pip_cli("--version", prefix=prefix)
+        assert rc == 0, err
 
 
-def test_defaults_specs_work(conda_cli: CondaCLIFixture) -> None:
+@pytest.mark.usefixtures("reset_conda_context")
+def test_defaults_specs_work(conda_cli: CondaCLIFixture, monkeypatch: MonkeyPatch) -> None:
     """
     See https://github.com/conda/conda-libmamba-solver/issues/173
 
@@ -192,6 +199,7 @@ def test_defaults_specs_work(conda_cli: CondaCLIFixture) -> None:
     conda canonicalizes them to the multichannel name ('pkgs/main::' becomes
     'defaults::') before the specs reach the solver.
     """
+    monkeypatch.setitem(context.__dict__, "_default_channels", DEFAULT_CHANNELS)
     out, err, rc = conda_cli(
         "create",
         "--dry-run",
@@ -199,7 +207,7 @@ def test_defaults_specs_work(conda_cli: CondaCLIFixture) -> None:
         "--solver=rattler",
         "--override-channels",
         "--channel=conda-forge",
-        "python=3.10",
+        "python=3.14",
         "defaults::libarchive",
         raises=DryRunExit,
     )
@@ -219,7 +227,7 @@ def test_defaults_specs_work(conda_cli: CondaCLIFixture) -> None:
         "--solver=rattler",
         "--override-channels",
         "--channel=conda-forge",
-        "pkgs/main::python=3.9",
+        "pkgs/main::python=3.14",
         raises=DryRunExit,
     )
     data = json.loads(out)
@@ -277,6 +285,10 @@ def test_determinism(tmpdir):
     env.pop("PYTHONHASHSEED", None)
     env["CONDA_PKGS_DIRS"] = str(tmpdir / "pkgs")
     installed_bokeh_versions = []
+    # conda-forge lacks bokeh's compiled dependencies on win-arm64.
+    channel = (
+        "https://repo.anaconda.com/pkgs/main" if context.subdir == "win-arm64" else "conda-forge"
+    )
     common_args = (
         sys.executable,
         "-mconda",
@@ -286,10 +298,10 @@ def test_determinism(tmpdir):
         "--yes",
         "--json",
         "--solver=rattler",
-        "--channel=conda-forge",
+        f"--channel={channel}",
         "--override-channels",
     )
-    pkgs = ("python=3.8", "bokeh", "hvplot")
+    pkgs = ("python=3.14", "bokeh", "hvplot")
     # Two things being tested in the same loop:
     # - Repeated attempts of the same input should give the same result
     # - Input order (from the user side) should not matter, and should give the same result
@@ -1173,7 +1185,7 @@ def test_update_build_downgrade_fallback_does_not_revalidate_pins(
 
 def test_constraining_pin_and_requested():
     env = os.environ.copy()
-    env["CONDA_PINNED_PACKAGES"] = "python=3.9"
+    env["CONDA_PINNED_PACKAGES"] = "python=3.14"
 
     # This should fail because it contradicts the pinned packages
     p = conda_subprocess(
@@ -1182,7 +1194,7 @@ def test_constraining_pin_and_requested():
         "unused",
         "--dry-run",
         "--json",
-        "python=3.10",
+        "python=3.15",
         "--override-channels",
         "-c",
         "conda-forge",
@@ -1202,6 +1214,9 @@ def test_constraining_pin_and_requested():
         "--dry-run",
         "--json",
         "python",
+        "--override-channels",
+        "-c",
+        "conda-forge",
         env=env,
         explain=True,
         check=False,
@@ -1209,6 +1224,8 @@ def test_constraining_pin_and_requested():
     data = json.loads(p.stdout)
     assert data.get("success")
     assert data.get("dry_run")
+    python = next(pkg for pkg in data["actions"]["LINK"] if pkg["name"] == "python")
+    assert python["version"].startswith("3.14.")
 
 
 def test_locking_pins(
@@ -1285,9 +1302,11 @@ def test_ca_certificates_pins(tmp_env: TmpEnvFixture, conda_cli: CondaCLIFixture
                 raise AssertionError("ca-certificates not found in LINK actions")
 
 
+@pytest.mark.usefixtures("reset_conda_context")
 def test_python_update_should_not_uninstall_history(
     tmp_env: TmpEnvFixture,
     conda_cli: CondaCLIFixture,
+    monkeypatch: MonkeyPatch,
 ) -> None:
     """
     https://github.com/conda/conda-libmamba-solver/issues/341
@@ -1304,15 +1323,17 @@ def test_python_update_should_not_uninstall_history(
     """
     channels = "--override-channels", "-c", "conda-forge"
     solver = "--solver", "rattler"
-    # Py27 not available in osx-arm64
-    platform = ("--platform", "osx-64") if context.subdir == "osx-arm64" else ()
-    with tmp_env("python=3.8", "typing_extensions>=4.8", *channels, *solver, *platform) as prefix:
+    # These platforms have no Python 2.7 builds.
+    platform = {"osx-arm64": "osx-64", "win-arm64": "win-64"}.get(context.subdir)
+    if context.subdir in ("win-64", "win-arm64"):
+        # conda-forge no longer provides the vc 9 runtime required by Python 2.7.
+        channels += ("-c", "https://repo.anaconda.com/pkgs/main", "--no-channel-priority")
+    if platform:
+        monkeypatch.setenv("CONDA_SUBDIR", platform)
+    with tmp_env("python=3.8", "typing_extensions>=4.8", *channels, *solver) as prefix:
         assert package_is_installed(prefix, "python=3.8")
         assert package_is_installed(prefix, "typing_extensions>=4.8")
-        with pytest.raises(
-            RattlerUnsatisfiableError,
-            match=r"python 2\.7.|\n*typing_extensions",
-        ):
+        with pytest.raises(RattlerUnsatisfiableError) as exc:
             conda_cli(
                 "install",
                 f"--prefix={prefix}",
@@ -1321,15 +1342,26 @@ def test_python_update_should_not_uninstall_history(
                 *solver,
                 "--dry-run",
             )
+        message = str(exc.value).replace("-", "_")
+        assert "python 2.7" in message
+        assert "typing_extensions" in message
 
 
-def test_python_downgrade_with_pins_removes_truststore(tmp_env: TmpEnvFixture) -> None:
+@pytest.mark.usefixtures("reset_conda_context")
+def test_python_downgrade_with_pins_removes_truststore(
+    tmp_env: TmpEnvFixture,
+    monkeypatch: MonkeyPatch,
+) -> None:
     """
     https://github.com/conda/conda-libmamba-solver/issues/354
     """
     channels = "--override-channels", "-c", "conda-forge"
     solver = "--solver", "rattler"
+    # These Python versions predate win-arm64 support.
+    if context.subdir == "win-arm64":
+        monkeypatch.setenv("CONDA_SUBDIR", "win-64")
     with tmp_env("python=3.10", "conda=23.9", *channels, *solver) as prefix:
+        assert package_is_installed(prefix, "truststore")
         zstd_version = PrefixData(prefix).get("zstd").version
         for pin in (None, "zstd", f"zstd={zstd_version}"):
             env = os.environ.copy()
@@ -2142,16 +2174,16 @@ def test_python_does_not_change_unless_wanted(
     tmp_env: TmpEnvFixture, conda_cli: CondaCLIFixture
 ) -> None:
     """
-    Ensure that the solver does not do extra work when trying to install something already there.
-    If we install a slightly older python (3.11.10, but 3.11.14 is available at the time of
-    writing) along with colorama, a 2nd colorama installation should NOT cause a python update
-    unless the user opts out the freezing strategy (default): --update-deps, requesting python;
-    both work.
+    Reinstalling colorama must keep the installed Python unless updates are requested.
+
+    Start with an older Python patch release so --update-deps and requesting Python
+    can each produce a newer version.
     """
     args = "--override-channels", "--channel=conda-forge", "--solver=rattler"
+    python_version = "3.14.3"
     with tmp_env(
         *args,
-        "python=3.11.10",
+        f"python={python_version}",
         "colorama",
     ) as prefix:
         out, err, rc = conda_cli(
@@ -2192,6 +2224,8 @@ def test_python_does_not_change_unless_wanted(
         link_names = {pkg["name"] for pkg in data["actions"]["LINK"]}
         unlink_names = {pkg["name"] for pkg in data["actions"]["UNLINK"]}
         assert "python" in unlink_names.intersection(link_names)
+        linked_python = next(pkg for pkg in data["actions"]["LINK"] if pkg["name"] == "python")
+        assert Version(linked_python["version"]) > Version(python_version)
 
         out, err, rc = conda_cli(
             "install",
@@ -2207,6 +2241,8 @@ def test_python_does_not_change_unless_wanted(
         link_names = {pkg["name"] for pkg in data["actions"]["LINK"]}
         unlink_names = {pkg["name"] for pkg in data["actions"]["UNLINK"]}
         assert "python" in unlink_names.intersection(link_names)
+        linked_python = next(pkg for pkg in data["actions"]["LINK"] if pkg["name"] == "python")
+        assert Version(linked_python["version"]) > Version(python_version)
 
 
 @pytest.mark.usefixtures("solver_rattler")
