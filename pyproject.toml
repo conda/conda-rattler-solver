@@ -28,7 +28,7 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = [
   # "conda >=26.7.0",
-  "py-rattler >=0.28.1,<0.29.0a0",
+  "py-rattler >=0.28.1,<0.30.0a0",
 ]
 dynamic = ["version"]
 
@@ -52,7 +52,7 @@ platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 [tool.pixi.dependencies]
 conda = ">=26.7.0"
 conda-rattler-solver = ">=26.10.2"
-py-rattler = ">=0.28.1,<0.29.0a0"
+py-rattler = ">=0.28.1,<0.30.0a0"
 
 [tool.pixi.feature.self.tasks]
 # Replace the released package with the local editable install.
