@@ -66,14 +66,18 @@ is a shared YAML test suite that runs the same solver scenarios against
 [Pytest Conda Solvers workflow](https://github.com/conda/conda-rattler-solver/actions/workflows/pytest-conda-solvers.yml)
 runs it on every push and pull request. To run it locally, install
 pytest-conda-solvers into an environment that has conda-rattler-solver, then
-select the solver with `--conda-solver`:
+point pytest at the suite shipped in the package with `--pyargs` and select
+the solver with `--conda-solver`:
 
 ```shell
 git clone https://github.com/conda-incubator/pytest-conda-solvers.git
 cd pytest-conda-solvers
 python -m pip install -e .
-python -m pytest --conda-solver=rattler -vv
+python -m pytest --pyargs pytest_conda_solvers --conda-solver=rattler -vv
 ```
+
+A plain `python -m pytest` in the checkout also runs pytest-conda-solvers' own
+tests, which you only need when working on the suite itself.
 
 Known limitations of the rattler backend are carried in the suite as strict
 `xfail_solvers: rattler` marks, so an unexpected pass is reported as a failure
