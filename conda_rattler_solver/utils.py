@@ -153,7 +153,7 @@ def conda_record_to_rattler_record(record: PackageRecord) -> rattler.RepoDataRec
     # conda keeps the timestamp in seconds, rattler takes a datetime
     timestamp = None
     if seconds := record.get("timestamp"):
-        timestamp = datetime.datetime.fromtimestamp(seconds, tz=datetime.timezone.utc)
+        timestamp = datetime.datetime.fromtimestamp(seconds, tz=datetime.UTC)
     package_record = rattler.PackageRecord(
         name=record.name,
         version=record.version,

@@ -293,7 +293,7 @@ def test_matchspec_from_solver_diagnostic(
         pytest.param(
             "timestamp",
             1673001600000,
-            datetime.datetime(2023, 1, 6, 10, 40, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2023, 1, 6, 10, 40, tzinfo=datetime.UTC),
             id="timestamp",
         ),
     ],
