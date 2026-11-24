@@ -4,7 +4,7 @@
 
 ### Bug fixes
 
-* Use py-rattler solve api `additional_packages` to represent packages that are already in the environment. (#174 via #181)
+* Use py-rattler solve api `additional_packages` to represent packages that are already in the environment. (#174 via #259)
 
 ### Deprecations
 
