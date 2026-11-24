@@ -642,8 +642,8 @@ class RattlerSolver(Solver):
                 conda_record_to_rattler_record(record) for record in pinned_packages
             ],
             "additional_packages": [
-                conda_prefix_record_to_rattler_prefix_record(record) for record in in_state.installed.values()
-            ]
+                conda_record_to_rattler_record(record) for record in in_state.installed.values()
+            ],
         }
 
     def _collect_specs_for_remove(
