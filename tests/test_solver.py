@@ -2715,6 +2715,36 @@ def test_channel_priority_updates_installed_dependency_two(
         assert packages["bar"] == "3.0"
 
 
+@pytest.mark.parametrize("command", ["install", "update"])
+def test_explicit_channel_excludes_installed_candidate(
+    tmp_path, tmp_env, monkeypatch, command
+):
+    monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", "strict")
+    monkeypatch.setenv("CONDA_AGGRESSIVE_UPDATE_PACKAGES", "")
+    monkeypatch.setenv("CONDA_PINNED_PACKAGES", "")
+    reset_context()
+
+    channel_a = tmp_path / "channel-a"
+    channel_b = tmp_path / "channel-b"
+    _make_noarch_package(channel_a, "foo", "2.0")
+    _make_noarch_package(channel_b, "foo", "1.0")
+
+    with tmp_env(
+        "foo", "--override-channels", "--channel", str(channel_a), "--solver=rattler"
+    ) as prefix:
+        requested = MatchSpec(name="foo", channel=Channel(str(channel_b)).canonical_name)
+        solver = Solver(
+            prefix=prefix,
+            channels=(Channel(str(channel_b)),),
+            subdirs=("noarch",),
+            specs_to_add=(requested,),
+            command=command,
+        )
+        result = {record.name: record for record in solver.solve_final_state()}
+        assert result["foo"].version == "1.0"
+        assert requested.match(result["foo"])
+
+
 @pytest.mark.parametrize("solver_fixture", ("solver_rattler", "solver_libmamba"))
 @pytest.mark.parametrize("openssl_build_number", (0, 2))
 def test_can_update_env_with_python(

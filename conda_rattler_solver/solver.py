@@ -642,7 +642,13 @@ class RattlerSolver(Solver):
                 conda_record_to_rattler_record(record) for record in pinned_packages
             ],
             "additional_packages": [
-                conda_record_to_rattler_record(record) for record in in_state.installed.values()
+                conda_record_to_rattler_record(record)
+                for record in in_state.installed.values()
+                if all(
+                    not (channel := spec.get_raw_value("channel"))
+                    or MatchSpec(channel=channel).match(record)
+                    for spec in requested_specs.get(record.name, ())
+                )
             ],
         }
 
