@@ -2716,9 +2716,7 @@ def test_channel_priority_updates_installed_dependency_two(
 
 
 @pytest.mark.parametrize("command", ["install", "update"])
-def test_explicit_channel_excludes_installed_candidate(
-    tmp_path, tmp_env, monkeypatch, command
-):
+def test_explicit_channel_excludes_installed_candidate(tmp_path, tmp_env, monkeypatch, command):
     monkeypatch.setenv("CONDA_CHANNEL_PRIORITY", "strict")
     monkeypatch.setenv("CONDA_AGGRESSIVE_UPDATE_PACKAGES", "")
     monkeypatch.setenv("CONDA_PINNED_PACKAGES", "")
