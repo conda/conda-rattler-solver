@@ -129,5 +129,11 @@ jobs:
 
       - name: Run solver tests
         working-directory: pytest-conda-solvers
+        env:
+          # Remove once
+          # https://github.com/conda/pytest-conda-solvers/pull/140 is merged, see
+          # https://github.com/conda/pytest-conda-solvers/issues/130
+          PYTEST_ADDOPTS: >-
+            --deselect pytest_conda_solvers/conda-solver-tests/basic.yaml::test_conda_downgrade_1_rattler
         # same invocation as pytest-conda-solvers' own CI
         run: python -m pytest --pyargs pytest_conda_solvers --conda-solver=${{ env.CONDA_SOLVER }} -vv

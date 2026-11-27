@@ -1,0 +1,19 @@
+### Enhancements
+
+* Map conda's disabled channel priority to rattler's `VersionFirst` mode instead of `Disabled`. The highest version still wins regardless of the channel, and a tie between candidates with the same version now goes to the higher-priority channel before build numbers are compared, matching the `classic` and `libmamba` solvers. (#252)
+
+### Bug fixes
+
+* <news item>
+
+### Deprecations
+
+* <news item>
+
+### Docs
+
+* Remove disabled channel priority from the "Known limitations and differences" documentation. (#252)
+
+### Other
+
+* <news item>
