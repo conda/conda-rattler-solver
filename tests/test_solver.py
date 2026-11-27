@@ -47,6 +47,7 @@ from conda_rattler_solver.exceptions import RattlerUnsatisfiableError
 from conda_rattler_solver.index import RattlerIndexHelper
 from conda_rattler_solver.solver import RattlerSolver as Solver
 from conda_rattler_solver.state import SolverInputState, SolverOutputState
+from conda_rattler_solver.utils import empty_repodata_dict
 
 from .utils import conda_subprocess
 
@@ -549,6 +550,43 @@ def test_install_allows_explicit_build_downgrade(
         conda_cli("install", "foo=1.0=0", f"--prefix={prefix}", *args, "--yes")
         PrefixData._cache_.clear()
         assert PrefixData(prefix).get("foo").build_number == 0
+
+
+@pytest.mark.parametrize("command", ["install", "update"])
+def test_wheel_records_are_solver_candidates(tmp_path: Path, command: str) -> None:
+    """
+    The channel only has ``foo`` as a wheel. Update solves use ``rattler.solve()``,
+    which drops wheels from its sources unless it is given a package format
+    selection, so both solve paths have to pass one.
+    """
+    channel = tmp_path / "channel"
+    (channel / "noarch").mkdir(parents=True)
+    repodata = empty_repodata_dict("noarch")
+    repodata["v3"]["whl"]["foo-1.0-py3_none_any_0"] = {
+        "build": "py3_none_any_0",
+        "build_number": 0,
+        "depends": [],
+        "fn": "foo-1.0-py3-none-any.whl",
+        "name": "foo",
+        "noarch": "python",
+        "sha256": "0" * 64,
+        "size": 1,
+        "subdir": "noarch",
+        "timestamp": 1700000000000,
+        "url": "https://example.invalid/foo-1.0-py3-none-any.whl",
+        "version": "1.0",
+    }
+    (channel / "noarch" / "repodata.json").write_text(json.dumps(repodata))
+
+    solver = Solver(
+        prefix=str(tmp_path / "prefix"),
+        channels=[Channel(str(channel))],
+        subdirs=("noarch",),
+        specs_to_add=("foo",),
+        command=command,
+    )
+    solution = solver.solve_final_state()
+    assert [(record.name, record.version) for record in solution] == [("foo", "1.0")]
 
 
 @pytest.mark.parametrize("extras", [(), ("feature",)])
