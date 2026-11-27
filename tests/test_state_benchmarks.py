@@ -75,6 +75,7 @@ def test_state_spec_collection_benchmark(
             channel="conda-forge",
             subdir="noarch",
             fn=f"{name}-1.0-0.conda",
+            url=f"https://conda.anaconda.org/conda-forge/noarch/{name}-1.0-0.conda",
         )
     solver = RattlerSolver(prefix, channels=(), command="update")
 

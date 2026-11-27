@@ -50,6 +50,7 @@ def test_update_all_emits_installed_version_constraint(tmp_path):
         channel="conda-forge",
         subdir="noarch",
         fn="libmamba-2.3.2-0.conda",
+        url="https://conda.anaconda.org/conda-forge/noarch/libmamba-2.3.2-0.conda",
     )
     in_state = SolverInputState(
         tmp_path,
@@ -81,6 +82,7 @@ def test_installed_version_constraint_exclusions(tmp_path):
             channel="conda-forge",
             subdir="noarch",
             fn="libmamba-2.3.2-0.conda",
+            url="https://conda.anaconda.org/conda-forge/noarch/libmamba-2.3.2-0.conda",
             package_type=package_type,
         )
         in_state = SolverInputState(
@@ -116,6 +118,7 @@ def test_update_all_emits_python_constraint_and_update_spec(tmp_path):
         channel="conda-forge",
         subdir="noarch",
         fn="python-3.13.9-0.conda",
+        url="https://conda.anaconda.org/conda-forge/noarch/python-3.13.9-0.conda",
     )
     in_state = SolverInputState(
         tmp_path,
@@ -143,6 +146,7 @@ def test_update_all_emits_python_constraint_and_update_spec(tmp_path):
             channel="conda-forge",
             subdir="noarch",
             fn="python-3.13.14-0.conda",
+            url="https://conda.anaconda.org/conda-forge/noarch/python-3.13.14-0.conda",
         )
     )
     assert not pin.match(
@@ -154,6 +158,7 @@ def test_update_all_emits_python_constraint_and_update_spec(tmp_path):
             channel="conda-forge",
             subdir="noarch",
             fn="python-3.14.0-0.conda",
+            url="https://conda.anaconda.org/conda-forge/noarch/python-3.14.0-0.conda",
         )
     )
 
@@ -168,6 +173,7 @@ def test_explicit_python_request_skips_major_minor_constraint(tmp_path):
         channel="conda-forge",
         subdir="noarch",
         fn="python-3.13.9-0.conda",
+        url="https://conda.anaconda.org/conda-forge/noarch/python-3.13.9-0.conda",
     )
     in_state = SolverInputState(
         tmp_path,
