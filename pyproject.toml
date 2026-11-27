@@ -27,7 +27,7 @@ classifiers = [
 requires-python = ">=3.11"
 dependencies = [
   # "conda >=26.7.0",
-  "py-rattler >=0.28.1,<0.30.0a0",
+  "py-rattler >=0.29.0,<0.30.0a0",
 ]
 dynamic = ["version"]
 
@@ -45,16 +45,22 @@ conda-rattler-solver = "conda_rattler_solver.plugin"
 source = "vcs"
 
 [tool.pixi.workspace]
-channels = ["conda-forge"]
+channels = ["conda-forge", "conda-canary/label/dev"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 
 [tool.pixi.dependencies]
 conda = ">=26.7.0"
-conda-rattler-solver = ">=26.10.2"
-py-rattler = ">=0.28.1,<0.30.0a0"
+py-rattler = ">=0.29.0,<0.30.0a0"
+
+# Remove this bootstrap pin once a compatible conda-forge release is available.
+[tool.pixi.dependencies.conda-rattler-solver]
+version = "==26.11.0.10+g081766c"
+build = "py_0"
+channel = "conda-canary/label/dev"
+sha256 = "e41800999cc5bf4485bdf525ef44879980db05d7620c774d1f4aea5bd5871972"
 
 [tool.pixi.feature.self.tasks]
-# Replace the released package with the local editable install.
+# Replace the bootstrap package with the local editable install.
 _install-self = { cmd = "conda pypi install -e . -q -y", default-environment = "test-py313" }
 
 [tool.pixi.feature.self.dependencies]
